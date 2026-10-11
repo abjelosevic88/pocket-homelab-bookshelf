@@ -1,0 +1,121 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api, ApiError, V1 } from '../lib/api'
+import type { Book, Candidate, Format, Status } from '../lib/types'
+import { todayISO } from '../lib/format'
+import { Field, Modal, Segmented, useToast } from './ui'
+import { BookSearch, fromCandidate, withDetails } from './BookSearch'
+import { RemoteCover } from './Cover'
+import { Stars } from './Stars'
+import { BookFields, emptyBook, type BookDraft } from './BookForm'
+
+type Step = { kind: 'search' } | { kind: 'pick'; c: Candidate; loading: boolean } | { kind: 'manual' }
+
+/** Add a book: search the catalogues (or type it in), then say where it stands. */
+export function AddBook({ status: initialStatus = 'want', onClose, onAdded }: { status?: Status; onClose: () => void; onAdded?: (b: Book) => void }) {
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const [step, setStep] = useState<Step>({ kind: 'search' })
+  const [draft, setDraft] = useState<BookDraft>(emptyBook())
+  const [status, setStatus] = useState<Status>(initialStatus)
+  const [finished, setFinished] = useState(todayISO())
+  const [rating, setRating] = useState(0)
+  const [format, setFormat] = useState<Format>('')
+  const [tags, setTags] = useState('')
+  const [planNote, setPlanNote] = useState('')
+  const [dup, setDup] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const pick = async (c: Candidate) => {
+    setDup(c.on_shelf || null)
+    setDraft({ ...emptyBook(), ...fromCandidate(c) })
+    setStep({ kind: 'pick', c, loading: true })
+    const full = await withDetails(c)
+    setDraft(d => ({ ...d, description: d.description || full.description }))
+    setStep({ kind: 'pick', c: full, loading: false })
+  }
+
+  const save = async () => {
+    const coverUrl = step.kind === 'pick' ? step.c.cover_url : ''
+    setBusy(true)
+    try {
+      const body: Record<string, unknown> = { ...draft, status, format, tags: tags || draft.tags, cover_url: coverUrl, allow_duplicate: dup !== null }
+      if (status === 'read') { body.finished_on = finished; body.rating = rating }
+      if (status === 'want') body.plan_note = planNote
+      const r = await api.post<{ book: Book; warning?: string }>(`${V1}/books`, body)
+      if (r.warning) toast(r.warning, 'err'); else toast(`Added “${r.book.title}”`)
+      onAdded?.(r.book)
+      onClose()
+    } catch (e) {
+      const err = e as ApiError
+      if (err.status === 409 && err.data.book_id) { setDup(err.data.book_id as number); toast('Already on your shelf — press Add again to add a second copy', 'err') } else toast(err.message, 'err')
+    } finally { setBusy(false) }
+  }
+
+  const subjects = step.kind === 'pick' ? step.c.subjects || [] : []
+  const tagList = tags.split(',').map(t => t.trim()).filter(Boolean)
+  const toggleTag = (t: string) => setTags(tagList.some(x => x.toLowerCase() === t.toLowerCase()) ? tagList.filter(x => x.toLowerCase() !== t.toLowerCase()).join(', ') : [...tagList, t].join(', '))
+
+  const verdict = (
+    <div className="grid" style={{ gap: 12 }}>
+      <Field group label="Where does it stand?">
+        <Segmented value={status} onChange={setStatus} options={[{ value: 'want', label: 'Want to read' }, { value: 'reading', label: 'Reading' }, { value: 'read', label: 'Read' }]} />
+      </Field>
+      {status === 'read' && (
+        <div className="two-col tight">
+          <Field label="Finished on"><input type="date" value={finished} max={todayISO()} onChange={e => setFinished(e.target.value)} /></Field>
+          <Field group label="Rating"><Stars value={rating} onChange={setRating} /></Field>
+        </div>
+      )}
+      {status === 'want' && <Field label="Why read it?" help="Who recommended it, what you hope to get out of it. Shown in the plan."><input value={planNote} onChange={e => setPlanNote(e.target.value)} maxLength={200} /></Field>}
+      <div className="two-col tight">
+        <Field group label="Format"><Segmented size="sm" value={format} onChange={setFormat} options={[{ value: '', label: '–' }, { value: 'paper', label: 'Paper' }, { value: 'ebook', label: 'E-book' }, { value: 'audio', label: 'Audio' }]} /></Field>
+        <Field label="Tags"><input value={tags} onChange={e => setTags(e.target.value)} placeholder="sci-fi, book club" /></Field>
+      </div>
+      {subjects.length > 0 && <div className="chips">{subjects.map(s => <button key={s} type="button" className={`chip sm ${tagList.some(t => t.toLowerCase() === s.toLowerCase()) ? 'active' : ''}`} onClick={() => toggleTag(s)}>+ {s}</button>)}</div>}
+    </div>
+  )
+
+  return (
+    <Modal title={step.kind === 'manual' ? 'Add a book by hand' : 'Add a book'} onClose={onClose} size="lg">
+      {step.kind === 'search' && (
+        <>
+          <BookSearch onPick={pick} />
+          <div className="form-actions"><button className="btn ghost" onClick={() => setStep({ kind: 'manual' })}>Not found? Add it by hand</button></div>
+        </>
+      )}
+      {step.kind === 'pick' && (
+        <div className="pick">
+          <div className="pick-head">
+            <RemoteCover url={step.c.cover_url || step.c.thumb_url} title={step.c.title} size="md" />
+            <div className="info">
+              <h2>{draft.title}</h2>
+              {draft.subtitle && <div className="muted">{draft.subtitle}</div>}
+              <div className="authors">{draft.authors || 'Unknown author'}</div>
+              <div className="meta muted small">{[draft.published, draft.pages ? `${draft.pages} pages` : '', draft.publisher, draft.isbn13].filter(Boolean).join(' · ')}</div>
+              {step.loading ? <p className="muted small mt-sm"><span className="spinner sm" /> Fetching description…</p> : draft.description && <p className="desc small">{draft.description}</p>}
+              {dup && <div className="callout mt-sm small">Already on your shelf. <a href={`/books/${dup}`} onClick={e => { e.preventDefault(); onClose(); navigate(`/books/${dup}`) }}>Open it</a> — or add another copy.</div>}
+            </div>
+          </div>
+          <hr className="mt mb" />
+          {verdict}
+          <div className="form-actions">
+            <button className="btn ghost" onClick={() => setStep({ kind: 'search' })}>← Back to results</button>
+            <button className="btn primary" onClick={save} disabled={busy || step.loading}>{busy ? 'Adding…' : 'Add to shelf'}</button>
+          </div>
+        </div>
+      )}
+      {step.kind === 'manual' && (
+        <div className="grid" style={{ gap: 14 }}>
+          <BookFields draft={draft} onChange={setDraft} />
+          <hr />
+          {verdict}
+          <div className="form-actions">
+            <button className="btn ghost" onClick={() => setStep({ kind: 'search' })}>← Search instead</button>
+            <button className="btn primary" onClick={save} disabled={busy || !draft.title.trim()}>{busy ? 'Adding…' : 'Add to shelf'}</button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}

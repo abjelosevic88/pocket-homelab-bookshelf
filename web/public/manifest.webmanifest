@@ -1,0 +1,9 @@
+{
+  "name": "Pocket Bookshelf",
+  "short_name": "Bookshelf",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#7c3aed",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }, { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }]
+}

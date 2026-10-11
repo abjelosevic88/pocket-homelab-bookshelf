@@ -1,0 +1,71 @@
+package store
+
+import (
+	"context"
+	"strconv"
+)
+
+// DefaultTitle is the app title until someone changes it.
+const DefaultTitle = "Pocket Bookshelf"
+
+// GetSettings loads all settings with defaults applied.
+func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
+	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all"}
+	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return st, err
+		}
+		switch k {
+		case "title":
+			if v != "" {
+				st.Title = v
+			}
+		case "yearly_goal":
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				st.YearlyGoal = n
+			}
+		case "landing":
+			if v == "now" || v == "library" || v == "planner" {
+				st.Landing = v
+			}
+		case "search_source":
+			if v == "all" || v == "openlibrary" || v == "google" {
+				st.SearchSource = v
+			}
+		case "google_books_key":
+			st.GoogleBooksKey = v
+		case "setup_complete":
+			st.SetupComplete = v == "1"
+		}
+	}
+	return st, rows.Err()
+}
+
+// SaveSettings persists all settings.
+func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
+	kv := map[string]string{
+		"title":            st.Title,
+		"yearly_goal":      strconv.Itoa(st.YearlyGoal),
+		"landing":          st.Landing,
+		"search_source":    st.SearchSource,
+		"google_books_key": st.GoogleBooksKey,
+		"setup_complete":   map[bool]string{true: "1", false: "0"}[st.SetupComplete],
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for k, v := range kv {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, k, v); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}

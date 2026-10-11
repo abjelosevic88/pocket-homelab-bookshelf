@@ -1,0 +1,21 @@
+[Unit]
+Description=Pocket Bookshelf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pocket-bookshelf
+Group=pocket-bookshelf
+WorkingDirectory=/var/lib/pocket-bookshelf
+Environment=DATA_DIR=/var/lib/pocket-bookshelf PORT=8080 TZ=Europe/Berlin BASE_URL=https://bookshelf.example.com
+ExecStart=/usr/local/bin/pocket-bookshelf
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pocket-bookshelf
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

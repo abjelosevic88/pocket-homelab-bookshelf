@@ -1,0 +1,18 @@
+services:
+  pocket-bookshelf:
+    image: ghcr.io/abjelosevic88/pocket-homelab-bookshelf:latest
+    container_name: pocket-bookshelf
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: ${TZ:-UTC}
+      BASE_URL: ${BASE_URL:-}
+      # Set both to skip the first-run setup screen and create the admin directly:
+      # ADMIN_EMAIL: ${ADMIN_EMAIL}
+      # ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # SECURE_COOKIES: "true"          # behind HTTPS
+      # AUTH_MODE: proxy                # trust Remote-User from Authelia / Authentik / Tinyauth
+      # DEMO_DATA: "true"               # seed a sample household into an empty database
+    volumes:
+      - ./data:/data

@@ -1,0 +1,105 @@
+export interface User { id: number; email: string; name: string; role: 'admin' | 'member'; created_at: string }
+export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }
+
+export type Status = 'want' | 'reading' | 'read' | 'abandoned'
+export type Format = '' | 'paper' | 'ebook' | 'audio'
+
+export interface Book {
+  id: number
+  title: string
+  subtitle: string
+  authors: string
+  isbn13: string
+  isbn10: string
+  pages: number
+  published: string
+  publisher: string
+  language: string
+  description: string
+  format: Format
+  tags: string
+  cover: string
+  source: string
+  source_id: string
+  source_url: string
+  status: Status
+  rating: number
+  review: string
+  favorite: boolean
+  current_page: number
+  queue_pos: number
+  planned_for: string
+  plan_note: string
+  created_at: string
+  updated_at: string
+  started_on: string
+  finished_on: string
+  read_count: number
+  quote_count: number
+}
+
+export interface Read { id: number; book_id: number; started_on: string; finished_on: string; abandoned: boolean }
+export interface Quote { id: number; book_id: number; text: string; page: string; note: string; created_at: string; book_title: string; book_authors: string; book_cover: string }
+
+export interface Candidate {
+  source: 'openlibrary' | 'google'
+  source_id: string
+  source_url: string
+  title: string
+  subtitle: string
+  authors: string[] | null
+  published: string
+  pages: number
+  isbn13: string
+  isbn10: string
+  publisher: string
+  language: string
+  description: string
+  subjects: string[] | null
+  cover_url: string
+  thumb_url: string
+  on_shelf?: number
+}
+
+export interface Settings {
+  title: string
+  yearly_goal: number
+  landing: 'now' | 'library' | 'planner'
+  search_source: 'all' | 'openlibrary' | 'google'
+  google_books_key: string
+  google_books_env: boolean
+  sources: string[]
+}
+
+export interface BookLine { id: number; title: string; authors: string; rating?: number; pages?: number; progress?: number; date?: string }
+export interface TagCount { name: string; count: number }
+
+export interface Stats {
+  year: number
+  years: number[]
+  goal: number
+  totals: { books: number; pages: number; rated: number; avg_rating: number }
+  all_time: { books: number; pages: number; rated: number; avg_rating: number }
+  abandoned: number
+  months: { books: number; pages: number }[]
+  ratings: number[]
+  top_authors: TagCount[]
+  top_tags: TagCount[]
+  formats: TagCount[]
+  finished: BookLine[]
+  longest: BookLine | null
+  quotes: number
+}
+
+export interface Dashboard {
+  reading: number
+  read_this_year: number
+  pages_this_year: number
+  yearly_goal: number
+  goal_percent: number
+  want: number
+  read_total: number
+  books: number
+  quotes: number
+  avg_rating: number
+}
