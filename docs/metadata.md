@@ -67,4 +67,6 @@ Every name in a book's authors becomes an author entry, linked to the book. A ba
 
 The **bibliography** on an author page is Open Library's list of their works, most published first. Study guides, summaries, collected-works volumes, anthologies and barely catalogued records are filtered out. English titles are shown when an English edition exists, with the original underneath. Works already on your shelf are recognised by their Open Library link, or by title.
 
+**Change photo** (click the author's photo): pictures from the author's Open Library record, the Wikidata portrait, images from their Wikipedia article, and other Open Library records with the same name. Portraits come first. Upload and image address work as for covers.
+
 Author pages are editable. A changed name is written into every book; renaming onto an existing author merges the two. A hand-edited biography or dates is kept when you refresh. **Wrong person?** links a different Open Library author.

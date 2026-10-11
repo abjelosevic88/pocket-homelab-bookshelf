@@ -82,6 +82,7 @@ Authors are created from the books' `authors` strings and looked up on Open Libr
 | `DELETE` | `/authors/{id}` | Only without books on the shelf (409 otherwise). |
 | `GET` | `/authors/{id}/works` | Bibliography from Open Library, most published first; `on_shelf` = your book id; `original_title` when `title` is an English edition's. |
 | `POST` | `/authors/{id}/refresh` | Look up again; `{"key": "OL…A"}` links a different Open Library author. |
+| `GET` | `/authors/{id}/photos` | Pictures to choose from: `{"photos": [{url, thumb, source, label}]}` — Open Library photos, the Wikidata portrait, images from the Wikipedia article, other Open Library records with the name. Set one with `POST /authors/{id}/photo {"url"}`. |
 | `GET` · `POST` · `DELETE` | `/authors/{id}/photo` | Image / set (`multipart` field `photo`, or `{"url"}`) / remove. |
 
 ## Search the catalogues

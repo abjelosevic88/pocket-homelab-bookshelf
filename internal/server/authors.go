@@ -469,6 +469,20 @@ func (s *Server) handleAuthorWorks(w http.ResponseWriter, r *http.Request) {
 
 // ---- photos ----
 
+// handleAuthorPhotoSuggestions lists pictures of the author to choose from.
+func (s *Server) handleAuthorPhotoSuggestions(w http.ResponseWriter, r *http.Request) {
+	a, err := s.store.GetAuthor(r.Context(), me(r), idParam(r, "id"))
+	if err != nil {
+		s.fail(w, err, "get author")
+		return
+	}
+	photos := s.meta.AuthorPhotoSuggestions(r.Context(), a.OLKey, a.Name, a.Wikipedia)
+	if photos == nil {
+		photos = []metadata.CoverOption{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"photos": photos})
+}
+
 func (s *Server) handleGetAuthorPhoto(w http.ResponseWriter, r *http.Request) {
 	a, err := s.store.GetAuthor(r.Context(), me(r), idParam(r, "id"))
 	if err != nil || a.Photo == "" {

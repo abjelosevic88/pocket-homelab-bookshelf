@@ -177,6 +177,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/authors/{id}/works", s.handleAuthorWorks)
 			r.Post("/authors/{id}/refresh", s.handleRefreshAuthor)
 			r.Get("/authors/{id}/photo", s.handleGetAuthorPhoto)
+			r.Get("/authors/{id}/photos", s.handleAuthorPhotoSuggestions)
 			r.Post("/authors/{id}/photo", s.handleSetAuthorPhoto)
 			r.Delete("/authors/{id}/photo", s.handleDeleteAuthorPhoto)
 			r.Get("/tags", s.handleListTags)

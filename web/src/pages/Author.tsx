@@ -10,6 +10,7 @@ import { RemoteCover } from '../components/Cover'
 import { withDetails } from '../components/BookSearch'
 import { FindAuthor } from './Authors'
 import { AddBook } from '../components/AddBook'
+import { AuthorPhotoPicker } from '../components/AuthorPhotoPicker'
 import { langName } from '../lib/languages'
 
 interface Detail { author: AuthorT; books: Book[] }
@@ -27,6 +28,7 @@ export default function Author() {
   const [busy, setBusy] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [details, setDetails] = useState<Work | null>(null)
+  const [photoOpen, setPhotoOpen] = useState(false)
   // Still being looked up in the background: check back shortly.
   useEffect(() => { if (data && !data.author.enriched_at) { const t = setTimeout(reload, 3000); return () => clearTimeout(t) } }, [data, reload])
 
@@ -61,7 +63,10 @@ export default function Author() {
     <div className="author-page">
       <Link to="/authors" className="muted small">← Authors</Link>
       <div className="author-head">
-        <AuthorPhoto author={a} size="lg" />
+        <button type="button" className="photo-change" onClick={() => setPhotoOpen(true)} title="Change photo">
+          <AuthorPhoto author={a} size="lg" />
+          <span className="photo-change-label">Change</span>
+        </button>
         <div className="info">
           <h1>{a.name}</h1>
           <div className="muted">{fmtYearRange(a.birth_date, a.death_date) || span}</div>
@@ -126,6 +131,7 @@ export default function Author() {
           )}
       </Card>
 
+      {photoOpen && <AuthorPhotoPicker author={a} onClose={() => setPhotoOpen(false)} onChanged={reload} />}
       {details && <AddBook initial={{ ...details, authors: [a.name] }} status="want" onClose={() => setDetails(null)} onAdded={() => { reload(); works.reload() }} />}
       {editing && <EditAuthor author={a} onClose={() => setEditing(false)} onSaved={na => { setEditing(false); if (na.id !== a.id) navigate(`/authors/${na.id}`, { replace: true }); else reload() }} />}
       {relinking && <FindAuthor initial={a.name} onClose={() => setRelinking(false)} onPick={(c: AuthorCandidate) => { setRelinking(false); refresh(c.key) }} />}
