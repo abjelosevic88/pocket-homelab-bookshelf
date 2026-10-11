@@ -141,10 +141,21 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
   const [editing, setEditing] = useState(!book.review)
   useEffect(() => { setText(book.review); setEditing(!book.review) }, [book.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = text !== book.review
+  const cancel = () => { setText(book.review); setEditing(!book.review) }
+  const save = () => { if (dirty) { onSave(text); setEditing(!text) } }
+  const buttons = (
+    <>
+      {book.review && <button className="btn ghost sm" onClick={cancel}>Cancel</button>}
+      <button className="btn primary sm" disabled={!dirty} onClick={save} title="Save (Ctrl/Cmd+S)">Save</button>
+    </>
+  )
   return (
-    <Card className="mt" title="My thoughts" actions={!editing && <button className="btn ghost sm" onClick={() => setEditing(true)}>Edit</button>}>
+    <Card className="mt" title="My thoughts" actions={editing ? buttons : <button className="btn ghost sm" onClick={() => setEditing(true)}>Edit</button>}>
       {editing ? (
-        <>
+        <div onKeyDown={e => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save() }
+          else if (e.key === 'Escape' && !e.defaultPrevented && book.review && !dirty) cancel()
+        }}>
           {!text.trim() && templates.length > 0 && (
             <div className="row wrap mb-sm template-pick"><span className="muted small">Start from:</span>
               {templates.map(t => <button key={t.name} type="button" className="chip sm" onClick={() => setText(t.body)}>{t.name}</button>)}
@@ -152,11 +163,8 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
           )}
           <MarkdownEditor className="review-input" value={text} onChange={setText} autoFocus={!!book.review} rows={text.split('\n').length > 7 ? Math.min(28, text.split('\n').length + 2) : 7}
             placeholder={book.status === 'want' ? 'What do you expect from it?' : 'What stayed with you? What did you like, what not? Would you recommend it — to whom?'} />
-          <div className="form-actions">
-            {book.review && <button className="btn ghost sm" onClick={() => { setText(book.review); setEditing(false) }}>Cancel</button>}
-            <button className="btn primary sm" disabled={!dirty} onClick={() => { onSave(text); setEditing(!text) }}>Save</button>
-          </div>
-        </>
+          {text.split('\n').length > 12 && <div className="form-actions">{buttons}</div>}
+        </div>
       ) : <div className="review" onDoubleClick={() => setEditing(true)}><ReviewText text={book.review} /></div>}
     </Card>
   )
