@@ -159,31 +159,45 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
   )
 }
 
-/** Thoughts as written: "## " lines are section titles, "### " sub-titles.
- *  Sections left empty (a template's unused headings, bare "1." prompts) are hidden. */
+/** Thoughts as written: "## " lines are section titles, "### " and "#### "
+ *  sub-titles. Sections left empty (a template's unused headings, bare "1."
+ *  prompts) are hidden; long thoughts open with "Show all". */
 function ReviewText({ text }: { text: string }) {
-  if (!/^#{2,3} /m.test(text)) return <>{text}</>
+  const [all, setAll] = useState(false)
+  if (!/^#{2,4} /m.test(text)) return <>{text}</>
   const blocks: { level: number; title: string; body: string }[] = []
   for (const line of text.split('\n')) {
-    const m = line.match(/^(#{2,3}) (.*)$/)
+    const m = line.match(/^(#{2,4}) (.*)$/)
     if (m) blocks.push({ level: m[1].length, title: m[2], body: '' })
     else if (blocks.length) blocks[blocks.length - 1].body += line + '\n'
     else blocks.push({ level: 0, title: '', body: line + '\n' })
   }
   const filled = (b: { body: string }) => b.body.split('\n').some(l => l.trim() && !/^\s*(\d+\.|[-*])\s*$/.test(l))
-  // A section title stays when it, or one of its sub-sections, has text.
+  // A title stays when it, or something nested under it, has text.
   const keep = blocks.map((b, i) => {
     if (filled(b)) return true
-    if (b.level !== 2) return false
-    for (let j = i + 1; j < blocks.length && blocks[j].level === 3; j++) if (filled(blocks[j])) return true
+    for (let j = i + 1; j < blocks.length && blocks[j].level > b.level && b.level > 0; j++) if (filled(blocks[j])) return true
     return false
   })
-  return <>{blocks.map((b, i) => keep[i] && (
-    <div key={i} className={`review-section l${b.level}`}>
-      {b.title && (b.level === 3 ? <h5>{b.title}</h5> : <h4>{b.title}</h4>)}
-      {filled(b) && <div>{b.body.trim()}</div>}
-    </div>
-  ))}</>
+  // Long notes: show the first ~1800 characters' worth of sections.
+  let shown = blocks.length, size = 0
+  if (!all && text.length > 2600) {
+    for (let i = 0; i < blocks.length; i++) {
+      size += blocks[i].body.length
+      if (size > 1800) { shown = Math.max(1, i + 1); break }
+    }
+  }
+  const words = text.split(/\s+/).length
+  return <>
+    {blocks.slice(0, shown).map((b, i) => keep[i] && (
+      <div key={i} className={`review-section l${b.level}`}>
+        {b.title && (b.level === 4 ? <h6>{b.title}</h6> : b.level === 3 ? <h5>{b.title}</h5> : <h4>{b.title}</h4>)}
+        {filled(b) && <div>{b.body.trim()}</div>}
+      </div>
+    ))}
+    {shown < blocks.length && <button className="btn ghost sm read-more mt-sm" onClick={() => setAll(true)}>Show all · {Math.max(1, Math.round(words / 230))} min ▾</button>}
+    {all && text.length > 2600 && <button className="btn ghost sm read-more mt-sm" onClick={() => setAll(false)}>Show less ▴</button>}
+  </>
 }
 
 function QuotesCard({ book, quotes, onChanged }: { book: BookT; quotes: Quote[]; onChanged: () => void }) {

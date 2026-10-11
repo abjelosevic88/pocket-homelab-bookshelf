@@ -31,7 +31,7 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 	return map[string]any{
 		"title": st.Title, "yearly_goal": st.YearlyGoal, "landing": st.Landing, "search_source": st.SearchSource,
 		"google_books_key": st.GoogleBooksKey, "google_books_env": s.cfg.GoogleBooksKey != "", "sources": s.meta.Sources(),
-		"languages":      st.Languages,
+		"languages": st.Languages, "thought_templates": st.ThoughtTemplates,
 		"setup_complete": st.SetupComplete,
 	}
 }

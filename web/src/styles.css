@@ -463,3 +463,4 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
 .template-pick .chip { font-weight: 600; }
 .template-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
 .template-edit textarea { font-size: 13.5px; line-height: 1.55; }
+.review-section h6 { font-size: 13px; font-weight: 650; margin: 0 0 2px; color: var(--muted); }
