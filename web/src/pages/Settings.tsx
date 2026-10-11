@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
+import type { APIToken, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 import { Avatar } from '../components/people'
 import { KindleImport } from '../components/KindleImport'
@@ -9,18 +9,19 @@ import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
-type Tab = 'general' | 'metadata' | 'templates' | 'users' | 'profile' | 'api' | 'data' | 'about'
+type Tab = 'general' | 'metadata' | 'templates' | 'daily' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>('general')
+  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'general')
   return (
     <>
       <PageHeader title="Settings" />
-      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'daily', label: 'Daily highlights' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
       <div className="mt">
         {tab === 'general' && <General />}
         {tab === 'metadata' && <Metadata />}
         {tab === 'templates' && <Templates />}
+        {tab === 'daily' && <DailyTab />}
         {tab === 'users' && <Users />}
         {tab === 'profile' && <Profile />}
         {tab === 'api' && <Tokens />}
@@ -332,6 +333,55 @@ function Templates() {
           ))}
         </div>
         <div className="mt"><button className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
+      </Card>
+    </div>
+  )
+}
+
+/** Daily highlights: when and where the morning review goes. */
+function DailyTab() {
+  const { toast } = useToast()
+  const { data, setData } = useAsync(() => api.get<DailySettings>(`${V1}/daily/settings`), [])
+  const [busy, setBusy] = useState(false)
+  if (!data) return <Loading />
+  const f = data
+  const set = (p: Partial<DailySettings>) => setData({ ...f, ...p })
+  const save = async () => {
+    setBusy(true)
+    try { setData(await api.put<DailySettings>(`${V1}/daily/settings`, f)); toast('Saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const test = async () => {
+    setBusy(true)
+    try { await api.put(`${V1}/daily/settings`, f); await api.post(`${V1}/daily/send`); toast('Sent — check your phone') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const hints: Record<string, string> = {
+    apprise: 'Apprise API route, e.g. http://192.168.1.10:8000/notify/bookshelf-daily',
+    ntfy: 'ntfy topic, e.g. https://ntfy.example.com/reading',
+    webhook: 'Any URL that accepts a JSON POST {title, body, url, date, quotes}',
+  }
+  return (
+    <div className="two-col">
+      <Card title="Daily highlights">
+        <div className="grid" style={{ gap: 14 }}>
+          <p className="muted">Every morning a few of your highlights come back: the ones you have not seen for longest, favourites more often, never two from the same book. They are on the <b>Daily</b> page anyway; here you choose whether they are also sent to your phone.</p>
+          <label className="row"><input type="checkbox" checked={f.enabled} onChange={e => set({ enabled: e.target.checked })} style={{ width: 'auto' }} /> Send them to my phone every day</label>
+          <div className="two-col tight">
+            <Field group label="How many"><Segmented size="sm" value={f.count} onChange={v => set({ count: v })} options={[3, 4, 5, 6, 7].map(n => ({ value: n, label: String(n) }))} /></Field>
+            <Field label="At"><input type="time" value={f.time} onChange={e => set({ time: e.target.value })} style={{ maxWidth: 140 }} /></Field>
+          </div>
+          <Field group label="Send through"><Segmented size="sm" value={f.channel} onChange={v => set({ channel: v })} options={[{ value: 'apprise', label: 'Apprise' }, { value: 'ntfy', label: 'ntfy' }, { value: 'webhook', label: 'Webhook' }]} /></Field>
+          <Field label="Address" help={hints[f.channel]}><input value={f.url} onChange={e => set({ url: e.target.value.trim() })} placeholder="http://…" spellCheck={false} /></Field>
+          <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={busy || !f.url}>Send today’s now</button></div>
+        </div>
+      </Card>
+      <Card title="How it picks">
+        <ul className="muted small" style={{ paddingLeft: 18, margin: 0 }}>
+          <li>Highlights never shown come first, then the longest unseen; one shown in the last week rests.</li>
+          <li>♡ favourites count double.</li>
+          <li>At most one highlight per book each day.</li>
+          <li>Hidden highlights never come back (they stay in Quotes).</li>
+          <li>Today’s set stays the same all day; <b>↻ Shuffle</b> on the Daily page picks a new one.</li>
+        </ul>
       </Card>
     </div>
   )

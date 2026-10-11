@@ -58,6 +58,8 @@ func (s *Server) authorWorker(ctx context.Context) {
 				break
 			}
 		}
+		// Authors are linked now: look new books up for series.
+		s.detectSeries(ctx)
 	}
 }
 

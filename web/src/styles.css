@@ -516,3 +516,31 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .photo-option:hover img, .photo-option:focus-visible img { box-shadow: 0 0 0 3px var(--accent); }
 .photo-option .spinner { position: absolute; top: 45%; left: 45%; }
 .photo-option.busy img { opacity: .5; }
+/* ---- daily highlights ---- */
+.daily-list { display: grid; gap: 12px; }
+.daily-quote { display: grid; grid-template-columns: 40px 1fr; gap: 14px; padding: 14px 16px; margin: 0 0 10px; }
+.daily-quote.big { grid-template-columns: 64px 1fr; padding: 18px 20px; }
+.daily-quote.big blockquote { font-size: 18px; }
+.daily-quote .q-note { margin: 6px 0 0 14px; font-style: italic; font-size: 13.5px; }
+.quote.is-hidden { opacity: .55; }
+.fav-q { color: var(--muted); font-size: 15px; }
+.fav-q.on { color: #f43f5e; }
+/* ---- series ---- */
+.book-series { margin-top: 4px; font-size: 14px; }
+.series-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.series-card { display: flex; gap: 16px; align-items: center; padding: 14px; color: var(--text); }
+.series-card:hover { border-color: var(--accent); text-decoration: none; }
+.series-card .stack { position: relative; width: 106px; height: 60px; flex-shrink: 0; }
+.series-card .stack-item { position: absolute; top: 0; left: 0; }
+.series-card .info { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.series-card .nm { font-weight: 650; }
+.series-card .bar { margin-top: 6px; }
+.series-progress { max-width: 420px; }
+.series-list { list-style: none; margin: 0; padding: 0; }
+.series-list li { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.series-list li:last-child { border-bottom: 0; }
+.series-list li a { color: var(--text); gap: 12px; }
+.series-list li a:hover { text-decoration: none; } .series-list li a:hover b { color: var(--accent-hover); }
+.series-list .no { width: 38px; text-align: right; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.series-list li.missing b { color: var(--muted); font-weight: 600; }
+.next-no { width: 40px; height: 60px; border-radius: 4px; background: var(--surface-2); display: grid; place-items: center; font-weight: 700; color: var(--muted); flex-shrink: 0; }

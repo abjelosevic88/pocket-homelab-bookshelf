@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { Book, Dashboard, Quote } from '../lib/types'
+import type { Book, DailySet, Dashboard } from '../lib/types'
 import { daysBetween, fmtDate, progress, todayISO, pageLabel } from '../lib/format'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
 import { AddBook } from '../components/AddBook'
 import { FinishModal } from '../components/FinishModal'
+import { QuoteCard } from '../components/QuoteCard'
 
 export default function Now() {
   const { settings } = useApp()
@@ -17,7 +18,7 @@ export default function Now() {
   const next = useAsync(() => api.get<Book[]>(`${V1}/books?status=want&sort=queue&limit=3`), [])
   const recent = useAsync(() => api.get<Book[]>(`${V1}/books?status=read&sort=finished&limit=6`), [])
   const dash = useAsync(() => api.get<Dashboard>(`${V1}/dashboard`), [])
-  const quote = useAsync(() => api.get<Quote[]>(`${V1}/quotes?random=1`), [])
+  const daily = useAsync(() => api.get<{ set: DailySet }>(`${V1}/daily`), [])
   const [adding, setAdding] = useState(false)
   const [finishing, setFinishing] = useState<Book | null>(null)
   const reloadAll = () => { reading.reload(); next.reload(); recent.reload(); dash.reload() }
@@ -28,7 +29,7 @@ export default function Now() {
   const d = dash.data
   const goal = settings?.yearly_goal || 0
   const year = new Date().getFullYear()
-  const q = quote.data?.[0]
+  const today = daily.data?.set.quotes || []
 
   return (
     <>
@@ -77,12 +78,15 @@ export default function Now() {
         </Card>
       </div>
 
-      {q && (
-        <figure className="quote-hero mt">
-          <blockquote>{q.text}</blockquote>
-          <figcaption>— <Link to={`/books/${q.book_id}`}>{q.book_title}</Link>{q.book_authors && <>, {q.book_authors}</>}{q.page && <span className="muted"> · {pageLabel(q.page)}</span>}</figcaption>
-          <button className="btn ghost sm" onClick={quote.reload} title="Another quote">↻</button>
-        </figure>
+      {today.length > 0 && (
+        <section className="mt">
+          <div className="row mb-sm"><h2 className="grow">Today’s highlights</h2><Link to="/daily" className="btn ghost sm">All {today.length} →</Link></div>
+          <figure className="quote-hero">
+            <blockquote>{today[0].text}</blockquote>
+            <figcaption>— <Link to={`/books/${today[0].book_id}`}>{today[0].book_title}</Link>{today[0].book_authors && <>, {today[0].book_authors.split(',')[0]}</>}{today[0].page && <span className="muted"> · {pageLabel(today[0].page)}</span>}</figcaption>
+          </figure>
+          {today.slice(1, 3).map(q => <QuoteCard key={q.id} quote={q} />)}
+        </section>
       )}
 
       {adding && <AddBook status="reading" onClose={() => setAdding(false)} onAdded={reloadAll} />}

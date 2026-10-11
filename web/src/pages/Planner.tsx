@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { Book, Dashboard } from '../lib/types'
+import type { Book, Candidate, Dashboard, SeriesNext } from '../lib/types'
 import { fmtMonth } from '../lib/format'
 import { Card, Confirm, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
@@ -19,6 +19,8 @@ export default function Planner() {
   const dash = useAsync(() => api.get<Dashboard>(`${V1}/dashboard`), [])
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<Book | null>(null)
+  const next = useAsync(() => api.get<SeriesNext[]>(`${V1}/series/next`), [])
+  const [addNext, setAddNext] = useState<SeriesNext | null>(null)
 
   const groups: { key: string; books: Book[] }[] = []
   for (const b of data || []) {
@@ -41,7 +43,7 @@ export default function Planner() {
     try { await api.put(`${V1}/books/${b.id}`, { planned_for: m }); reload() } catch (e) { toast((e as Error).message, 'err') }
   }
   const start = async (b: Book) => {
-    try { await api.post(`${V1}/books/${b.id}/status`, { status: 'reading' }); toast(`Started “${b.title}” — good luck!`); reload(); dash.reload() } catch (e) { toast((e as Error).message, 'err') }
+    try { await api.post(`${V1}/books/${b.id}/status`, { status: 'reading' }); toast(`Started “${b.title}” — good luck!`); reload(); dash.reload(); next.reload() } catch (e) { toast((e as Error).message, 'err') }
   }
   const remove = async (b: Book) => { setRemoving(null); await api.del(`${V1}/books/${b.id}`); toast('Removed from your plan'); reload() }
 
@@ -57,6 +59,20 @@ export default function Planner() {
         <div className="callout mb">
           {toGo === 0 ? <>Yearly goal of {goal} reached 🎉 — everything from here is a bonus.</> : <><b>{toGo}</b> more {toGo === 1 ? 'book' : 'books'} to reach {goal} this year — about <b>{(toGo / monthsLeft).toFixed(1)}</b> a month. {data && data.length < toGo && <span className="muted">Your plan has {data.length}.</span>}</>}
         </div>
+      )}
+      {next.data && next.data.length > 0 && (
+        <Card className="mb" title="Next in your series">
+          <ul className="mini-list">
+            {next.data.map(n => (
+              <li key={n.series}>
+                {n.book ? <Link to={`/books/${n.book.id}`}><Cover book={n.book} size="xs" /></Link> : <span className="next-no">#{n.no}</span>}
+                <span className="grow"><b>{n.book ? n.book.title : n.title}</b>
+                  <span className="muted small block"><Link to={`/series/${encodeURIComponent(n.series)}`}>{n.series}</Link> · #{n.no}{n.total ? ` of ${n.total}` : ''} · you read {n.read}{n.book ? ' · already in your plan' : ''}</span></span>
+                {n.book ? <button className="btn sm" onClick={() => start(n.book!)}>Start</button> : <button className="btn sm" onClick={() => setAddNext(n)}>+ Add to plan</button>}
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
       {loading && !data ? <Loading /> : !data || data.length === 0 ? (
         <Card><Empty title="Nothing planned yet">Add books you want to read. Put them in order, pencil some in for a month, and start the next one from here.</Empty></Card>
@@ -86,6 +102,8 @@ export default function Planner() {
         </section>
       ))}
       {adding && <AddBook status="want" onClose={() => setAdding(false)} onAdded={reload} />}
+      {addNext && <AddBook status="want" initial={addNext.ol_work ? { source: 'openlibrary', source_id: addNext.ol_work, source_url: 'https://openlibrary.org' + addNext.ol_work, title: addNext.title, subtitle: '', authors: [], published: addNext.year || '', pages: 0, isbn13: '', isbn10: '', publisher: '', language: '', description: '', subjects: [], cover_url: '', thumb_url: '' } as Candidate : undefined}
+        query={addNext.ol_work ? undefined : addNext.title} extra={{ series: addNext.series, series_no: addNext.no }} onClose={() => setAddNext(null)} onAdded={() => { reload(); next.reload() }} />}
       {removing && <Confirm title={`Remove “${removing.title}”?`} message="It is deleted from your shelf. (To keep it but not plan it, just leave it at the end.)" onCancel={() => setRemoving(null)} onConfirm={() => remove(removing)} />}
     </>
   )

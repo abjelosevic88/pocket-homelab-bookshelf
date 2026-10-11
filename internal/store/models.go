@@ -62,6 +62,9 @@ type Book struct {
 	QueuePos    int     `json:"queue_pos"`
 	PlannedFor  string  `json:"planned_for"`
 	PlanNote    string  `json:"plan_note"`
+	Series      string  `json:"series"`
+	SeriesNo    string  `json:"series_no"` // "1", "0" (prequel), "2.5"; "" unknown
+	SeriesQID   string  `json:"series_qid"`
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
 
@@ -90,6 +93,9 @@ type Quote struct {
 	Page      string `json:"page"`
 	Note      string `json:"note"`
 	CreatedAt string `json:"created_at"`
+	Favorite  bool   `json:"favorite"`
+	Hidden    bool   `json:"hidden"` // never picked for the daily review
+	LastShown string `json:"last_shown"`
 
 	// Joined, read-only.
 	BookTitle   string `json:"book_title"`

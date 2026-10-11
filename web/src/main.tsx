@@ -13,6 +13,9 @@ import Planner from './pages/Planner'
 import Quotes from './pages/Quotes'
 import Stats from './pages/Stats'
 import Authors from './pages/Authors'
+import Daily from './pages/Daily'
+import Series from './pages/Series'
+import SeriesDetail from './pages/SeriesDetail'
 import Author from './pages/Author'
 import { AuthorByName } from './components/AuthorBits'
 import Settings from './pages/Settings'
@@ -45,6 +48,9 @@ function App() {
         <Route path="/planner" element={<Planner />} />
         <Route path="/quotes" element={<Quotes />} />
         <Route path="/authors" element={<Authors />} />
+        <Route path="/daily" element={<Daily />} />
+        <Route path="/series" element={<Series />} />
+        <Route path="/series/:name" element={<SeriesDetail />} />
         <Route path="/authors/:id" element={<Author />} />
         <Route path="/author/:name" element={<AuthorByName />} />
         <Route path="/stats" element={<Stats />} />

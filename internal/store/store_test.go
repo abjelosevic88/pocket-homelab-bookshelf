@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -212,5 +213,36 @@ func TestAuthorsFollowBooks(t *testing.T) {
 	list, _ = s.ListAuthors(ctx, uid, "", "name")
 	if len(list) != 1 || list[0].Name != "Ursula K. Le Guin" || !list[0].Followed {
 		t.Fatalf("followed author kept: %+v", list)
+	}
+}
+
+func TestPickQuotesPrefersUnseenAndSpreadsBooks(t *testing.T) {
+	today := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
+	var c []candidate
+	for i := int64(1); i <= 30; i++ {
+		last := "2026-10-11" // seen yesterday
+		if i > 25 {
+			last = "" // never shown
+		}
+		c = append(c, candidate{id: i, book: i % 3, last: last})
+	}
+	rnd := rand.New(rand.NewSource(1))
+	got := pickQuotes(c, 3, today, rnd)
+	if len(got) != 3 {
+		t.Fatalf("want 3, got %v", got)
+	}
+	books := map[int64]bool{}
+	unseen := 0
+	for _, id := range got {
+		books[id%3] = true
+		if id > 25 {
+			unseen++
+		}
+	}
+	if len(books) != 3 {
+		t.Fatalf("books repeat: %v", got)
+	}
+	if unseen < 2 {
+		t.Fatalf("expected mostly never-shown quotes, got %v", got)
 	}
 }

@@ -4,8 +4,11 @@ import type { Book, Candidate } from '../lib/types'
 import { Field, Modal, Segmented, useToast } from './ui'
 import { BookSearch, fromCandidate, withDetails } from './BookSearch'
 import { Cover, RemoteCover } from './Cover'
+import { Select } from './Select'
+import { useAsync } from './ui'
+import type { SeriesSummary } from '../lib/types'
 
-export type BookDraft = Pick<Book, 'title' | 'subtitle' | 'authors' | 'isbn13' | 'isbn10' | 'pages' | 'published' | 'publisher' | 'language' | 'description' | 'source' | 'source_id' | 'source_url' | 'tags' | 'format'>
+export type BookDraft = Pick<Book, 'title' | 'subtitle' | 'authors' | 'isbn13' | 'isbn10' | 'pages' | 'published' | 'publisher' | 'language' | 'description' | 'source' | 'source_id' | 'source_url' | 'tags' | 'format'> & { series?: string; series_no?: string }
 
 export function emptyBook(): BookDraft {
   return { title: '', subtitle: '', authors: '', isbn13: '', isbn10: '', pages: 0, published: '', publisher: '', language: '', description: '', source: '', source_id: '', source_url: '', tags: '', format: '' }
@@ -34,6 +37,10 @@ export function BookFields({ draft, onChange, full = false }: { draft: BookDraft
         <div className="two-col tight">
           <Field group label="Format"><Segmented size="sm" value={draft.format} onChange={v => onChange({ ...draft, format: v })} options={[{ value: '', label: '–' }, { value: 'paper', label: 'Paper' }, { value: 'ebook', label: 'E-book' }, { value: 'audio', label: 'Audio' }]} /></Field>
           <Field label="Tags" help="Comma separated."><input value={draft.tags} onChange={set('tags')} /></Field>
+        </div>
+        <div className="two-col tight">
+          <Field group label="Series" help="Pick one of yours or type a new name."><SeriesPicker value={draft.series || ''} onChange={v => onChange({ ...draft, series: v })} /></Field>
+          <Field label="Number in series" help="1, 2 … — 0 for a prequel, 2.5 for an in-between."><input value={draft.series_no || ''} onChange={e => onChange({ ...draft, series_no: e.target.value.trim() })} placeholder="e.g. 4" style={{ maxWidth: 120 }} /></Field>
         </div>
         <Field label="Description"><textarea rows={5} value={draft.description} onChange={set('description')} /></Field>
       </>}
@@ -98,4 +105,11 @@ export function EditBook({ book, onClose, onSaved }: { book: Book; onClose: () =
       </form>
     </Modal>
   )
+}
+
+function SeriesPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data } = useAsync(() => api.get<SeriesSummary[]>(`${V1}/series`), [])
+  const names = Array.from(new Set([...(data || []).map(s => s.name), ...(value ? [value] : [])])).sort()
+  return <Select value={value} onChange={onChange} placeholder="No series" clearLabel="No series" ariaLabel="Series"
+    options={names.map(n => ({ value: n, label: n }))} onCreate={name => name} createLabel="New series" />
 }

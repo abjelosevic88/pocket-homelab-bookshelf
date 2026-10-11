@@ -71,6 +71,7 @@ export default function Book() {
         <h1 className="book-title">{b.title}</h1>
         {b.subtitle && <div className="book-subtitle">{b.subtitle}</div>}
         <div className="book-authors">{splitTags(b.authors).map((a, i) => <span key={a}>{i > 0 && ', '}<AuthorLink name={a} /></span>)}</div>
+        {b.series && <div className="book-series"><Link to={`/series/${encodeURIComponent(b.series)}`}>📚 {b.series}{b.series_no !== '' && <> · #{b.series_no}</>}</Link></div>}
         <div className="row wrap mt-sm">
           <Stars value={b.rating} onChange={v => patch({ rating: v }, v ? `Rated ${v}★` : 'Rating cleared')} size="lg" />
           <button className={`fav-btn ${b.favorite ? 'on' : ''}`} onClick={() => patch({ favorite: !b.favorite })} title={b.favorite ? 'Favourite' : 'Mark as favourite'}>♥</button>

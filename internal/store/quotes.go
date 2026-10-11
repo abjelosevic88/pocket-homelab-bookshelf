@@ -7,11 +7,13 @@ import (
 
 // QuoteFilter narrows ListQuotes. UserID is required.
 type QuoteFilter struct {
-	UserID int64
-	BookID int64
-	Query  string
-	Random bool // one random quote
-	Limit  int
+	UserID   int64
+	BookID   int64
+	Query    string
+	Random   bool // one random quote (never a hidden one)
+	Favorite bool
+	Hidden   int // 0 any, 1 only hidden, -1 not hidden
+	Limit    int
 }
 
 // ListQuotes returns saved quotes, newest first (or one at random).
@@ -27,6 +29,14 @@ func (s *Store) ListQuotes(ctx context.Context, f QuoteFilter) ([]Quote, error) 
 		where = append(where, "(LOWER(q.text) LIKE ? OR LOWER(q.note) LIKE ? OR LOWER(b.title) LIKE ? OR LOWER(b.authors) LIKE ?)")
 		args = append(args, like, like, like, like)
 	}
+	if f.Favorite {
+		where = append(where, "q.favorite = 1")
+	}
+	if f.Random || f.Hidden == -1 {
+		where = append(where, "q.hidden = 0")
+	} else if f.Hidden == 1 {
+		where = append(where, "q.hidden = 1")
+	}
 	order := "q.created_at DESC, q.id DESC"
 	if f.BookID > 0 {
 		order = "q.id"
@@ -34,7 +44,7 @@ func (s *Store) ListQuotes(ctx context.Context, f QuoteFilter) ([]Quote, error) 
 	if f.Random {
 		order, f.Limit = "RANDOM()", 1
 	}
-	query := `SELECT q.id, q.book_id, q.text, q.page, q.note, q.created_at, b.title, b.authors, b.cover
+	query := `SELECT q.id, q.book_id, q.text, q.page, q.note, q.created_at, q.favorite, q.hidden, q.last_shown, b.title, b.authors, b.cover
 		FROM quotes q JOIN books b ON b.id = q.book_id WHERE ` + strings.Join(where, " AND ") + ` ORDER BY ` + order
 	if f.Limit > 0 {
 		query += ` LIMIT ?`
@@ -48,9 +58,11 @@ func (s *Store) ListQuotes(ctx context.Context, f QuoteFilter) ([]Quote, error) 
 	out := []Quote{}
 	for rows.Next() {
 		var q Quote
-		if err := rows.Scan(&q.ID, &q.BookID, &q.Text, &q.Page, &q.Note, &q.CreatedAt, &q.BookTitle, &q.BookAuthors, &q.BookCover); err != nil {
+		var fav, hid int
+		if err := rows.Scan(&q.ID, &q.BookID, &q.Text, &q.Page, &q.Note, &q.CreatedAt, &fav, &hid, &q.LastShown, &q.BookTitle, &q.BookAuthors, &q.BookCover); err != nil {
 			return nil, err
 		}
+		q.Favorite, q.Hidden = fav == 1, hid == 1
 		out = append(out, q)
 	}
 	return out, rows.Err()

@@ -11,12 +11,16 @@ import { pageLabel } from '../lib/format'
 export default function Quotes() {
   const { toast } = useToast()
   const [q, setQ] = useState('')
+  const [filter, setFilter] = useState<'all' | 'fav' | 'hidden'>('all')
   const dq = useDebounce(q, 250)
-  const { data, loading, reload } = useAsync(() => api.get<Quote[]>(`${V1}/quotes${dq ? `?q=${encodeURIComponent(dq)}` : ''}`), [dq])
+  const { data, loading, reload } = useAsync(() => api.get<Quote[]>(`${V1}/quotes?${new URLSearchParams({ ...(dq && { q: dq }), ...(filter === 'fav' && { favorite: '1' }), ...(filter === 'hidden' && { hidden: '1' }) })}`), [dq, filter])
   const random = useAsync(() => api.get<Quote[]>(`${V1}/quotes?random=1`), [])
   const [edit, setEdit] = useState<Quote | null>(null)
   const [del, setDel] = useState<Quote | null>(null)
   const [kindle, setKindle] = useState(false)
+  const flag = async (qt: Quote, f: { favorite?: boolean; hidden?: boolean }) => {
+    try { await api.post(`${V1}/quotes/${qt.id}/flags`, f); reload() } catch (e) { toast((e as Error).message, 'err') }
+  }
   const r = random.data?.[0]
   return (
     <>
@@ -29,12 +33,18 @@ export default function Quotes() {
         </figure>
       )}
       <div className="toolbar"><div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search quotes, notes, books…" /></div></div>
+      <div className="filters">
+        <button className={`chip ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+        <button className={`chip ${filter === 'fav' ? 'active' : ''}`} onClick={() => setFilter('fav')}>♥ Favourites</button>
+        <button className={`chip ${filter === 'hidden' ? 'active' : ''}`} onClick={() => setFilter('hidden')}>Hidden from daily</button>
+        <span className="spacer" /><Link to="/daily" className="btn ghost sm">Today’s highlights →</Link>
+      </div>
       {loading && !data ? <Loading /> : data && data.length === 0 ? (
         <Card><Empty title={dq ? 'No quotes match' : 'No quotes yet'}>{dq ? '' : 'Open a book and use “+ Add quote” to keep a passage, or import your Kindle highlights.'}</Empty></Card>
       ) : (
         <div className="quote-list">
           {data?.map(qt => (
-            <figure key={qt.id} className="quote card">
+            <figure key={qt.id} className={`quote card ${qt.hidden ? 'is-hidden' : ''}`}>
               <Link to={`/books/${qt.book_id}`} className="q-cover"><Cover book={{ id: qt.book_id, title: qt.book_title, authors: qt.book_authors, cover: qt.book_cover }} size="xs" /></Link>
               <div>
                 <blockquote>{qt.text}</blockquote>
@@ -42,6 +52,8 @@ export default function Quotes() {
                   <Link to={`/books/${qt.book_id}`}>{qt.book_title}</Link>{qt.page && <span className="muted"> · {pageLabel(qt.page)}</span>}
                   {qt.note && <span className="note">{qt.note}</span>}
                   <span className="spacer" />
+                  <button className={`btn ghost sm fav-q ${qt.favorite ? 'on' : ''}`} onClick={() => flag(qt, { favorite: !qt.favorite })} title="Favourite: comes back more often in daily highlights">{qt.favorite ? '♥' : '♡'}</button>
+                  <button className="btn ghost sm" onClick={() => flag(qt, { hidden: !qt.hidden })} title={qt.hidden ? 'Show in daily highlights again' : 'Keep out of daily highlights'}>{qt.hidden ? 'Unhide' : 'Hide'}</button>
                   <button className="btn ghost sm" onClick={() => setEdit(qt)}>Edit</button>
                   <button className="btn ghost sm danger-text" onClick={() => setDel(qt)}>✕</button>
                 </figcaption>

@@ -30,6 +30,9 @@ export interface Book {
   queue_pos: number
   planned_for: string
   plan_note: string
+  series: string
+  series_no: string
+  series_qid: string
   created_at: string
   updated_at: string
   started_on: string
@@ -39,7 +42,7 @@ export interface Book {
 }
 
 export interface Read { id: number; book_id: number; started_on: string; finished_on: string; abandoned: boolean }
-export interface Quote { id: number; book_id: number; text: string; page: string; note: string; created_at: string; book_title: string; book_authors: string; book_cover: string }
+export interface Quote { id: number; book_id: number; text: string; page: string; note: string; created_at: string; favorite: boolean; hidden: boolean; last_shown: string; book_title: string; book_authors: string; book_cover: string }
 
 export interface Candidate {
   source: 'openlibrary' | 'google'
@@ -136,3 +139,9 @@ export interface Author {
 }
 
 export interface AuthorCandidate { key: string; name: string; birth_date: string; death_date: string; top_work: string; work_count: number; subjects: string[] | null; photo_url: string; author_id?: number }
+
+export interface DailySet { date: string; quotes: Quote[]; sent_at: string }
+export interface DailySettings { enabled: boolean; count: number; time: string; channel: 'apprise' | 'ntfy' | 'webhook'; url: string }
+export interface SeriesSummary { name: string; qid: string; authors: string; books: number; read: number; reading: number; want: number; covers: Book[]; last_no: string; total: number }
+export interface SeriesEntry { no: string; title: string; year?: string; ol_work?: string; book?: Book }
+export interface SeriesNext { series: string; no: string; title: string; year?: string; ol_work?: string; book?: Book; read: number; total: number }

@@ -454,8 +454,15 @@ func (s *Server) handleDeleteRead(w http.ResponseWriter, r *http.Request) {
 // ---- quotes ----
 
 func (s *Server) handleListQuotes(w http.ResponseWriter, r *http.Request) {
+	hidden := 0
+	switch r.URL.Query().Get("hidden") {
+	case "1":
+		hidden = 1
+	case "0":
+		hidden = -1
+	}
 	q, err := s.store.ListQuotes(r.Context(), store.QuoteFilter{UserID: me(r), BookID: queryInt(r, "book"), Query: r.URL.Query().Get("q"),
-		Random: queryBool(r, "random"), Limit: int(queryInt(r, "limit"))})
+		Random: queryBool(r, "random"), Favorite: queryBool(r, "favorite"), Hidden: hidden, Limit: int(queryInt(r, "limit"))})
 	if err != nil {
 		s.fail(w, err, "list quotes")
 		return

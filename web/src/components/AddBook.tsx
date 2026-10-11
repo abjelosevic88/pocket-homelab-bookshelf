@@ -13,7 +13,7 @@ import { BookFields, emptyBook, type BookDraft } from './BookForm'
 type Step = { kind: 'search' } | { kind: 'pick'; c: Candidate; loading: boolean } | { kind: 'manual' }
 
 /** Add a book: search the catalogues (or type it in), then say where it stands. */
-export function AddBook({ status: initialStatus = 'want', initial, onClose, onAdded }: { status?: Status; initial?: Candidate; onClose: () => void; onAdded?: (b: Book) => void }) {
+export function AddBook({ status: initialStatus = 'want', initial, query, extra, onClose, onAdded }: { status?: Status; initial?: Candidate; query?: string; extra?: Record<string, unknown>; onClose: () => void; onAdded?: (b: Book) => void }) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = useState<Step>({ kind: 'search' })
@@ -43,7 +43,7 @@ export function AddBook({ status: initialStatus = 'want', initial, onClose, onAd
     const coverUrl = step.kind === 'pick' ? step.c.cover_url : ''
     setBusy(true)
     try {
-      const body: Record<string, unknown> = { ...draft, status, format, tags: tags || draft.tags, cover_url: coverUrl, allow_duplicate: dup !== null }
+      const body: Record<string, unknown> = { ...draft, status, format, tags: tags || draft.tags, cover_url: coverUrl, allow_duplicate: dup !== null, ...(extra || {}) }
       if (status === 'read') { body.finished_on = finished; body.rating = rating }
       if (status === 'want') body.plan_note = planNote
       const r = await api.post<{ book: Book; warning?: string }>(`${V1}/books`, body)
@@ -84,7 +84,7 @@ export function AddBook({ status: initialStatus = 'want', initial, onClose, onAd
     <Modal title={step.kind === 'manual' ? 'Add a book by hand' : initial ? 'Book details' : 'Add a book'} onClose={onClose} size="lg">
       {step.kind === 'search' && (
         <>
-          <BookSearch onPick={pick} />
+          <BookSearch onPick={pick} initial={query} />
           <div className="form-actions"><button className="btn ghost" onClick={() => setStep({ kind: 'manual' })}>Not found? Add it by hand</button></div>
         </>
       )}

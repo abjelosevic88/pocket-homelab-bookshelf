@@ -30,7 +30,8 @@ export function BookRow({ book }: { book: Book }) {
         <div className="nm">{book.title}{book.favorite && <span className="fav-inline">♥</span>}</div>
         <div className="meta">
           <span>{book.authors || 'Unknown author'}</span>
-          {book.published && <span className="hide-sm">· {book.published}</span>}
+          {book.series && <span className="hide-sm">· {book.series}{book.series_no !== '' ? ` #${book.series_no}` : ''}</span>}
+          {book.published && !book.series && <span className="hide-sm">· {book.published}</span>}
           {splitTags(book.tags).slice(0, 3).map(t => <span key={t} className="badge tag hide-sm">{t}</span>)}
         </div>
       </div>

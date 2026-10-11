@@ -123,7 +123,7 @@ func (s *Store) FindAuthorByName(ctx context.Context, userID int64, name string)
 // AuthorBooks lists the user's books by an author.
 func (s *Store) AuthorBooks(ctx context.Context, userID, authorID int64) ([]Book, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT `+bookCols+` FROM books b JOIN book_authors ba ON ba.book_id = b.id
-		WHERE ba.author_id = ? AND b.user_id = ? ORDER BY (b.status = 'read') DESC, 30 DESC, b.created_at DESC`, authorID, userID)
+		WHERE ba.author_id = ? AND b.user_id = ? ORDER BY (b.status = 'read') DESC, 33 DESC, b.created_at DESC`, authorID, userID)
 	if err != nil {
 		return nil, err
 	}

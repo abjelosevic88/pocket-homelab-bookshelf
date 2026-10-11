@@ -106,6 +106,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		return err
 	}
 	go s.authorWorker(ctx)
+	go s.dailyScheduler(ctx)
 	s.kickAuthors()
 	return nil
 }
@@ -164,6 +165,12 @@ func (s *Server) Router() http.Handler {
 			r.Post("/books/{id}/quotes", s.handleCreateQuote)
 			r.Get("/quotes", s.handleListQuotes)
 			r.Put("/quotes/{id}", s.handleUpdateQuote)
+			r.Post("/quotes/{id}/flags", s.handleQuoteFlags)
+			r.Get("/daily", s.handleDaily)
+			r.Post("/daily/shuffle", s.handleDailyShuffle)
+			r.Post("/daily/send", s.handleDailySend)
+			r.Get("/daily/settings", s.handleGetDailySettings)
+			r.Put("/daily/settings", s.handlePutDailySettings)
 			r.Delete("/quotes/{id}", s.handleDeleteQuote)
 			r.Put("/planner/order", s.handleReorderPlanner)
 
@@ -181,6 +188,11 @@ func (s *Server) Router() http.Handler {
 			r.Post("/authors/{id}/photo", s.handleSetAuthorPhoto)
 			r.Delete("/authors/{id}/photo", s.handleDeleteAuthorPhoto)
 			r.Get("/tags", s.handleListTags)
+			r.Get("/series", s.handleListSeries)
+			r.Get("/series/detail", s.handleSeriesDetail)
+			r.Get("/series/next", s.handleSeriesNext)
+			r.Put("/series/rename", s.handleRenameSeries)
+			r.Post("/series/detect", s.handleDetectSeries)
 
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
