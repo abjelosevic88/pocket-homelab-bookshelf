@@ -401,3 +401,11 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
 .bio.full h3 { font-size: 16px; margin: 22px 0 8px; }
 .bio.full h4 { font-size: 14px; margin: 16px 0 6px; color: var(--muted); }
 .read-more { padding-left: 0; color: var(--accent-hover); }
+.work-open { padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; }
+.work-open:hover .cover { box-shadow: 0 0 0 2px var(--accent); }
+.work-title { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); text-align: left; cursor: pointer; }
+.work-title:hover { color: var(--accent-hover); }
+.lang-picker { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lang-chip { display: inline-flex; gap: 6px; align-items: center; cursor: default; }
+.lang-chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; font: inherit; opacity: .7; }
+.lang-chip button:hover { opacity: 1; }

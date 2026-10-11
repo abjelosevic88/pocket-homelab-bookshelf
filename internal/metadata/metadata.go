@@ -35,7 +35,9 @@ type Candidate struct {
 	CoverURL    string   `json:"cover_url"` // large, for saving
 	ThumbURL    string   `json:"thumb_url"` // small, for the result list
 
-	OriginalTitle string `json:"original_title,omitempty"` // when Title is an English edition's
+	OriginalTitle string   `json:"original_title,omitempty"` // when Title is a preferred-language edition's
+	Editions      int      `json:"editions,omitempty"`
+	Languages     []string `json:"languages,omitempty"` // ISO 639-1 codes of available editions
 }
 
 // Client talks to the catalogues.
@@ -44,6 +46,9 @@ type Client struct {
 	UserAgent string
 	// GoogleKey returns the current Google Books API key ("" = Google disabled).
 	GoogleKey func() string
+	// Langs returns the preferred languages (ISO 639-1, most preferred first):
+	// results with an edition in them come first, shown as that edition.
+	Langs func() []string
 }
 
 // New returns a client with the given timeout.

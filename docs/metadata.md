@@ -15,6 +15,8 @@ All lookups happen **on the server**, so the browser never talks to Google or Op
 
 With **All** (the default) both are searched in parallel and the results interleaved; a book both know (same ISBN-13) is shown once, with missing fields borrowed from the other. If one catalogue fails, you get the other's results and a warning.
 
+**Preferred languages** (Settings → Metadata, up to three, in order): for each one Open Library is also asked which works have an edition in that language. Those works come first, shown as that edition (its title, cover and ISBN, with the original title underneath). Works with no edition in your languages follow in catalogue order. The same applies to authors' bibliographies, and Google Books results are re-ordered by language. Open Library's Serbian, Croatian and Bosnian coverage is thin, so a second language like English is a useful fallback.
+
 **ISBN searches** (`9780441478125`, `978-0-441-47812-5`, `ISBN 0441478123`) are detected and pinned to that edition: its page count, publisher and cover.
 
 ### Getting a Google Books key

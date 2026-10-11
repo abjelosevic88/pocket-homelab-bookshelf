@@ -4,6 +4,7 @@ import { useApp } from '../lib/app-context'
 import type { Candidate } from '../lib/types'
 import { Segmented, useDebounce } from './ui'
 import { RemoteCover } from './Cover'
+import { langName } from '../lib/languages'
 
 const SOURCE_LABEL: Record<string, string> = { all: 'All', openlibrary: 'Open Library', google: 'Google Books' }
 
@@ -49,10 +50,12 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
                 <RemoteCover url={c.thumb_url} title={c.title} size="xs" />
                 <span className="info">
                   <span className="nm">{c.title}{c.subtitle && <span className="muted">: {c.subtitle}</span>}</span>
+                  {c.original_title && <span className="meta">Original: {c.original_title}</span>}
                   <span className="meta">{(c.authors || []).join(', ') || 'Unknown author'}{c.published && <> · {c.published}</>}{c.pages > 0 && <> · {c.pages} p.</>}</span>
                 </span>
                 <span className="tags">
                   {c.on_shelf ? <span className="badge cat">on shelf</span> : null}
+                  {c.language && <span className="badge" title="Edition shown">{langName(c.language)}</span>}
                   <span className="badge">{c.source === 'google' ? 'Google' : 'Open Library'}</span>
                 </span>
               </button>

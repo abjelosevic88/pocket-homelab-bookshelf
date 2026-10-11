@@ -10,7 +10,7 @@ const DefaultTitle = "Pocket Bookshelf"
 
 // GetSettings loads all settings with defaults applied.
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
-	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all"}
+	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all", Languages: "en"}
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return st, err
@@ -40,6 +40,8 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			}
 		case "google_books_key":
 			st.GoogleBooksKey = v
+		case "languages":
+			st.Languages = v
 		case "setup_complete":
 			st.SetupComplete = v == "1"
 		}
@@ -55,6 +57,7 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 		"landing":          st.Landing,
 		"search_source":    st.SearchSource,
 		"google_books_key": st.GoogleBooksKey,
+		"languages":        st.Languages,
 		"setup_complete":   map[bool]string{true: "1", false: "0"}[st.SetupComplete],
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)

@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
 
@@ -29,6 +31,7 @@ func (s *Server) publicSettings(st store.Settings) map[string]any {
 	return map[string]any{
 		"title": st.Title, "yearly_goal": st.YearlyGoal, "landing": st.Landing, "search_source": st.SearchSource,
 		"google_books_key": st.GoogleBooksKey, "google_books_env": s.cfg.GoogleBooksKey != "", "sources": s.meta.Sources(),
+		"languages":      st.Languages,
 		"setup_complete": st.SetupComplete,
 	}
 }
@@ -57,6 +60,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		in.SearchSource = "all"
 	}
 	in.GoogleBooksKey = strings.TrimSpace(in.GoogleBooksKey)
+	var langs []string
+	for _, l := range strings.Split(strings.ToLower(in.Languages), ",") {
+		if l = strings.TrimSpace(l); metadata.MARCCode(l) != "" && !slices.Contains(langs, l) {
+			langs = append(langs, l)
+		}
+	}
+	in.Languages = strings.Join(langs, ",")
 	in.SetupComplete = cur.SetupComplete
 	if err := s.store.SaveSettings(r.Context(), in); err != nil {
 		s.fail(w, err, "save settings")

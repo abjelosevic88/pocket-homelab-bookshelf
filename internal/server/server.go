@@ -48,6 +48,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	st.OnAuthorsChanged = s.kickAuthors
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
+	s.meta.Langs = s.languages
 	return s
 }
 
@@ -57,6 +58,15 @@ func (s *Server) googleKey() string {
 		return st.GoogleBooksKey
 	}
 	return s.cfg.GoogleBooksKey
+}
+
+// languages are the preferred edition languages from Settings → Metadata.
+func (s *Server) languages() []string {
+	st, err := s.store.GetSettings(context.Background())
+	if err != nil || st.Languages == "" {
+		return nil
+	}
+	return strings.Split(st.Languages, ",")
 }
 
 // Bootstrap seeds the first admin (if configured) and demo data.

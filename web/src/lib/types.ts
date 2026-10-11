@@ -60,6 +60,8 @@ export interface Candidate {
   thumb_url: string
   on_shelf?: number
   original_title?: string
+  editions?: number
+  languages?: string[]
 }
 
 export interface Settings {
@@ -70,6 +72,7 @@ export interface Settings {
   google_books_key: string
   google_books_env: boolean
   sources: string[]
+  languages: string
 }
 
 export interface BookLine { id: number; title: string; authors: string; rating?: number; pages?: number; progress?: number; date?: string }

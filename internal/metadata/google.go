@@ -120,6 +120,7 @@ func (c *Client) SearchGoogle(ctx context.Context, query string, limit int) ([]C
 	for _, it := range res.Items {
 		out = append(out, gbCandidate(it))
 	}
+	rankByLanguage(out, c.langs())
 	return out, nil
 }
 

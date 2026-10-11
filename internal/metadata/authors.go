@@ -349,52 +349,45 @@ var (
 	worksCache = map[string]worksCacheEntry{}
 )
 
-// AuthorWorks lists an author's works on Open Library, most published first.
-// Results are cached for six hours.
+// AuthorWorks lists an author's works on Open Library, most published first;
+// works with an edition in a preferred language come first and are shown as
+// that edition. Results are cached for six hours.
 func (c *Client) AuthorWorks(ctx context.Context, key string, limit int) ([]Candidate, error) {
-	ck := key + "|" + strconv.Itoa(limit)
+	langs := c.langs()
+	ck := key + "|" + strconv.Itoa(limit) + "|" + strings.Join(langs, ",")
 	worksMu.Lock()
 	if e, ok := worksCache[ck]; ok && time.Since(e.at) < 6*time.Hour {
 		worksMu.Unlock()
 		return e.works, nil
 	}
 	worksMu.Unlock()
+	q := "author_key:" + key
+	sortBy := url.Values{"sort": {"editions"}}
+	var prefs map[string][]edition
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); prefs, _ = c.preferredEditions(ctx, q, sortBy, 150) }()
 	v := url.Values{}
-	v.Set("q", "author_key:"+key)
+	v.Set("q", q)
 	v.Set("sort", "editions")
 	v.Set("limit", strconv.Itoa(limit))
-	v.Set("fields", "key,title,subtitle,author_name,first_publish_year,cover_i,number_of_pages_median,edition_count,isbn,language,editions,editions.title,editions.language")
-	v.Set("lang", "en") // the "editions" field then carries an English edition when there is one
-	var res struct {
-		Docs []struct {
-			olDoc
-			EditionCount int `json:"edition_count"`
-			Editions     struct {
-				Docs []struct {
-					Title    string   `json:"title"`
-					Language []string `json:"language"`
-				} `json:"docs"`
-			} `json:"editions"`
-		} `json:"docs"`
-	}
-	if err := c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &res); err != nil {
+	v.Set("fields", olFields)
+	var res olSearch
+	err := c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &res)
+	wg.Wait()
+	if err != nil {
 		return nil, err
 	}
-	out := []Candidate{}
+	var withPref, without []Candidate
 	seen := map[string]bool{}
 	for _, d := range res.Docs {
 		// Barely catalogued records (one edition, no cover) are mostly noise.
 		if d.Title == "" || junkWork.MatchString(d.Title) || (d.EditionCount <= 1 && d.CoverI == 0) {
 			continue
 		}
-		cand := olCandidate(d.olDoc, "")
+		cand := olCandidate(d, "")
 		cand.Subjects = nil
-		for _, e := range d.Editions.Docs {
-			if t := englishTitle(e.Title); t != "" && contains(e.Language, "eng") && !strings.EqualFold(t, d.Title) && !junkWork.MatchString(t) {
-				cand.OriginalTitle, cand.Title = d.Title, t
-			}
-			break
-		}
+		applyPreferred(&cand, prefs[d.Key])
 		k, ko := workKey(cand.Title), workKey(cand.OriginalTitle)
 		if seen[k] || (ko != "" && seen[ko]) { // a less published duplicate (results come most published first)
 			continue
@@ -403,8 +396,13 @@ func (c *Client) AuthorWorks(ctx context.Context, key string, limit int) ([]Cand
 		if ko != "" {
 			seen[ko] = true
 		}
-		out = append(out, cand)
+		if len(prefs[d.Key]) > 0 {
+			withPref = append(withPref, cand)
+		} else {
+			without = append(without, cand)
+		}
 	}
+	out := append(withPref, without...)
 	worksMu.Lock()
 	worksCache[ck] = worksCacheEntry{at: time.Now(), works: out}
 	worksMu.Unlock()

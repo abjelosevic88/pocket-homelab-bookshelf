@@ -104,7 +104,10 @@ type Settings struct {
 	Landing        string `json:"landing"`     // now | library | planner
 	SearchSource   string `json:"search_source"`
 	GoogleBooksKey string `json:"google_books_key"`
-	SetupComplete  bool   `json:"setup_complete"`
+	// Languages are ISO 639-1 codes, most preferred first ("sr,en"): search
+	// results and bibliographies prefer editions in them.
+	Languages     string `json:"languages"`
+	SetupComplete bool   `json:"setup_complete"`
 }
 
 // Dashboard is the compact status used by widgets.

@@ -5,6 +5,7 @@ import type { APIToken, Settings as SettingsT, User } from '../lib/types'
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 import { Avatar } from '../components/people'
 import { KindleImport } from '../components/KindleImport'
+import { LANGUAGES, langName } from '../lib/languages'
 
 type Tab = 'general' | 'metadata' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
@@ -76,6 +77,9 @@ function Metadata() {
           <p className="muted">When you add a book, its details and cover come from free public catalogues. Covers are downloaded and kept with your data, so nothing is loaded from outside when you browse.</p>
           <Field group label="Search in" help="The default for the add-book search; you can switch per search.">
             <Segmented value={f.search_source} onChange={v => setF({ ...f, search_source: v })} options={[{ value: 'all', label: 'All' }, { value: 'openlibrary', label: 'Open Library' }, { value: 'google', label: 'Google Books' }]} />
+          </Field>
+          <Field group label="Preferred languages" help="Search results and authors' bibliographies show books available in these languages first, as that edition (title and cover). The first one wins when a book exists in several.">
+            <LanguagePicker value={f.languages} onChange={v => setF({ ...f, languages: v })} />
           </Field>
           <Field label="Google Books API key" help={<>Free: Google Cloud console → enable “Books API” → Credentials → API key. Without a key Google refuses anonymous searches. {f.google_books_env && !f.google_books_key && 'A key is set through GOOGLE_BOOKS_API_KEY.'}</>}>
             <input value={f.google_books_key} onChange={e => setF({ ...f, google_books_key: e.target.value.trim() })} placeholder={f.google_books_env ? 'using GOOGLE_BOOKS_API_KEY' : 'AIza…'} autoComplete="off" spellCheck={false} />
@@ -267,5 +271,30 @@ function About() {
         </table>
       )}
     </Card>
+  )
+}
+
+/** Ordered list of preferred languages with add / remove / move up. */
+function LanguagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const list = value.split(',').map(s => s.trim()).filter(Boolean)
+  const set = (l: string[]) => onChange(l.join(','))
+  const up = (i: number) => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }
+  return (
+    <div className="lang-picker">
+      {list.length === 0 && <span className="muted small">None: results in catalogue order.</span>}
+      {list.map((c, i) => (
+        <span key={c} className="chip active lang-chip">
+          <b>{i + 1}.</b> {langName(c)}
+          {i > 0 && <button type="button" onClick={() => up(i)} title="Prefer this one more" aria-label={`Move ${langName(c)} up`}>↑</button>}
+          <button type="button" onClick={() => set(list.filter(x => x !== c))} title="Remove" aria-label={`Remove ${langName(c)}`}>✕</button>
+        </span>
+      ))}
+      {list.length < 3 && (
+        <select value="" onChange={e => e.target.value && set([...list, e.target.value])} aria-label="Add a language" style={{ width: 'auto' }}>
+          <option value="">+ Add language…</option>
+          {Object.entries(LANGUAGES).filter(([c]) => !list.includes(c)).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+        </select>
+      )}
+    </div>
   )
 }

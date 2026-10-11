@@ -7,9 +7,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const olBase = "https://openlibrary.org"
+
+const olFields = "key,title,subtitle,author_name,first_publish_year,isbn,cover_i,number_of_pages_median,publisher,language,subject,edition_count"
 
 type olDoc struct {
 	Key          string   `json:"key"`
@@ -23,6 +26,7 @@ type olDoc struct {
 	Publisher    []string `json:"publisher"`
 	Language     []string `json:"language"`
 	Subject      []string `json:"subject"`
+	EditionCount int      `json:"edition_count"`
 }
 
 type olSearch struct {
@@ -47,14 +51,46 @@ func (c *Client) SearchOpenLibrary(ctx context.Context, query string, limit int)
 	v := url.Values{}
 	v.Set("q", q)
 	v.Set("limit", strconv.Itoa(limit))
-	v.Set("fields", "key,title,subtitle,author_name,first_publish_year,isbn,cover_i,number_of_pages_median,publisher,language,subject")
+	v.Set("fields", olFields)
 	var res olSearch
-	if err := c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &res); err != nil {
+	var prefs map[string][]edition
+	var prefOnly []olDoc
+	var wg sync.WaitGroup
+	if isbn == "" {
+		wg.Add(1)
+		go func() { defer wg.Done(); prefs, prefOnly = c.preferredEditions(ctx, q, nil, limit) }()
+	}
+	err := c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &res)
+	wg.Wait()
+	if err != nil && len(prefOnly) == 0 {
 		return nil, err
 	}
-	out := make([]Candidate, 0, len(res.Docs))
+	// Works with an edition in a preferred language first (catalogue order),
+	// then works found only through the language queries, then the rest.
+	var withPref, without []olDoc
+	inBase := map[string]bool{}
 	for _, d := range res.Docs {
-		out = append(out, olCandidate(d, isbn))
+		inBase[d.Key] = true
+		if len(prefs[d.Key]) > 0 {
+			withPref = append(withPref, d)
+		} else {
+			without = append(without, d)
+		}
+	}
+	for _, d := range prefOnly {
+		if !inBase[d.Key] {
+			withPref = append(withPref, d)
+		}
+	}
+	docs := append(withPref, without...)
+	if len(docs) > limit {
+		docs = docs[:limit]
+	}
+	out := make([]Candidate, 0, len(docs))
+	for _, d := range docs {
+		cand := olCandidate(d, isbn)
+		applyPreferred(&cand, prefs[d.Key])
+		out = append(out, cand)
 	}
 	// An ISBN names one edition: take its page count, publisher and cover.
 	if isbn != "" && len(out) > 0 {
@@ -67,6 +103,7 @@ func (c *Client) SearchOpenLibrary(ctx context.Context, query string, limit int)
 
 func olCandidate(d olDoc, wantISBN string) Candidate {
 	c := Candidate{
+		Editions:  d.EditionCount,
 		Source:    "openlibrary",
 		SourceID:  d.Key,
 		SourceURL: olBase + d.Key,
@@ -85,7 +122,10 @@ func olCandidate(d olDoc, wantISBN string) Candidate {
 		c.Publisher = d.Publisher[0]
 	}
 	if len(d.Language) == 1 {
-		c.Language = d.Language[0]
+		c.Language = iso639(d.Language[0])
+	}
+	for _, l := range firstN(d.Language, 40) {
+		c.Languages = append(c.Languages, iso639(l))
 	}
 	c.ISBN13, c.ISBN10 = pickISBNs(d.ISBN, wantISBN)
 	return c

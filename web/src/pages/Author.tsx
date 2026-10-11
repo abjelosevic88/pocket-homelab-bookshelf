@@ -9,6 +9,8 @@ import { BookRow } from '../components/BookCard'
 import { RemoteCover } from '../components/Cover'
 import { withDetails } from '../components/BookSearch'
 import { FindAuthor } from './Authors'
+import { AddBook } from '../components/AddBook'
+import { langName } from '../lib/languages'
 
 interface Detail { author: AuthorT; books: Book[] }
 type Work = Candidate & { on_shelf?: number }
@@ -24,6 +26,7 @@ export default function Author() {
   const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  const [details, setDetails] = useState<Work | null>(null)
   // Still being looked up in the background: check back shortly.
   useEffect(() => { if (data && !data.author.enriched_at) { const t = setTimeout(reload, 3000); return () => clearTimeout(t) } }, [data, reload])
 
@@ -104,11 +107,11 @@ export default function Author() {
               <div className="work-grid">
                 {shownOther.map(w => (
                   <div key={w.source_id} className="work">
-                    <RemoteCover url={w.thumb_url} title={w.title} size="sm" />
+                    <button type="button" className="work-open" onClick={() => setDetails(w)} title="More about this book"><RemoteCover url={w.thumb_url} title={w.title} size="sm" /></button>
                     <div className="info">
-                      <div className="nm" title={w.title}>{w.title}</div>
+                      <button type="button" className="nm work-title" onClick={() => setDetails(w)} title={w.title}>{w.title}</button>
                       {w.original_title && <div className="muted small orig" title={w.original_title}>{w.original_title}</div>}
-                      <div className="muted small">{[w.published, w.pages ? `${w.pages} p.` : ''].filter(Boolean).join(' · ')}</div>
+                      <div className="muted small">{[w.published, w.pages ? `${w.pages} p.` : '', w.language ? langName(w.language) : ''].filter(Boolean).join(' · ')}</div>
                       <div className="row mt-sm">
                         <button className="btn sm" onClick={() => addWork(w, 'want')} title="Add to your reading plan">+ Want</button>
                         <button className="btn ghost sm" onClick={() => addWork(w, 'read')} title="You have read it">Read it</button>
@@ -118,11 +121,12 @@ export default function Author() {
                 ))}
               </div>
               {other.length > shownOther.length && <div className="mt"><button className="btn ghost" onClick={() => setShowAll(true)}>Show all {other.length}</button></div>}
-              <p className="muted small mt">From Open Library, most published first. English titles where an English edition exists, the original below.</p>
+              <p className="muted small mt">From Open Library. Books available in your preferred languages (Settings → Metadata) come first, shown as that edition; the original title below. Click a book for details.</p>
             </>
           )}
       </Card>
 
+      {details && <AddBook initial={{ ...details, authors: [a.name] }} status="want" onClose={() => setDetails(null)} onAdded={() => { reload(); works.reload() }} />}
       {editing && <EditAuthor author={a} onClose={() => setEditing(false)} onSaved={na => { setEditing(false); if (na.id !== a.id) navigate(`/authors/${na.id}`, { replace: true }); else reload() }} />}
       {relinking && <FindAuthor initial={a.name} onClose={() => setRelinking(false)} onPick={(c: AuthorCandidate) => { setRelinking(false); refresh(c.key) }} />}
       {deleting && <Confirm title={`Remove ${a.name}?`} message="They have no books on your shelf. The biography and photo are removed." onCancel={() => setDeleting(false)} onConfirm={del} />}
