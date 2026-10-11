@@ -7,6 +7,8 @@ import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } f
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
 import { useApp } from '../lib/app-context'
+import { Markdown } from '../components/Markdown'
+import { MarkdownEditor } from '../components/MarkdownEditor'
 import { Stars } from '../components/Stars'
 import { EditBook } from '../components/BookForm'
 import { CoverPicker } from '../components/CoverPicker'
@@ -148,7 +150,8 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
               {templates.map(t => <button key={t.name} type="button" className="chip sm" onClick={() => setText(t.body)}>{t.name}</button>)}
             </div>
           )}
-          <textarea className="review-input" rows={text.split('\n').length > 7 ? Math.min(28, text.split('\n').length + 2) : 7} value={text} onChange={e => setText(e.target.value)} placeholder={book.status === 'want' ? 'What do you expect from it?' : 'What stayed with you? What did you like, what not? Would you recommend it — to whom?'} />
+          <MarkdownEditor className="review-input" value={text} onChange={setText} autoFocus={!!book.review} rows={text.split('\n').length > 7 ? Math.min(28, text.split('\n').length + 2) : 7}
+            placeholder={book.status === 'want' ? 'What do you expect from it?' : 'What stayed with you? What did you like, what not? Would you recommend it — to whom?'} />
           <div className="form-actions">
             {book.review && <button className="btn ghost sm" onClick={() => { setText(book.review); setEditing(false) }}>Cancel</button>}
             <button className="btn primary sm" disabled={!dirty} onClick={() => { onSave(text); setEditing(!text) }}>Save</button>
@@ -164,7 +167,7 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
  *  prompts) are hidden; long thoughts open with "Show all". */
 function ReviewText({ text }: { text: string }) {
   const [all, setAll] = useState(false)
-  if (!/^#{2,4} /m.test(text)) return <>{text}</>
+  if (!/^#{2,4} /m.test(text)) return <Markdown text={text} />
   const blocks: { level: number; title: string; body: string }[] = []
   for (const line of text.split('\n')) {
     const m = line.match(/^(#{2,4}) (.*)$/)
@@ -192,7 +195,7 @@ function ReviewText({ text }: { text: string }) {
     {blocks.slice(0, shown).map((b, i) => keep[i] && (
       <div key={i} className={`review-section l${b.level}`}>
         {b.title && (b.level === 4 ? <h6>{b.title}</h6> : b.level === 3 ? <h5>{b.title}</h5> : <h4>{b.title}</h4>)}
-        {filled(b) && <div>{b.body.trim()}</div>}
+        {filled(b) && <Markdown text={b.body} />}
       </div>
     ))}
     {shown < blocks.length && <button className="btn ghost sm read-more mt-sm" onClick={() => setAll(true)}>Show all · {Math.max(1, Math.round(words / 230))} min ▾</button>}

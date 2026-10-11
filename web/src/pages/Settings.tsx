@@ -5,6 +5,7 @@ import type { APIToken, Settings as SettingsT, ThoughtTemplate, User } from '../
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 import { Avatar } from '../components/people'
 import { KindleImport } from '../components/KindleImport'
+import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
@@ -326,7 +327,7 @@ function Templates() {
                 {i > 0 && <button className="btn ghost sm" onClick={() => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }} title="Move up">↑</button>}
                 <button className="btn ghost sm danger-text" onClick={() => set(list.filter((_, j) => j !== i))}>Delete</button>
               </div>
-              <textarea rows={Math.min(16, Math.max(6, t.body.split('\n').length + 1))} value={t.body} onChange={e => upd(i, { body: e.target.value })} className="mono-ish" aria-label={`${t.name} template`} />
+              <MarkdownEditor rows={Math.min(16, Math.max(6, t.body.split('\n').length + 1))} value={t.body} onChange={v => upd(i, { body: v })} />
             </div>
           ))}
         </div>
