@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, ApiError, V1 } from '../lib/api'
+import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Candidate } from '../lib/types'
 import { Segmented, useDebounce } from './ui'
@@ -15,17 +15,16 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
   const [source, setSource] = useState<string>(() => (settings?.search_source && (settings.search_source === 'all' || sources.includes(settings.search_source)) ? settings.search_source : 'all'))
   const [results, setResults] = useState<Candidate[] | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
-  const [err, setErr] = useState('')
-  const [busy, setBusy] = useState(false)
+    const [busy, setBusy] = useState(false)
   const dq = useDebounce(q.trim(), 450)
 
   useEffect(() => {
-    if (dq.length < 2) { setResults(null); setErr(''); return }
+    if (dq.length < 3) { setResults(null); return } // catalogues refuse shorter queries
     let live = true
-    setBusy(true); setErr('')
+    setBusy(true)
     api.get<{ results: Candidate[]; warnings: string[] | null }>(`${V1}/search?q=${encodeURIComponent(dq)}&source=${source}`)
       .then(r => { if (live) { setResults(r.results); setWarnings(r.warnings || []) } })
-      .catch(e => { if (live) { setResults([]); setErr((e as ApiError).message) } })
+      .catch(() => { if (live) { setResults([]); setWarnings([]) } }) // a failed lookup reads as “no results”
       .finally(() => live && setBusy(false))
     return () => { live = false }
   }, [dq, source])
@@ -40,9 +39,8 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
       {sources.length > 1 && (
         <div className="row mt-sm"><Segmented size="sm" value={source} onChange={setSource} options={['all', ...sources].map(s => ({ value: s, label: SOURCE_LABEL[s] || s }))} /></div>
       )}
-      {err && <div className="callout danger mt-sm">{err}</div>}
-      {warnings.map(w => <div key={w} className="callout mt-sm small">{w}</div>)}
-      {results && results.length === 0 && !busy && !err && <p className="muted mt">Nothing found. Try fewer words, the ISBN, or add it by hand.</p>}
+      {results && results.length === 0 && !busy && <p className="muted mt">No results. Try other words, the ISBN, or add it by hand.</p>}
+      {results && results.length > 0 && warnings.length > 0 && <p className="muted small mt-sm">Some results may be missing: one catalogue did not answer.</p>}
       {results && results.length > 0 && (
         <ul className="results">
           {results.map(c => (
@@ -62,7 +60,8 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
           ))}
         </ul>
       )}
-      {!results && <p className="muted small mt">Searches {sources.map(s => SOURCE_LABEL[s]).join(' and ')}.{!sources.includes('google') && ' Add a free Google Books API key under Settings → Metadata for a second catalogue.'}</p>}
+      {!results && q.trim().length > 0 && q.trim().length < 3 && <p className="muted small mt">Keep typing…</p>}
+      {!results && q.trim().length === 0 && <p className="muted small mt">Searches {sources.map(s => SOURCE_LABEL[s]).join(' and ')}.{!sources.includes('google') && ' Add a free Google Books API key under Settings → Metadata for a second catalogue.'}</p>}
     </div>
   )
 }

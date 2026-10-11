@@ -137,7 +137,8 @@ func ISBN10to13(isbn10 string) string {
 // With "all", sources run in parallel and a failing one only adds a warning.
 func (c *Client) Search(ctx context.Context, query, source string, limit int) ([]Candidate, []string, error) {
 	query = strings.TrimSpace(query)
-	if query == "" {
+	// Open Library answers shorter queries with HTTP 422; nothing useful matches them anyway.
+	if len([]rune(query)) < 3 {
 		return []Candidate{}, nil, nil
 	}
 	if limit <= 0 || limit > 40 {
