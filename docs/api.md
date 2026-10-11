@@ -66,6 +66,23 @@ Stats count finished, not-abandoned reads by their finish date. A book marked re
 | `POST` | `/books/{id}/quotes` | `{"text", "page", "note"}` |
 | `PUT` · `DELETE` | `/quotes/{id}` | |
 
+## Authors
+
+Authors are created from the books' `authors` strings and looked up on Open Library in the background.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/authors?q=&sort=read\|name\|rating\|recent\|added` | With shelf stats: `books, read, reading, want, avg_rating, pages, last_read`. `enriched_at` is `""` until the lookup ran. |
+| `POST` | `/authors` | Follow an author: `{"name"}` and/or `{"key": "OL31353A"}`. Looked up immediately. |
+| `GET` | `/authors/search?q=` | Open Library author search; results already on your list carry `author_id`. |
+| `GET` | `/authors/resolve?name=` | `{"id"}` of the author with that name. |
+| `GET` | `/authors/{id}` | `{"author", "books": […]}` |
+| `PUT` | `/authors/{id}` | Partial: `name` (renames it in every book; renaming onto an existing author merges), `bio`, `birth_date`, `death_date`. Edited fields survive refreshes. |
+| `DELETE` | `/authors/{id}` | Only without books on the shelf (409 otherwise). |
+| `GET` | `/authors/{id}/works` | Bibliography from Open Library, most published first; `on_shelf` = your book id; `original_title` when `title` is an English edition's. |
+| `POST` | `/authors/{id}/refresh` | Look up again; `{"key": "OL…A"}` links a different Open Library author. |
+| `GET` · `POST` · `DELETE` | `/authors/{id}/photo` | Image / set (`multipart` field `photo`, or `{"url"}`) / remove. |
+
 ## Search the catalogues
 
 | Method | Path | Notes |

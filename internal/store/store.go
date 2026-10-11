@@ -31,6 +31,9 @@ var ErrConflict = errors.New("already exists")
 type Store struct {
 	DB  *sql.DB
 	log *slog.Logger
+	// OnAuthorsChanged is called after books gained or lost authors (the
+	// server uses it to look new authors up in the background).
+	OnAuthorsChanged func()
 }
 
 // Open opens (and creates if needed) the SQLite database and runs migrations.
@@ -119,7 +122,7 @@ func (s *Store) Backup(ctx context.Context, dst string) error {
 // Counts returns row counts per table for metrics / the About page.
 func (s *Store) Counts(ctx context.Context) map[string]int {
 	out := map[string]int{}
-	for _, t := range []string{"books", "reads", "quotes", "users", "api_tokens"} {
+	for _, t := range []string{"books", "reads", "quotes", "authors", "users", "api_tokens"} {
 		var n int
 		if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM `+t).Scan(&n); err == nil {
 			out[t] = n

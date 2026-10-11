@@ -1,0 +1,368 @@
+package metadata
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/fold"
+)
+
+// AuthorCandidate is one author search result.
+type AuthorCandidate struct {
+	Key       string   `json:"key"` // "OL31353A"
+	Name      string   `json:"name"`
+	BirthDate string   `json:"birth_date"`
+	DeathDate string   `json:"death_date"`
+	TopWork   string   `json:"top_work"`
+	WorkCount int      `json:"work_count"`
+	Subjects  []string `json:"subjects"`
+	PhotoURL  string   `json:"photo_url"`
+	alternate []string
+}
+
+// AuthorInfo is the full record of an author.
+type AuthorInfo struct {
+	Key       string `json:"key"`
+	Name      string `json:"name"`
+	Bio       string `json:"bio"`
+	BioSource string `json:"bio_source"`
+	BirthDate string `json:"birth_date"`
+	DeathDate string `json:"death_date"`
+	PhotoURL  string `json:"photo_url"`
+	Wikipedia string `json:"wikipedia"`
+	Names     []string
+}
+
+func olAuthorPhoto(key string) string {
+	return "https://covers.openlibrary.org/a/olid/" + key + "-M.jpg?default=false"
+}
+
+// SearchAuthors finds authors on Open Library by name, most prolific first.
+func (c *Client) SearchAuthors(ctx context.Context, name string, limit int) ([]AuthorCandidate, error) {
+	if len([]rune(strings.TrimSpace(name))) < 3 {
+		return []AuthorCandidate{}, nil
+	}
+	var res struct {
+		Docs []struct {
+			Key       string   `json:"key"`
+			Name      string   `json:"name"`
+			Alternate []string `json:"alternate_names"`
+			BirthDate string   `json:"birth_date"`
+			DeathDate string   `json:"death_date"`
+			TopWork   string   `json:"top_work"`
+			WorkCount int      `json:"work_count"`
+			Subjects  []string `json:"top_subjects"`
+		} `json:"docs"`
+	}
+	v := url.Values{"q": {name}, "limit": {strconv.Itoa(limit)}}
+	if err := c.getJSON(ctx, olBase+"/search/authors.json?"+v.Encode(), &res); err != nil {
+		return nil, err
+	}
+	out := []AuthorCandidate{}
+	for _, d := range res.Docs {
+		// Records naming several people at once, or with no works, are catalogue noise.
+		if strings.Contains(d.Name, ";") || d.WorkCount == 0 {
+			continue
+		}
+		out = append(out, AuthorCandidate{Key: d.Key, Name: d.Name, BirthDate: d.BirthDate, DeathDate: d.DeathDate, TopWork: d.TopWork,
+			WorkCount: d.WorkCount, Subjects: firstN(d.Subjects, 4), PhotoURL: olAuthorPhoto(d.Key), alternate: d.Alternate})
+	}
+	return out, nil
+}
+
+// AllNames is the name with its alternates, for matching.
+func (a AuthorCandidate) AllNames() []string { return append([]string{a.Name}, a.alternate...) }
+
+// WorkAuthorKeys returns the author keys of an Open Library work, in order.
+func (c *Client) WorkAuthorKeys(ctx context.Context, workKey string) ([]string, error) {
+	var w struct {
+		Authors []struct {
+			Author struct {
+				Key string `json:"key"`
+			} `json:"author"`
+		} `json:"authors"`
+	}
+	if err := c.getJSON(ctx, olBase+workKey+".json", &w); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, a := range w.Authors {
+		if k := strings.TrimPrefix(a.Author.Key, "/authors/"); k != "" {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+var (
+	mdLink     = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	mdSource   = regexp.MustCompile(`(?i)\s*\(\s*\[?source\]?(\([^)]*\))?\s*\)`)
+	mdRefDef   = regexp.MustCompile(`(?m)^\s*\[\d+\]:.*$`)
+	mdEmphasis = regexp.MustCompile(`[*_]{1,2}([^*_]+)[*_]{1,2}`)
+)
+
+// cleanOLBio turns an Open Library biography (markdown, source notes, often
+// a second language after a rule) into plain text.
+func cleanOLBio(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	for _, cut := range []string{"\n---", "\n___", "\n***"} {
+		if i := strings.Index(s, cut); i > 0 {
+			s = s[:i]
+		}
+	}
+	s = mdSource.ReplaceAllString(s, "")
+	s = mdRefDef.ReplaceAllString(s, "")
+	s = mdLink.ReplaceAllString(s, "$1")
+	s = mdEmphasis.ReplaceAllString(s, "$1")
+	s = strings.ReplaceAll(s, `\[`, "[")
+	s = strings.ReplaceAll(s, `\]`, "]")
+	return PlainText(s)
+}
+
+// AuthorDetails fetches an author record. The biography is the English
+// Wikipedia summary when Open Library links the author to Wikidata, else
+// Open Library's own text.
+func (c *Client) AuthorDetails(ctx context.Context, key string) (*AuthorInfo, error) {
+	var a struct {
+		Name      string          `json:"name"`
+		Personal  string          `json:"personal_name"`
+		Alternate []string        `json:"alternate_names"`
+		Bio       json.RawMessage `json:"bio"`
+		BirthDate string          `json:"birth_date"`
+		DeathDate string          `json:"death_date"`
+		Photos    []int           `json:"photos"`
+		Wikipedia string          `json:"wikipedia"`
+		RemoteIDs map[string]any  `json:"remote_ids"`
+		Links     []struct {
+			URL string `json:"url"`
+		} `json:"links"`
+	}
+	if err := c.getJSON(ctx, olBase+"/authors/"+url.PathEscape(key)+".json", &a); err != nil {
+		return nil, err
+	}
+	info := &AuthorInfo{Key: key, Name: a.Name, BirthDate: a.BirthDate, DeathDate: a.DeathDate, Names: append([]string{a.Name, a.Personal}, a.Alternate...)}
+	if bio := cleanOLBio(olText(a.Bio)); bio != "" {
+		info.Bio, info.BioSource = bio, olBase+"/authors/"+key
+	}
+	for _, p := range a.Photos {
+		if p > 0 {
+			info.PhotoURL = fmt.Sprintf("https://covers.openlibrary.org/a/id/%d-L.jpg", p)
+			break
+		}
+	}
+	wikiTitle := ""
+	if qid, _ := a.RemoteIDs["wikidata"].(string); qid != "" {
+		wikiTitle, _ = c.wikidataEnwiki(ctx, qid)
+	}
+	if wikiTitle == "" && strings.Contains(a.Wikipedia, "en.wikipedia.org/wiki/") {
+		wikiTitle, _ = url.PathUnescape(a.Wikipedia[strings.Index(a.Wikipedia, "/wiki/")+6:])
+	}
+	var sum *wikiSummary
+	if wikiTitle != "" {
+		sum, _ = c.wikipediaSummary(ctx, wikiTitle)
+	} else {
+		sum = c.wikipediaByName(ctx, info.Name)
+	}
+	if sum != nil && sum.Extract != "" {
+		info.Bio, info.BioSource, info.Wikipedia = sum.Extract, sum.Page, sum.Page
+		if info.PhotoURL == "" {
+			info.PhotoURL = sum.Image
+		}
+	}
+	return info, nil
+}
+
+// writerWords: a Wikipedia page found by name alone is only trusted when it
+// describes someone who writes books, not a footballer of the same name.
+var writerWords = regexp.MustCompile(`(?i)\b(author|writer|novelist|poet|playwright|essayist|journalist|philosopher|psychologist|psychiatrist|psychotherapist|historian|scientist|professor|translator|monk|teacher|scholar|physician|economist|engineer|programmer|blogger|entrepreneur|investor)\b`)
+
+// wikipediaByName tries the English Wikipedia page titled exactly like the author.
+func (c *Client) wikipediaByName(ctx context.Context, name string) *wikiSummary {
+	if strings.TrimSpace(name) == "" {
+		return nil
+	}
+	sum, err := c.wikipediaSummary(ctx, name)
+	if err != nil || sum.Extract == "" {
+		return nil
+	}
+	if !writerWords.MatchString(sum.Description + " " + firstSentence(sum.Extract)) {
+		return nil
+	}
+	return sum
+}
+
+func firstSentence(s string) string {
+	if i := strings.Index(s, ". "); i > 0 {
+		return s[:i]
+	}
+	return s
+}
+
+func (c *Client) wikidataEnwiki(ctx context.Context, qid string) (string, error) {
+	var r struct {
+		Entities map[string]struct {
+			Sitelinks map[string]struct {
+				Title string `json:"title"`
+			} `json:"sitelinks"`
+		} `json:"entities"`
+	}
+	u := "https://www.wikidata.org/w/api.php?action=wbgetentities&props=sitelinks&sitefilter=enwiki&format=json&ids=" + url.QueryEscape(qid)
+	if err := c.getJSON(ctx, u, &r); err != nil {
+		return "", err
+	}
+	return r.Entities[qid].Sitelinks["enwiki"].Title, nil
+}
+
+type wikiSummary struct{ Extract, Image, Page, Description string }
+
+func (c *Client) wikipediaSummary(ctx context.Context, title string) (*wikiSummary, error) {
+	var r struct {
+		Type        string `json:"type"`
+		Extract     string `json:"extract"`
+		Description string `json:"description"`
+		Thumbnail   struct {
+			Source string `json:"source"`
+		} `json:"thumbnail"`
+		ContentURLs struct {
+			Desktop struct {
+				Page string `json:"page"`
+			} `json:"desktop"`
+		} `json:"content_urls"`
+	}
+	u := "https://en.wikipedia.org/api/rest_v1/page/summary/" + url.PathEscape(strings.ReplaceAll(title, " ", "_"))
+	if err := c.getJSON(ctx, u, &r); err != nil {
+		return nil, err
+	}
+	if r.Type == "disambiguation" {
+		return &wikiSummary{}, nil
+	}
+	return &wikiSummary{Extract: strings.Join(strings.Fields(r.Extract), " "), Image: r.Thumbnail.Source, Page: r.ContentURLs.Desktop.Page, Description: r.Description}, nil
+}
+
+// junkWork filters study guides, summaries and box sets out of a bibliography.
+var junkWork = regexp.MustCompile(`(?i)(\b(study guide|sparknotes|cliffsnotes|summary of|summary and analysis|workbook for|box set|boxed set|collection set|coles notes|york notes|bookrags|supersummary|complete works|collected works|selected works|works of|novels and stories|omnibus|anthology|best .*short stories|great short works|sochinenii|izbrannoe)\b|собрание сочинений|сочинения|избранное|polnoe sobranie)`)
+
+type worksCacheEntry struct {
+	at    time.Time
+	works []Candidate
+}
+
+var (
+	worksMu    sync.Mutex
+	worksCache = map[string]worksCacheEntry{}
+)
+
+// AuthorWorks lists an author's works on Open Library, most published first.
+// Results are cached for six hours.
+func (c *Client) AuthorWorks(ctx context.Context, key string, limit int) ([]Candidate, error) {
+	ck := key + "|" + strconv.Itoa(limit)
+	worksMu.Lock()
+	if e, ok := worksCache[ck]; ok && time.Since(e.at) < 6*time.Hour {
+		worksMu.Unlock()
+		return e.works, nil
+	}
+	worksMu.Unlock()
+	v := url.Values{}
+	v.Set("q", "author_key:"+key)
+	v.Set("sort", "editions")
+	v.Set("limit", strconv.Itoa(limit))
+	v.Set("fields", "key,title,subtitle,author_name,first_publish_year,cover_i,number_of_pages_median,edition_count,isbn,language,editions,editions.title,editions.language")
+	v.Set("lang", "en") // the "editions" field then carries an English edition when there is one
+	var res struct {
+		Docs []struct {
+			olDoc
+			EditionCount int `json:"edition_count"`
+			Editions     struct {
+				Docs []struct {
+					Title    string   `json:"title"`
+					Language []string `json:"language"`
+				} `json:"docs"`
+			} `json:"editions"`
+		} `json:"docs"`
+	}
+	if err := c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &res); err != nil {
+		return nil, err
+	}
+	out := []Candidate{}
+	seen := map[string]bool{}
+	for _, d := range res.Docs {
+		// Barely catalogued records (one edition, no cover) are mostly noise.
+		if d.Title == "" || junkWork.MatchString(d.Title) || (d.EditionCount <= 1 && d.CoverI == 0) {
+			continue
+		}
+		cand := olCandidate(d.olDoc, "")
+		cand.Subjects = nil
+		for _, e := range d.Editions.Docs {
+			if t := englishTitle(e.Title); t != "" && contains(e.Language, "eng") && !strings.EqualFold(t, d.Title) && !junkWork.MatchString(t) {
+				cand.OriginalTitle, cand.Title = d.Title, t
+			}
+			break
+		}
+		k, ko := workKey(cand.Title), workKey(cand.OriginalTitle)
+		if seen[k] || (ko != "" && seen[ko]) { // a less published duplicate (results come most published first)
+			continue
+		}
+		seen[k] = true
+		if ko != "" {
+			seen[ko] = true
+		}
+		out = append(out, cand)
+	}
+	worksMu.Lock()
+	worksCache[ck] = worksCacheEntry{at: time.Now(), works: out}
+	worksMu.Unlock()
+	return out, nil
+}
+
+func contains(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// englishTitle tidies an edition title for display: drops translator notes
+// after ";" and turns SHOUTED titles into Title Case. "" when it looks unusable.
+func englishTitle(t string) string {
+	if i := strings.Index(t, ";"); i > 0 {
+		t = t[:i]
+	}
+	t = strings.TrimSpace(strings.TrimRight(strings.TrimSpace(t), ".,:"))
+	if t == "" || len(t) > 120 {
+		return ""
+	}
+	if strings.ToUpper(t) == t {
+		words := strings.Fields(strings.ToLower(t))
+		for i, w := range words {
+			if i == 0 || len(w) > 3 {
+				words[i] = strings.ToUpper(w[:1]) + w[1:]
+			}
+		}
+		t = strings.Join(words, " ")
+	}
+	return t
+}
+
+// workKey compares titles loosely: no subtitle, no leading article, no accents.
+// "The Double: A St Petersburg Poem", "Double" → "double".
+func workKey(t string) string {
+	for _, sep := range []string{":", " (", "[", " - "} {
+		if i := strings.Index(t, sep); i > 0 {
+			t = t[:i]
+		}
+	}
+	k := fold.String(t)
+	for _, art := range []string{"the ", "a ", "an "} {
+		k = strings.TrimPrefix(k, art)
+	}
+	return k
+}

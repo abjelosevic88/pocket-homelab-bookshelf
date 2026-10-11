@@ -29,20 +29,23 @@ var Version = "dev"
 
 // Server holds dependencies.
 type Server struct {
-	cfg      *config.Config
-	store    *store.Store
-	meta     *metadata.Client
-	covers   coverJob
-	log      *slog.Logger
-	webFS    fs.FS
-	started  time.Time
-	requests atomic.Int64
-	errors   atomic.Int64
+	cfg    *config.Config
+	store  *store.Store
+	meta   *metadata.Client
+	covers coverJob
+
+	authorKick chan struct{}
+	log        *slog.Logger
+	webFS      fs.FS
+	started    time.Time
+	requests   atomic.Int64
+	errors     atomic.Int64
 }
 
 // New creates a server.
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Server {
-	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now()}
+	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1)}
+	st.OnAuthorsChanged = s.kickAuthors
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
 	return s
@@ -87,6 +90,12 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		}
 	}
 	_ = s.store.PurgeSessions(ctx)
+	// Link existing books to authors, then look new authors up in the background.
+	if err := s.store.SyncAllAuthors(ctx); err != nil {
+		return err
+	}
+	go s.authorWorker(ctx)
+	s.kickAuthors()
 	return nil
 }
 
@@ -145,6 +154,19 @@ func (s *Server) Router() http.Handler {
 			r.Put("/quotes/{id}", s.handleUpdateQuote)
 			r.Delete("/quotes/{id}", s.handleDeleteQuote)
 			r.Put("/planner/order", s.handleReorderPlanner)
+
+			r.Get("/authors", s.handleListAuthors)
+			r.Post("/authors", s.handleCreateAuthor)
+			r.Get("/authors/search", s.handleSearchAuthors)
+			r.Get("/authors/resolve", s.handleResolveAuthor)
+			r.Get("/authors/{id}", s.handleGetAuthor)
+			r.Put("/authors/{id}", s.handleUpdateAuthor)
+			r.Delete("/authors/{id}", s.handleDeleteAuthor)
+			r.Get("/authors/{id}/works", s.handleAuthorWorks)
+			r.Post("/authors/{id}/refresh", s.handleRefreshAuthor)
+			r.Get("/authors/{id}/photo", s.handleGetAuthorPhoto)
+			r.Post("/authors/{id}/photo", s.handleSetAuthorPhoto)
+			r.Delete("/authors/{id}/photo", s.handleDeleteAuthorPhoto)
 			r.Get("/tags", s.handleListTags)
 
 			r.Get("/users", s.handleListUsers)

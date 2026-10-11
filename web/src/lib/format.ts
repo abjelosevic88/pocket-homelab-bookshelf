@@ -68,3 +68,17 @@ export function ratingText(r: number): string { return r ? `${r % 1 ? r.toFixed(
 
 /** "142" → "p. 142"; "loc. 1201" and other free text stay as they are. */
 export function pageLabel(page: string): string { return /^\d/.test(page) ? `p. ${page}` : page }
+
+/** "21 October 1929" / "1929" → "1929". */
+export function year(d: string): string { const m = d.match(/\d{4}/); return m ? m[0] : '' }
+
+/** "1929–2018", "b. 1966", or "". */
+export function lifespan(birth: string, death: string): string {
+  const b = year(birth), d = year(death)
+  if (b && d) return `${b}–${d}`
+  if (b) return `b. ${b}`
+  if (d) return `d. ${d}`
+  return ''
+}
+
+export function authorPhotoSrc(a: { id: number; photo: string }): string { return `/api/v1/authors/${a.id}/photo?v=${encodeURIComponent(a.photo)}` }

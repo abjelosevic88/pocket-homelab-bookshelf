@@ -5,6 +5,7 @@ import type { Book as BookT, Quote, Read, Status } from '../lib/types'
 import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
+import { AuthorLink } from '../components/AuthorBits'
 import { Stars } from '../components/Stars'
 import { EditBook } from '../components/BookForm'
 import { FinishModal } from '../components/FinishModal'
@@ -61,7 +62,7 @@ export default function Book() {
         <Link to="/library" className="muted small">← Library</Link>
         <h1 className="book-title">{b.title}</h1>
         {b.subtitle && <div className="book-subtitle">{b.subtitle}</div>}
-        <div className="book-authors">{splitTags(b.authors).map((a, i) => <span key={a}>{i > 0 && ', '}<Link to={`/library?author=${encodeURIComponent(a)}`}>{a}</Link></span>)}</div>
+        <div className="book-authors">{splitTags(b.authors).map((a, i) => <span key={a}>{i > 0 && ', '}<AuthorLink name={a} /></span>)}</div>
         <div className="row wrap mt-sm">
           <Stars value={b.rating} onChange={v => patch({ rating: v }, v ? `Rated ${v}★` : 'Rating cleared')} size="lg" />
           <button className={`fav-btn ${b.favorite ? 'on' : ''}`} onClick={() => patch({ favorite: !b.favorite })} title={b.favorite ? 'Favourite' : 'Mark as favourite'}>♥</button>

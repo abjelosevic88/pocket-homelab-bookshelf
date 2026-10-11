@@ -187,7 +187,10 @@ func (s *Store) CreateBook(ctx context.Context, b *Book, startedOn, finishedOn s
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return s.syncBookAuthors(ctx, b.UserID, b.ID, b.Authors)
 }
 
 func nextQueuePos(ctx context.Context, q interface {
@@ -213,7 +216,7 @@ func (s *Store) UpdateBook(ctx context.Context, b *Book) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return s.syncBookAuthors(ctx, b.UserID, b.ID, b.Authors)
 }
 
 // SetCover records the cover file name of a book.
@@ -231,7 +234,7 @@ func (s *Store) DeleteBook(ctx context.Context, userID, id int64) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return pruneAuthors(ctx, s.DB, userID)
 }
 
 // SetStatus moves a book to another status and keeps the reads in step:
@@ -393,5 +396,8 @@ func (s *Store) ImportBook(ctx context.Context, b *Book, reads []Read, quotes []
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return s.syncBookAuthors(ctx, b.UserID, b.ID, b.Authors)
 }

@@ -19,6 +19,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 - **Add a book in seconds.** Type a title, author or ISBN. The details and cover come from Open Library (no key) and Google Books (free key), and the cover is saved with your data. Pick *Want to read*, *Reading* or *Read*, and you're done.
 - **Say what you thought.** Half-star ratings from ½ to 5, your thoughts in your own words, favourites, tags. When you finish a book, the app asks for a rating and a few words while it's still fresh.
 - **Keep the good lines.** Save quotes with a page number and a note, or import every Kindle highlight in one go. A random one comes back to you on the home page.
+- **Get to know the authors.** Every author gets a page with a short biography and photo, filled in automatically: how many of their books you read, your average rating, and the rest of their bibliography to plan from.
 - **Plan what's next.** Want-to-read books form a queue you can reorder, pencil in for a month and start with one tap. A yearly goal tells you whether you're ahead or behind.
 
 <p align="center"><img src="docs/screenshots/now.png" width="900" alt="Reading now: yearly goal, books in progress with page tracking, up next, recently finished, a random quote"></p>
@@ -39,6 +40,14 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
   <tr>
     <td align="center"><sub>Search by title, author or ISBN…</sub></td>
     <td align="center"><sub>…pick it and say where it stands. Subjects become one-tap tags.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/authors.png" alt="Authors with photos, years and how many of their books you read"></td>
+    <td width="50%"><img src="docs/screenshots/author.png" alt="An author page: biography, your stats, your books and their other books"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Authors, filled in from Open Library and Wikipedia.</sub></td>
+    <td align="center"><sub>An author: bio, what you read, everything else they wrote.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/planner.png" alt="Reading plan: up next queue and books planned per month"></td>
@@ -66,6 +75,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 | **Progress** | Current page with a percentage for books in progress, updated inline from the home page. |
 | **Quotes** | Text, page or location, your note. Searchable, with a random one on the home page and the Quotes page. |
 | **Plan** | Want-to-read queue: reorder, plan for a month (overdue months are flagged), note why you want to read it or who recommended it, start reading with one tap. Yearly goal with pace (“3 behind schedule”). |
+| **Authors** | Created from your books automatically, then filled in from Open Library in the background: short biography (Wikipedia summary when linked), birth/death, photo. Per author: books read, reading, planned, average rating, pages; your books; their full bibliography (English titles where an English edition exists) with one-tap *Want* / *Read it*. Find and follow new authors, edit name (renames it on every book, merges duplicates), bio, dates and photo, re-link to the right Open Library author. |
 | **Stats** | Per year: books, pages, average rating, books per month, rating distribution, top authors and tags, formats, longest book, the finished list. All-time totals. |
 | **Metadata** | Open Library and Google Books, searched in parallel, deduplicated by ISBN. ISBN queries pin the exact edition. Covers are downloaded and stored locally, and any book can re-fetch details and cover later. See [docs/metadata.md](docs/metadata.md). |
 | **Import** | Goodreads and StoryGraph CSV exports (ratings, reviews, dates, shelves); missing covers are fetched afterwards by ISBN. **Kindle highlights** from `My Clippings.txt`: matched to your books (also across translations, via Open Library), notes attached, re-imports only add what is new. |

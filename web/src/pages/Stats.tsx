@@ -5,6 +5,7 @@ import type { Stats as StatsT } from '../lib/types'
 import { fmtDate, FORMAT_LABEL } from '../lib/format'
 import { Card, Loading, PageHeader, Segmented, useAsync } from '../components/ui'
 import { Stars } from '../components/Stars'
+import { AuthorLink } from '../components/AuthorBits'
 
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
 
@@ -52,7 +53,7 @@ export default function Stats() {
       </div>
       <div className="three-col mt">
         <Card title="Authors">
-          {s.top_authors.length ? <ol className="rank">{s.top_authors.map(a => <li key={a.name}><Link to={`/library?author=${encodeURIComponent(a.name)}`}>{a.name}</Link><span className="muted">{a.count}</span></li>)}</ol> : <p className="muted">—</p>}
+          {s.top_authors.length ? <ol className="rank">{s.top_authors.map(a => <li key={a.name}><AuthorLink name={a.name} /><span className="muted">{a.count}</span></li>)}</ol> : <p className="muted">—</p>}
         </Card>
         <Card title="Tags">
           {s.top_tags.length ? <ol className="rank">{s.top_tags.map(t => <li key={t.name}><Link to={`/library?tag=${encodeURIComponent(t.name)}`}>{t.name}</Link><span className="muted">{t.count}</span></li>)}</ol> : <p className="muted">Tag books to see what you read most.</p>}

@@ -59,6 +59,7 @@ export interface Candidate {
   cover_url: string
   thumb_url: string
   on_shelf?: number
+  original_title?: string
 }
 
 export interface Settings {
@@ -103,3 +104,28 @@ export interface Dashboard {
   quotes: number
   avg_rating: number
 }
+
+export interface Author {
+  id: number
+  name: string
+  ol_key: string
+  bio: string
+  bio_source: string
+  birth_date: string
+  death_date: string
+  photo: string
+  wikipedia: string
+  followed: boolean
+  edited: boolean
+  enriched_at: string
+  created_at: string
+  books: number
+  read: number
+  reading: number
+  want: number
+  avg_rating: number
+  pages: number
+  last_read: string
+}
+
+export interface AuthorCandidate { key: string; name: string; birth_date: string; death_date: string; top_work: string; work_count: number; subjects: string[] | null; photo_url: string; author_id?: number }

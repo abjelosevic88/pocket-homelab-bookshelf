@@ -81,3 +81,16 @@ func TestPublicOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthorHelpers(t *testing.T) {
+	if got := englishTitle("DOUBLE: A ST PETERSBURG POEM; TRANS. BY HUGH APLIN."); got != "Double: a st Petersburg Poem" {
+		t.Errorf("englishTitle: %q", got)
+	}
+	bio := "Russian novelist ([Source](http://x.fi))\r\n\r\nHis *Notes from Underground* (1864) [link](http://y).\r\n\r\n---\r\n\r\nФёдор"
+	if got := cleanOLBio(bio); got != "Russian novelist\n\nHis Notes from Underground (1864) link." {
+		t.Errorf("cleanOLBio: %q", got)
+	}
+	if !writerWords.MatchString("American psychiatrist") || writerWords.MatchString("English footballer") {
+		t.Error("writerWords")
+	}
+}

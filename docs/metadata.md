@@ -53,3 +53,15 @@ Books already on your shelf (same ISBN, or same title and author) are skipped, s
 2. **Match.** Each Kindle book is matched to your shelf by title (ignoring subtitles, series, accents and case) and author. If that fails, the title is looked up in Open Library and compared with the Open Library work each of your books is linked to, so the English *The Power of Now* on the Kindle finds your *Moć sadašnjeg trenutka*. Books not on your shelf are offered as new books, filled in from Open Library.
 3. **Review.** Every Kindle book shows where its highlights will go. You can pick another book, create a new one (as read, reading or want to read) or skip it.
 4. **Import.** Highlights become quotes with their page (or `loc. 1201` when the book has no page numbers), note and original date. Running the same file again later only adds what is new.
+
+## Authors
+
+Every name in a book's authors becomes an author entry, linked to the book. A background worker then looks each new author up, one per second:
+
+1. **Find the Open Library author.** First through the book's own Open Library work, which names its authors exactly. Open Library has duplicate, near-empty author records, so when a name search finds the same person with far more works, that record wins. If the books aren't linked to Open Library, the name search alone decides (exact or alternate name match, most prolific first).
+2. **Biography.** The English Wikipedia summary when Open Library links the author to Wikidata. Otherwise the Wikipedia page with exactly that name, used only if it describes a writer, psychologist, philosopher or similar (so a footballer of the same name is ignored). Open Library's own biography is the last fallback, cleaned of markdown and of a second language.
+3. **Photo.** Open Library's author photo, or the Wikipedia image. It's downloaded like covers.
+
+The **bibliography** on an author page is Open Library's list of their works, most published first. Study guides, summaries, collected-works volumes, anthologies and barely catalogued records are filtered out. English titles are shown when an English edition exists, with the original underneath. Works already on your shelf are recognised by their Open Library link, or by title.
+
+Author pages are editable. A changed name is written into every book; renaming onto an existing author merges the two. A hand-edited biography or dates is kept when you refresh. **Wrong person?** links a different Open Library author.

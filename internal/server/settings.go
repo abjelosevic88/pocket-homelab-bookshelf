@@ -114,9 +114,10 @@ type ExportBook struct {
 
 // Export is the portable JSON shape of one user's shelf (also accepted by /import).
 type Export struct {
-	Version    string       `json:"version"`
-	ExportedAt string       `json:"exported_at"`
-	Books      []ExportBook `json:"books"`
+	Version    string         `json:"version"`
+	ExportedAt string         `json:"exported_at"`
+	Books      []ExportBook   `json:"books"`
+	Authors    []store.Author `json:"authors"`
 }
 
 func (s *Server) buildExport(ctx context.Context, userID int64) (*Export, error) {
@@ -125,6 +126,9 @@ func (s *Server) buildExport(ctx context.Context, userID int64) (*Export, error)
 		return nil, err
 	}
 	ex := &Export{Version: Version, ExportedAt: store.Now(), Books: []ExportBook{}}
+	if ex.Authors, err = s.store.ListAuthors(ctx, userID, "", "name"); err != nil {
+		return nil, err
+	}
 	for _, b := range books {
 		reads, err := s.store.ListReads(ctx, b.ID)
 		if err != nil {
@@ -212,5 +216,30 @@ func (s *Server) handleImportJSON(w http.ResponseWriter, r *http.Request) {
 		newIDs = append(newIDs, b.ID)
 	}
 	s.fetchMissingCovers(me(r), newIDs)
+	// Authors: keep the ones followed by hand and hand-edited biographies.
+	for _, ea := range ex.Authors {
+		if !ea.Followed && !ea.Edited {
+			continue
+		}
+		a, err := s.store.FindAuthorByName(r.Context(), me(r), ea.Name)
+		if err != nil {
+			if !ea.Followed {
+				continue
+			}
+			a = &store.Author{UserID: me(r), Name: ea.Name, OLKey: ea.OLKey}
+			if err := s.store.CreateAuthor(r.Context(), a); err != nil {
+				continue
+			}
+			if a, err = s.store.GetAuthor(r.Context(), me(r), a.ID); err != nil {
+				continue
+			}
+		}
+		if ea.Edited {
+			a.Bio, a.BioSource, a.BirthDate, a.DeathDate, a.Edited = ea.Bio, ea.BioSource, ea.BirthDate, ea.DeathDate, true
+		}
+		a.Followed = a.Followed || ea.Followed
+		_ = s.store.UpdateAuthor(r.Context(), a)
+	}
+	s.kickAuthors()
 	writeJSON(w, http.StatusOK, map[string]int{"created": created, "skipped": skipped})
 }

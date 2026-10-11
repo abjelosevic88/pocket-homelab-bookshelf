@@ -12,6 +12,9 @@ import Book from './pages/Book'
 import Planner from './pages/Planner'
 import Quotes from './pages/Quotes'
 import Stats from './pages/Stats'
+import Authors from './pages/Authors'
+import Author from './pages/Author'
+import { AuthorByName } from './components/AuthorBits'
 import Settings from './pages/Settings'
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -41,6 +44,9 @@ function App() {
         <Route path="/books/:id" element={<Book />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/quotes" element={<Quotes />} />
+        <Route path="/authors" element={<Authors />} />
+        <Route path="/authors/:id" element={<Author />} />
+        <Route path="/author/:name" element={<AuthorByName />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -34,6 +34,8 @@ type Candidate struct {
 	Subjects    []string `json:"subjects"`
 	CoverURL    string   `json:"cover_url"` // large, for saving
 	ThumbURL    string   `json:"thumb_url"` // small, for the result list
+
+	OriginalTitle string `json:"original_title,omitempty"` // when Title is an English edition's
 }
 
 // Client talks to the catalogues.

@@ -178,3 +178,39 @@ func TestImportQuotesIsIdempotent(t *testing.T) {
 		t.Fatalf("quotes: %+v", qs)
 	}
 }
+
+func TestAuthorsFollowBooks(t *testing.T) {
+	s, uid := openTest(t)
+	ctx := context.Background()
+	b := &Book{UserID: uid, Title: "The Hobbit", Authors: "J.R.R. Tolkien", Status: StatusRead, Rating: 5}
+	_ = s.CreateBook(ctx, b, "", "2026-01-01")
+	b2 := &Book{UserID: uid, Title: "Silmarillion", Authors: "J. R. R. Tolkien, Christopher Tolkien", Status: StatusWant}
+	_ = s.CreateBook(ctx, b2, "", "")
+	list, _ := s.ListAuthors(ctx, uid, "", "")
+	if len(list) != 2 || list[0].Name != "J.R.R. Tolkien" || list[0].Books != 2 || list[0].Read != 1 || list[0].AvgRating != 5 {
+		t.Fatalf("authors: %+v", list)
+	}
+	// Renaming writes the new name into the books.
+	a := list[0]
+	a.Name = "J. R. R. Tolkien"
+	if err := s.UpdateAuthor(ctx, &a); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetBook(ctx, uid, b2.ID)
+	if got.Authors != "J. R. R. Tolkien, Christopher Tolkien" {
+		t.Fatalf("renamed authors string: %q", got.Authors)
+	}
+	// Deleting the last book of an author removes them, unless followed.
+	_ = s.DeleteBook(ctx, uid, b2.ID)
+	list, _ = s.ListAuthors(ctx, uid, "", "")
+	if len(list) != 1 {
+		t.Fatalf("Christopher should be gone: %+v", list)
+	}
+	f := &Author{UserID: uid, Name: "Ursula K. Le Guin", OLKey: "OL31353A"}
+	_ = s.CreateAuthor(ctx, f)
+	_ = s.DeleteBook(ctx, uid, b.ID)
+	list, _ = s.ListAuthors(ctx, uid, "", "name")
+	if len(list) != 1 || list[0].Name != "Ursula K. Le Guin" || !list[0].Followed {
+		t.Fatalf("followed author kept: %+v", list)
+	}
+}

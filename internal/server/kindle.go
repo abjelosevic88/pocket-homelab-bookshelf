@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"unicode"
 
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/fold"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/kindle"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
@@ -18,32 +18,6 @@ import (
 // and proposes a shelf book for every Kindle book; import then writes the
 // highlights where the user decided, creating books where asked.
 
-var foldReplacer = strings.NewReplacer(
-	"č", "c", "ć", "c", "ž", "z", "š", "s", "đ", "dj", "á", "a", "à", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
-	"é", "e", "è", "e", "ê", "e", "ë", "e", "ě", "e", "í", "i", "ì", "i", "î", "i", "ï", "i", "ó", "o", "ò", "o", "ô", "o",
-	"ö", "o", "õ", "o", "ő", "o", "ø", "o", "ú", "u", "ù", "u", "û", "u", "ü", "u", "ű", "u", "ů", "u", "ñ", "n", "ń", "n",
-	"ň", "n", "ý", "y", "ç", "c", "ł", "l", "ľ", "l", "ś", "s", "ź", "z", "ż", "z", "ř", "r", "ť", "t", "ď", "d", "ß", "ss",
-	"&", " and ",
-)
-
-// fold lower-cases, strips accents and punctuation: "Moć sadašnjeg trenutka!" → "moc sadasnjeg trenutka".
-func fold(s string) string {
-	s = foldReplacer.Replace(strings.ToLower(s))
-	var b strings.Builder
-	space := false
-	for _, r := range s {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-			space = false
-		case !space && b.Len() > 0:
-			b.WriteByte(' ')
-			space = true
-		}
-	}
-	return strings.TrimSpace(b.String())
-}
-
 // shortTitle drops subtitles and series: "Sapiens: A Brief History…" → "sapiens".
 func shortTitle(s string) string {
 	for _, sep := range []string{":", " - ", " – ", " (", "[", "/"} {
@@ -51,11 +25,11 @@ func shortTitle(s string) string {
 			s = s[:i]
 		}
 	}
-	return fold(s)
+	return fold.String(s)
 }
 
 func sameTitle(a, b string) bool {
-	fa, fb := fold(a), fold(b)
+	fa, fb := fold.String(a), fold.String(b)
 	if fa == "" || fb == "" {
 		return false
 	}
@@ -65,7 +39,7 @@ func sameTitle(a, b string) bool {
 // lastName is the folded surname of the first author.
 func lastName(authors string) string {
 	first := strings.Split(authors, ",")[0]
-	f := strings.Fields(fold(first))
+	f := strings.Fields(fold.String(first))
 	if len(f) == 0 {
 		return ""
 	}
@@ -74,7 +48,7 @@ func lastName(authors string) string {
 
 func authorMatches(want, have string) bool {
 	ln := lastName(want)
-	return ln == "" || strings.Contains(fold(have), ln)
+	return ln == "" || strings.Contains(fold.String(have), ln)
 }
 
 type kindleMatch struct {

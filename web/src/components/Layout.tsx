@@ -8,6 +8,7 @@ const nav = [
   { to: '/now', label: 'Now', ico: '◉' },
   { to: '/library', label: 'Library', ico: '▤' },
   { to: '/planner', label: 'Plan', ico: '☰' },
+  { to: '/authors', label: 'Authors', ico: '✒' },
   { to: '/quotes', label: 'Quotes', ico: '❝' },
   { to: '/stats', label: 'Stats', ico: '◔' },
   { to: '/settings', label: 'Settings', ico: '⚙' },
@@ -43,7 +44,7 @@ export default function Layout() {
         </header>
         <main className="content"><Outlet /></main>
         <nav className="tabbar">
-          {nav.slice(0, 5).map(n => <NavLink key={n.to} to={n.to} className={({ isActive }) => isActive ? 'active' : ''}><span className="ico">{n.ico}</span><span>{n.label}</span></NavLink>)}
+          {nav.slice(0, 6).map(n => <NavLink key={n.to} to={n.to} className={({ isActive }) => isActive ? 'active' : ''}><span className="ico">{n.ico}</span><span>{n.label}</span></NavLink>)}
         </nav>
       </div>
     </div>
