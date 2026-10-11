@@ -20,6 +20,7 @@ type WDWork struct {
 	Year    string            `json:"year"`
 	OLWorks []string          `json:"ol_works"` // "OL7924103W"
 	Series  []WDSeriesRef     `json:"series"`
+	PartOf  []string          `json:"-"` // P361: e.g. "Book Four" is part of "The Two Towers"
 }
 
 // WDSeriesRef is a work's place in one series.
@@ -176,6 +177,11 @@ func (c *Client) toWorks(ents map[string]wdEntity, onlySeries string) []WDWork {
 				w.OLWorks = append(w.OLWorks, s)
 			}
 		}
+		for _, st := range e.Claims["P361"] {
+			if id := entityID(st.Mainsnak.Datavalue.Value); id != "" {
+				w.PartOf = append(w.PartOf, id)
+			}
+		}
 		for _, st := range e.Claims["P577"] {
 			if m, ok := st.Mainsnak.Datavalue.Value.(map[string]any); ok {
 				if t, ok := m["time"].(string); ok && len(t) >= 5 {
@@ -221,6 +227,25 @@ func (c *Client) SeriesMembers(ctx context.Context, seriesQID string) ([]WDWork,
 		return nil, err
 	}
 	works := c.toWorks(ents, seriesQID)
+	// Drop entries that are part of another entry (The Lord of the Rings lists
+	// both its three volumes and the six "books" inside them).
+	member := map[string]bool{}
+	for _, w := range works {
+		member[w.QID] = true
+	}
+	kept := works[:0]
+	for _, w := range works {
+		inner := false
+		for _, p := range w.PartOf {
+			if member[p] {
+				inner = true
+			}
+		}
+		if !inner {
+			kept = append(kept, w)
+		}
+	}
+	works = kept
 	sort.SliceStable(works, func(i, j int) bool { return ordinalLess(works[i].Series[0].Ordinal, works[j].Series[0].Ordinal) })
 	wdc.put(ck, works)
 	return works, nil
