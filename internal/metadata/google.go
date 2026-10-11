@@ -112,6 +112,7 @@ func (c *Client) SearchGoogle(ctx context.Context, query string, limit int) ([]C
 	v.Set("maxResults", strconv.Itoa(min(limit, 40)))
 	v.Set("printType", "books")
 	v.Set("key", key)
+	v.Set("country", c.googleCountry())
 	var res gbSearch
 	if err := c.getJSON(ctx, gbBase+"?"+v.Encode(), &res); err != nil {
 		return nil, err
@@ -130,9 +131,19 @@ func (c *Client) googleVolume(ctx context.Context, id string) (*Candidate, error
 		return nil, ErrNoGoogleKey
 	}
 	var v gbVolume
-	if err := c.getJSON(ctx, gbBase+"/"+url.PathEscape(id)+"?key="+url.QueryEscape(key), &v); err != nil {
+	if err := c.getJSON(ctx, gbBase+"/"+url.PathEscape(id)+"?key="+url.QueryEscape(key)+"&country="+c.googleCountry(), &v); err != nil {
 		return nil, err
 	}
 	cand := gbCandidate(v)
 	return &cand, nil
+}
+
+// googleCountry is sent with every Google Books request: Google decides what
+// it may show by country, and when it cannot place the server's IP address
+// it answers 503 "backendFailed" instead of saying so.
+func (c *Client) googleCountry() string {
+	if c.Country != "" {
+		return c.Country
+	}
+	return "US"
 }

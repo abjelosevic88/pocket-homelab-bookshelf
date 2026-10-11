@@ -49,6 +49,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
 	s.meta.Langs = s.languages
+	s.meta.Country = cfg.GoogleBooksCountry
 	return s
 }
 

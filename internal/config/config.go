@@ -27,8 +27,9 @@ type Config struct {
 	MaxCoverBytes  int64
 
 	// Book metadata lookups (Open Library needs no key; Google Books does).
-	GoogleBooksKey  string
-	MetadataTimeout time.Duration
+	GoogleBooksKey     string
+	GoogleBooksCountry string
+	MetadataTimeout    time.Duration
 
 	AuthMode             string // local | proxy | none
 	AuthProxyHeader      string
@@ -93,8 +94,9 @@ func Load() (*Config, error) {
 		MetricsEnabled: envBool("METRICS_ENABLED", true),
 		MaxCoverBytes:  int64(envInt("MAX_COVER_MB", 10)) << 20,
 
-		GoogleBooksKey:  env("GOOGLE_BOOKS_API_KEY", ""),
-		MetadataTimeout: envDuration("METADATA_TIMEOUT", 12*time.Second),
+		GoogleBooksKey:     env("GOOGLE_BOOKS_API_KEY", ""),
+		GoogleBooksCountry: strings.ToUpper(env("GOOGLE_BOOKS_COUNTRY", "US")),
+		MetadataTimeout:    envDuration("METADATA_TIMEOUT", 12*time.Second),
 
 		AuthMode:             strings.ToLower(env("AUTH_MODE", "local")),
 		AuthProxyHeader:      env("AUTH_PROXY_HEADER", "Remote-User"),

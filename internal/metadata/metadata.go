@@ -49,6 +49,8 @@ type Client struct {
 	// Langs returns the preferred languages (ISO 639-1, most preferred first):
 	// results with an edition in them come first, shown as that edition.
 	Langs func() []string
+	// Country is the ISO 3166 country sent to Google Books (default US).
+	Country string
 }
 
 // New returns a client with the given timeout.

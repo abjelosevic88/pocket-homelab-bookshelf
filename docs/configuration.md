@@ -25,6 +25,7 @@ All settings are environment variables. Nothing is required.
 | Variable | Default | Description |
 |---|---|---|
 | `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue. A key saved under Settings → Metadata takes precedence. |
+| `GOOGLE_BOOKS_COUNTRY` | `US` | Country sent to Google Books with every request (ISO code, e.g. `BA`). Google needs one and fails with *503 backendFailed* when it cannot place the server's IP address. |
 | `METADATA_TIMEOUT` | `12s` | Timeout for catalogue requests. |
 
 See [metadata.md](metadata.md) for what each catalogue gives you and how covers are fetched.
