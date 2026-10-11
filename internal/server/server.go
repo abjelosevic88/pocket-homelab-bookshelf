@@ -165,6 +165,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/export.csv", s.handleExportCSV)
 			r.Post("/import", s.handleImportJSON)
 			r.Post("/import/goodreads", s.handleImportGoodreads)
+			r.Post("/import/kindle/preview", s.handleKindlePreview)
+			r.Post("/import/kindle", s.handleKindleImport)
 		})
 	})
 

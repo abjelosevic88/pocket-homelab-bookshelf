@@ -5,6 +5,8 @@ import type { Quote } from '../lib/types'
 import { Card, Confirm, Empty, Loading, PageHeader, useAsync, useDebounce, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { QuoteModal } from './Book'
+import { KindleImport } from '../components/KindleImport'
+import { pageLabel } from '../lib/format'
 
 export default function Quotes() {
   const { toast } = useToast()
@@ -14,10 +16,11 @@ export default function Quotes() {
   const random = useAsync(() => api.get<Quote[]>(`${V1}/quotes?random=1`), [])
   const [edit, setEdit] = useState<Quote | null>(null)
   const [del, setDel] = useState<Quote | null>(null)
+  const [kindle, setKindle] = useState(false)
   const r = random.data?.[0]
   return (
     <>
-      <PageHeader title="Quotes" sub={data && `${data.length} saved`} />
+      <PageHeader title="Quotes" sub={data && `${data.length} saved`} actions={<button className="btn" onClick={() => setKindle(true)}>Import from Kindle…</button>} />
       {r && !dq && (
         <figure className="quote-hero mb">
           <blockquote>{r.text}</blockquote>
@@ -27,7 +30,7 @@ export default function Quotes() {
       )}
       <div className="toolbar"><div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search quotes, notes, books…" /></div></div>
       {loading && !data ? <Loading /> : data && data.length === 0 ? (
-        <Card><Empty title={dq ? 'No quotes match' : 'No quotes yet'}>{dq ? '' : 'Open a book and use “+ Add quote” to keep a passage.'}</Empty></Card>
+        <Card><Empty title={dq ? 'No quotes match' : 'No quotes yet'}>{dq ? '' : 'Open a book and use “+ Add quote” to keep a passage, or import your Kindle highlights.'}</Empty></Card>
       ) : (
         <div className="quote-list">
           {data?.map(qt => (
@@ -36,7 +39,7 @@ export default function Quotes() {
               <div>
                 <blockquote>{qt.text}</blockquote>
                 <figcaption>
-                  <Link to={`/books/${qt.book_id}`}>{qt.book_title}</Link>{qt.page && <span className="muted"> · p. {qt.page}</span>}
+                  <Link to={`/books/${qt.book_id}`}>{qt.book_title}</Link>{qt.page && <span className="muted"> · {pageLabel(qt.page)}</span>}
                   {qt.note && <span className="note">{qt.note}</span>}
                   <span className="spacer" />
                   <button className="btn ghost sm" onClick={() => setEdit(qt)}>Edit</button>
@@ -47,6 +50,7 @@ export default function Quotes() {
           ))}
         </div>
       )}
+      {kindle && <KindleImport onClose={() => setKindle(false)} onDone={() => { reload(); random.reload() }} />}
       {edit && <QuoteModal bookId={edit.book_id} quote={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reload() }} />}
       {del && <Confirm title="Delete this quote?" message={<i>“{del.text.slice(0, 120)}”</i>} onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/quotes/${del.id}`); setDel(null); toast('Quote deleted'); reload() }} />}
     </>

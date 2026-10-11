@@ -18,7 +18,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 
 - **Add a book in seconds.** Type a title, author or ISBN. The details and cover come from Open Library (no key) and Google Books (free key), and the cover is saved with your data. Pick *Want to read*, *Reading* or *Read*, and you're done.
 - **Say what you thought.** Half-star ratings from ½ to 5, your thoughts in your own words, favourites, tags. When you finish a book, the app asks for a rating and a few words while it's still fresh.
-- **Keep the good lines.** Save quotes with a page number and a note. A random one comes back to you on the home page.
+- **Keep the good lines.** Save quotes with a page number and a note, or import every Kindle highlight in one go. A random one comes back to you on the home page.
 - **Plan what's next.** Want-to-read books form a queue you can reorder, pencil in for a month and start with one tap. A yearly goal tells you whether you're ahead or behind.
 
 <p align="center"><img src="docs/screenshots/now.png" width="900" alt="Reading now: yearly goal, books in progress with page tracking, up next, recently finished, a random quote"></p>
@@ -68,7 +68,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 | **Plan** | Want-to-read queue: reorder, plan for a month (overdue months are flagged), note why you want to read it or who recommended it, start reading with one tap. Yearly goal with pace (“3 behind schedule”). |
 | **Stats** | Per year: books, pages, average rating, books per month, rating distribution, top authors and tags, formats, longest book, the finished list. All-time totals. |
 | **Metadata** | Open Library and Google Books, searched in parallel, deduplicated by ISBN. ISBN queries pin the exact edition. Covers are downloaded and stored locally, and any book can re-fetch details and cover later. See [docs/metadata.md](docs/metadata.md). |
-| **Import** | Goodreads and StoryGraph CSV exports (ratings, reviews, dates, shelves). Missing covers are fetched afterwards by ISBN. |
+| **Import** | Goodreads and StoryGraph CSV exports (ratings, reviews, dates, shelves); missing covers are fetched afterwards by ISBN. **Kindle highlights** from `My Clippings.txt`: matched to your books (also across translations, via Open Library), notes attached, re-imports only add what is new. |
 | **People** | Multi-user, and every account has its own private shelf. Admins manage users. Login modes: local accounts, proxy header (Authelia / Authentik / Tinyauth) or none. |
 | **Automation** | REST API with personal tokens: `GET /api/v1/dashboard` for Homepage/Glance widgets, `POST /api/v1/books/{id}/progress` from an iOS Shortcut, `GET /api/v1/quotes?random=1` for a quote anywhere. Prometheus `/metrics`, `/healthz`, `/readyz`. |
 | **Ops-friendly** | Single static binary with an embedded web app, SQLite with WAL, `VACUUM INTO` backups, JSON and CSV export, multi-arch image (~15 MB), runs as non-root, no outbound calls except catalogue lookups. |

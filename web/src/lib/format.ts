@@ -65,3 +65,6 @@ export function progress(b: Pick<Book, 'current_page' | 'pages'>): number {
 }
 
 export function ratingText(r: number): string { return r ? `${r % 1 ? r.toFixed(1) : r}★` : '' }
+
+/** "142" → "p. 142"; "loc. 1201" and other free text stay as they are. */
+export function pageLabel(page: string): string { return /^\d/.test(page) ? `p. ${page}` : page }

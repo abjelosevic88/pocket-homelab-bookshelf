@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import type { Book as BookT, Quote, Read, Status } from '../lib/types'
-import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, progress, splitTags, STATUS_LABEL, todayISO } from '../lib/format'
+import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
@@ -155,7 +155,7 @@ function QuotesCard({ book, quotes, onChanged }: { book: BookT; quotes: Quote[];
           {quotes.map(q => (
             <figure key={q.id} className="quote">
               <blockquote>{q.text}</blockquote>
-              <figcaption>{q.page && <span className="muted">p. {q.page}</span>}{q.note && <span className="note">{q.note}</span>}
+              <figcaption>{q.page && <span className="muted">{pageLabel(q.page)}</span>}{q.note && <span className="note">{q.note}</span>}
                 <span className="spacer" /><button className="btn ghost sm" onClick={() => setEdit(q)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(q)}>✕</button>
               </figcaption>
             </figure>

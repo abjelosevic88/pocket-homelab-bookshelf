@@ -95,6 +95,8 @@ Stats count finished, not-abandoned reads by their finish date. A book marked re
 | `GET` | `/backup` | Consistent SQLite copy. |
 | `GET` | `/export.json` · `/export.csv` | Your shelf: complete / one row per book. |
 | `POST` | `/import` | The JSON export. Books already on the shelf are skipped. |
+| `POST` | `/import/kindle/preview` | Kindle `My Clippings.txt` (body or `multipart` field `file`) → `{"clippings", "books": [{title, author, entries: [{text, note, page, loc_start, loc_end, added, note_only}], highlights, notes, known, match: {book_id, title, by: "title"\|"openlibrary"}, candidate}]}`. Nothing is saved. |
+| `POST` | `/import/kindle` | `{"books": [{"target": "book", "book_id": 17, "entries": […]}, {"target": "new", "status": "read", "title", "author", "candidate", "entries": […]}, {"target": "skip"}]}` → `{books_created, books_updated, added, updated, skipped}`. Idempotent: known highlights are skipped, longer versions replace shorter ones, a "new" book already on the shelf is reused. |
 | `POST` | `/import/goodreads` | Goodreads or StoryGraph export, or this app's CSV — body or `multipart` field `file`. |
 
 Unauthenticated: `/healthz`, `/readyz`, `/metrics` (Prometheus; disable with `METRICS_ENABLED=false` or block at the proxy).

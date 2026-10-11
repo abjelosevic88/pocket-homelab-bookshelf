@@ -4,6 +4,7 @@ import { useApp } from '../lib/app-context'
 import type { APIToken, Settings as SettingsT, User } from '../lib/types'
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 import { Avatar } from '../components/people'
+import { KindleImport } from '../components/KindleImport'
 
 type Tab = 'general' | 'metadata' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
@@ -205,6 +206,7 @@ function Data() {
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const [covers, setCovers] = useState<{ running: boolean; done: number; found: number; total: number } | null>(null)
+  const [kindle, setKindle] = useState(false)
   const importJSON = async (file: File) => {
     setBusy(true)
     try { const r = await api.post<{ created: number; skipped: number }>(`${V1}/import`, JSON.parse(await file.text())); toast(`Imported ${r.created} books, ${r.skipped} skipped`); pollCovers() } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
@@ -231,6 +233,8 @@ function Data() {
           <label className="btn ghost">{busy ? 'Importing…' : 'Import JSON…'}<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importJSON(e.target.files[0])} /></label>
           <label className="btn ghost">{busy ? 'Importing…' : 'Import Goodreads / StoryGraph CSV…'}<input type="file" accept=".csv,text/csv" hidden onChange={e => e.target.files?.[0] && importCSV(e.target.files[0])} /></label>
         </div>
+        <div className="row wrap mt"><button className="btn ghost" onClick={() => setKindle(true)}>Import Kindle highlights (My Clippings.txt)…</button></div>
+        {kindle && <KindleImport onClose={() => setKindle(false)} />}
         <p className="muted small mt">Goodreads: My Books → Import and export → Export library. StoryGraph: Manage account → Export. Ratings, reviews, read dates and shelves come along; books already on your shelf are skipped. Covers are looked up afterwards by ISBN.</p>
         <hr className="mt mb" />
         <div className="row wrap"><button className="btn" onClick={() => pollCovers(true)} disabled={covers?.running}>Find missing covers</button>

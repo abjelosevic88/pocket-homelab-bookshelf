@@ -158,3 +158,23 @@ func TestReorderQueue(t *testing.T) {
 		t.Fatalf("order: %s %s %s", list[0].Title, list[1].Title, list[2].Title)
 	}
 }
+
+func TestImportQuotesIsIdempotent(t *testing.T) {
+	s, uid := openTest(t)
+	ctx := context.Background()
+	b := &Book{UserID: uid, Title: "The Power of Now", Status: StatusRead}
+	_ = s.CreateBook(ctx, b, "", "")
+	in := []Quote{{Text: "Realize deeply that the present moment", Page: "21"}, {Text: "Another line", CreatedAt: "2021-05-03T19:14:02Z"}}
+	if a, u, k, err := s.ImportQuotes(ctx, uid, b.ID, in); err != nil || a != 2 || u != 0 || k != 0 {
+		t.Fatalf("first import: %d %d %d %v", a, u, k, err)
+	}
+	// Same file again, plus an extended version of the first highlight with a note.
+	again := []Quote{{Text: "another   LINE"}, {Text: "Realize deeply that the present moment is all you ever have.", Page: "21", Note: "core"}}
+	if a, u, k, err := s.ImportQuotes(ctx, uid, b.ID, again); err != nil || a != 0 || u != 1 || k != 1 {
+		t.Fatalf("second import: %d %d %d %v", a, u, k, err)
+	}
+	qs, _ := s.ListQuotes(ctx, QuoteFilter{UserID: uid, BookID: b.ID})
+	if len(qs) != 2 || qs[0].Note != "core" || qs[1].CreatedAt != "2021-05-03T19:14:02Z" {
+		t.Fatalf("quotes: %+v", qs)
+	}
+}

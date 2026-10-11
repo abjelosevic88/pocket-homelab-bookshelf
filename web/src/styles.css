@@ -360,3 +360,12 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
 }
 .field .segmented, .field .stars { align-self: flex-start; }
 .quote-hero.mb { margin-bottom: 16px; } .quote-hero.mt { margin-top: 16px; }
+/* ---- kindle import ---- */
+.kindle-list { display: grid; gap: 8px; max-height: 58vh; overflow-y: auto; margin: 10px 0; padding-right: 4px; }
+.kindle-row { display: grid; grid-template-columns: 1fr 290px; gap: 12px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.kindle-row.skipped { opacity: .5; }
+.kindle-row .nm { font-weight: 600; }
+.kindle-row .sample { color: var(--muted); font-style: italic; margin-top: 4px; }
+.kindle-row .target { display: grid; gap: 6px; }
+.kindle-row select { font-size: 13px; padding: 6px 8px; }
+@media (max-width: 900px) { .kindle-row { grid-template-columns: 1fr; } }

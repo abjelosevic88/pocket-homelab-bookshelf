@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Book, Dashboard, Quote } from '../lib/types'
-import { daysBetween, fmtDate, progress, todayISO } from '../lib/format'
+import { daysBetween, fmtDate, progress, todayISO, pageLabel } from '../lib/format'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
@@ -80,7 +80,7 @@ export default function Now() {
       {q && (
         <figure className="quote-hero mt">
           <blockquote>{q.text}</blockquote>
-          <figcaption>— <Link to={`/books/${q.book_id}`}>{q.book_title}</Link>{q.book_authors && <>, {q.book_authors}</>}{q.page && <span className="muted"> · p. {q.page}</span>}</figcaption>
+          <figcaption>— <Link to={`/books/${q.book_id}`}>{q.book_title}</Link>{q.book_authors && <>, {q.book_authors}</>}{q.page && <span className="muted"> · {pageLabel(q.page)}</span>}</figcaption>
           <button className="btn ghost sm" onClick={quote.reload} title="Another quote">↻</button>
         </figure>
       )}

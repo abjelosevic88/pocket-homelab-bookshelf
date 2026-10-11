@@ -44,3 +44,12 @@ Downloads only go to public addresses: the server refuses to fetch from loopback
 - this app's own **export.csv**.
 
 Books already on your shelf (same ISBN, or same title and author) are skipped, so importing twice is harmless.
+
+## Importing Kindle highlights
+
+**Quotes → Import from Kindle…** (also under Settings → Backup & data) reads the `My Clippings.txt` file every Kindle keeps in its `documents` folder (connect it with a USB cable).
+
+1. **Parse.** Highlights, notes and bookmarks are read with their page, location and date (English, German, French, Spanish, Italian and Portuguese Kindle menus). Bookmarks and "clipping limit" placeholders are dropped. When you extend a highlight, the Kindle appends a new entry; only the last, longest version is kept. A note is attached to the highlight it was written on, and a note without a highlight becomes a quote of its own.
+2. **Match.** Each Kindle book is matched to your shelf by title (ignoring subtitles, series, accents and case) and author. If that fails, the title is looked up in Open Library and compared with the Open Library work each of your books is linked to, so the English *The Power of Now* on the Kindle finds your *Moć sadašnjeg trenutka*. Books not on your shelf are offered as new books, filled in from Open Library.
+3. **Review.** Every Kindle book shows where its highlights will go. You can pick another book, create a new one (as read, reading or want to read) or skip it.
+4. **Import.** Highlights become quotes with their page (or `loc. 1201` when the book has no page numbers), note and original date. Running the same file again later only adds what is new.
