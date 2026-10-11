@@ -395,3 +395,9 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
   .tabbar a { font-size: 10px; }
 }
 .work .orig { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bio.clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.bio.full { white-space: normal; max-width: 75ch; }
+.bio.full p { margin: 0 0 12px; }
+.bio.full h3 { font-size: 16px; margin: 22px 0 8px; }
+.bio.full h4 { font-size: 14px; margin: 16px 0 6px; color: var(--muted); }
+.read-more { padding-left: 0; color: var(--accent-hover); }

@@ -76,7 +76,7 @@ Authors are created from the books' `authors` strings and looked up on Open Libr
 | `POST` | `/authors` | Follow an author: `{"name"}` and/or `{"key": "OL31353A"}`. Looked up immediately. |
 | `GET` | `/authors/search?q=` | Open Library author search; results already on your list carry `author_id`. |
 | `GET` | `/authors/resolve?name=` | `{"id"}` of the author with that name. |
-| `GET` | `/authors/{id}` | `{"author", "books": […]}` |
+| `GET` | `/authors/{id}` | `{"author", "books": […]}`. `bio` is the short biography, `bio_full` the long one (`## Section` / `### Subsection` lines) or `""`. |
 | `PUT` | `/authors/{id}` | Partial: `name` (renames it in every book; renaming onto an existing author merges), `bio`, `birth_date`, `death_date`. Edited fields survive refreshes. |
 | `DELETE` | `/authors/{id}` | Only without books on the shelf (409 otherwise). |
 | `GET` | `/authors/{id}/works` | Bibliography from Open Library, most published first; `on_shelf` = your book id; `original_title` when `title` is an English edition's. |

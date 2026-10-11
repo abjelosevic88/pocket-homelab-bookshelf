@@ -32,6 +32,7 @@ type AuthorInfo struct {
 	Key       string `json:"key"`
 	Name      string `json:"name"`
 	Bio       string `json:"bio"`
+	BioFull   string `json:"bio_full"`
 	BioSource string `json:"bio_source"`
 	BirthDate string `json:"birth_date"`
 	DeathDate string `json:"death_date"`
@@ -175,8 +176,96 @@ func (c *Client) AuthorDetails(ctx context.Context, key string) (*AuthorInfo, er
 		if info.PhotoURL == "" {
 			info.PhotoURL = sum.Image
 		}
+		if full, err := c.wikipediaBiography(ctx, sum.Title); err == nil && len(full) > len(info.Bio)+200 {
+			info.BioFull = full
+		}
 	}
 	return info, nil
+}
+
+// bioSkip are article sections that are not the life story.
+var bioSkip = regexp.MustCompile(`(?i)\b(works?|bibliography|writings|publications|books|novels|filmography|discography|themes?|style|legacy|reception|influence|criticism|critical|analysis|reputation|honou?rs|awards|prizes|recognition|adaptations?|in popular culture|selected|see also|references|notes|sources|citations|further reading|external links|footnotes|gallery|ideas|thought|teachings|philosophy|views|method|bibliograph)`)
+
+const maxBio = 20000
+
+// wikipediaBiography returns the article's introduction plus its life
+// sections (early life, career, death, personal life …) as plain text, with
+// section titles on their own lines as "## Title" ("### Title" below that).
+func (c *Client) wikipediaBiography(ctx context.Context, title string) (string, error) {
+	var r struct {
+		Query struct {
+			Pages []struct {
+				Extract string `json:"extract"`
+			} `json:"pages"`
+		} `json:"query"`
+	}
+	u := "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&formatversion=2&titles=" + url.QueryEscape(title)
+	if err := c.getJSON(ctx, u, &r); err != nil {
+		return "", err
+	}
+	if len(r.Query.Pages) == 0 {
+		return "", nil
+	}
+	return selectBiography(r.Query.Pages[0].Extract), nil
+}
+
+var headingRe = regexp.MustCompile(`^(={2,6})\s*(.*?)\s*={2,6}$`)
+
+// selectBiography keeps the introduction and the top-level sections that are
+// about the person's life, with their subsections; it stops at maxBio
+// characters on a paragraph boundary.
+func selectBiography(extract string) string {
+	var out strings.Builder
+	keep := true // the introduction
+	for _, line := range strings.Split(extract, "\n") {
+		line = strings.TrimSpace(line)
+		if m := headingRe.FindStringSubmatch(line); m != nil {
+			level, name := len(m[1]), m[2]
+			if level == 2 {
+				keep = !bioSkip.MatchString(name)
+			}
+			if keep && name != "" {
+				if level >= 4 && bioSkip.MatchString(name) {
+					continue
+				}
+				prefix := "## "
+				if level > 2 {
+					prefix = "### "
+				}
+				out.WriteString("\n" + prefix + name + "\n")
+			}
+			continue
+		}
+		if !keep || line == "" {
+			continue
+		}
+		if out.Len()+len(line) > maxBio {
+			break
+		}
+		out.WriteString(tidyWiki(line) + "\n\n")
+	}
+	// Drop headings left without text: followed by nothing, or by a heading of
+	// the same or a higher level.
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var clean []string
+	for i, l := range lines {
+		if lvl := headingLevel(l); lvl > 0 {
+			next := 0
+			found := false
+			for _, n := range lines[i+1:] {
+				if strings.TrimSpace(n) == "" {
+					continue
+				}
+				next, found = headingLevel(n), true
+				break
+			}
+			if !found || (next > 0 && next <= lvl) {
+				continue
+			}
+		}
+		clean = append(clean, l)
+	}
+	return strings.TrimSpace(blank3.ReplaceAllString(strings.Join(clean, "\n"), "\n\n"))
 }
 
 // writerWords: a Wikipedia page found by name alone is only trusted when it
@@ -220,11 +309,12 @@ func (c *Client) wikidataEnwiki(ctx context.Context, qid string) (string, error)
 	return r.Entities[qid].Sitelinks["enwiki"].Title, nil
 }
 
-type wikiSummary struct{ Extract, Image, Page, Description string }
+type wikiSummary struct{ Title, Extract, Image, Page, Description string }
 
 func (c *Client) wikipediaSummary(ctx context.Context, title string) (*wikiSummary, error) {
 	var r struct {
 		Type        string `json:"type"`
+		Title       string `json:"title"`
 		Extract     string `json:"extract"`
 		Description string `json:"description"`
 		Thumbnail   struct {
@@ -243,7 +333,7 @@ func (c *Client) wikipediaSummary(ctx context.Context, title string) (*wikiSumma
 	if r.Type == "disambiguation" {
 		return &wikiSummary{}, nil
 	}
-	return &wikiSummary{Extract: strings.Join(strings.Fields(r.Extract), " "), Image: r.Thumbnail.Source, Page: r.ContentURLs.Desktop.Page, Description: r.Description}, nil
+	return &wikiSummary{Title: r.Title, Extract: strings.Join(strings.Fields(r.Extract), " "), Image: r.Thumbnail.Source, Page: r.ContentURLs.Desktop.Page, Description: r.Description}, nil
 }
 
 // junkWork filters study guides, summaries and box sets out of a bibliography.
@@ -365,4 +455,27 @@ func workKey(t string) string {
 		k = strings.TrimPrefix(k, art)
 	}
 	return k
+}
+
+// headingLevel is 2 for "## x", 3 for "### x", 0 for text.
+func headingLevel(l string) int {
+	switch {
+	case strings.HasPrefix(l, "### "):
+		return 3
+	case strings.HasPrefix(l, "## "):
+		return 2
+	}
+	return 0
+}
+
+var (
+	emptyParenLead = regexp.MustCompile(`\(\s*[;,]\s*`)
+	emptyParens    = regexp.MustCompile(`\s*\(\s*\)`)
+)
+
+// tidyWiki removes what is left of stripped pronunciation guides:
+// "Andy Weir ( ; born 1972)" → "Andy Weir (born 1972)".
+func tidyWiki(s string) string {
+	s = emptyParenLead.ReplaceAllString(s, "(")
+	return emptyParens.ReplaceAllString(s, "")
 }

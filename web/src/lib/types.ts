@@ -110,6 +110,7 @@ export interface Author {
   name: string
   ol_key: string
   bio: string
+  bio_full: string
   bio_source: string
   birth_date: string
   death_date: string

@@ -84,8 +84,8 @@ export default function Author() {
       <Card title="About">
         {!a.enriched_at ? <p className="muted"><span className="spinner sm" /> Looking up a biography…</p>
           : a.bio ? <>
-            <div className="bio">{a.bio}</div>
-            {a.bio_source && <p className="muted small mt-sm">Source: <a href={a.bio_source} target="_blank" rel="noreferrer">{a.bio_source.includes('wikipedia') ? 'Wikipedia' : 'Open Library'}</a></p>}
+            <Biography short={a.bio} full={a.bio_full} more={a.bio_source.includes('wikipedia') ? a.bio_source : ''} />
+            {a.bio_source && <p className="muted small mt-sm">Source: <a href={a.bio_source} target="_blank" rel="noreferrer">{a.bio_source.includes('wikipedia') ? 'Wikipedia' : 'Open Library'}</a>{a.bio_source.includes('wikipedia') && ' (text under CC BY-SA)'}</p>}
           </>
           : <p className="muted">No biography found. {a.ol_key ? '' : 'Use “Wrong person?” to link the right Open Library author, or write one with Edit.'}</p>}
         {a.last_read && <p className="small mt-sm"><span className="muted">Last finished:</span> {fmtDate(a.last_read)}</p>}
@@ -127,6 +127,31 @@ export default function Author() {
       {relinking && <FindAuthor initial={a.name} onClose={() => setRelinking(false)} onPick={(c: AuthorCandidate) => { setRelinking(false); refresh(c.key) }} />}
       {deleting && <Confirm title={`Remove ${a.name}?`} message="They have no books on your shelf. The biography and photo are removed." onCancel={() => setDeleting(false)} onConfirm={del} />}
     </div>
+  )
+}
+
+/** The short biography, and the full one (with section titles) behind “Read more”. */
+function Biography({ short, full, more }: { short: string; full: string; more: string }) {
+  const [open, setOpen] = useState(false)
+  const long = full || (short.length > 700 ? short : '')
+  if (!long) return <div className="bio">{short}</div>
+  if (!open) return (
+    <>
+      <div className={`bio ${full ? '' : 'clamped'}`}>{short}</div>
+      <button className="btn ghost sm mt-sm read-more" onClick={() => setOpen(true)}>Read more{full ? ` · ${Math.max(1, Math.round(full.split(/\s+/).length / 230))} min` : ''} ▾</button>
+    </>
+  )
+  return (
+    <>
+      <div className="bio full">{long.split('\n').map((l, i) =>
+        l.startsWith('### ') ? <h4 key={i}>{l.slice(4)}</h4>
+          : l.startsWith('## ') ? <h3 key={i}>{l.slice(3)}</h3>
+            : l.trim() ? <p key={i}>{l}</p> : null)}</div>
+      <div className="row wrap">
+        <button className="btn ghost sm read-more" onClick={() => setOpen(false)}>Show less ▴</button>
+        {full && more && <a className="btn ghost sm" href={more} target="_blank" rel="noreferrer">Continue on Wikipedia ↗</a>}
+      </div>
+    </>
   )
 }
 

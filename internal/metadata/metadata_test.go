@@ -94,3 +94,18 @@ func TestAuthorHelpers(t *testing.T) {
 		t.Error("writerWords")
 	}
 }
+
+func TestSelectBiography(t *testing.T) {
+	in := "Intro paragraph.\n\n== Early life ==\nBorn in Moscow.\n\n=== Exile ===\nSent to Siberia.\n\n== Works ==\n=== Novels ===\nCrime and Punishment.\n\n== Death ==\n\n== Personal life ==\nMarried twice.\n\n== References =="
+	got := selectBiography(in)
+	want := "Intro paragraph.\n\n## Early life\nBorn in Moscow.\n\n### Exile\nSent to Siberia.\n\n## Personal life\nMarried twice."
+	if got != want {
+		t.Errorf("selectBiography:\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestTidyWiki(t *testing.T) {
+	if got := tidyWiki("Andy Weir ( ; born June 16, 1972) is () a novelist"); got != "Andy Weir (born June 16, 1972) is a novelist" {
+		t.Errorf("tidyWiki: %q", got)
+	}
+}

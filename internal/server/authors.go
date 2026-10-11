@@ -179,7 +179,7 @@ func (s *Server) enrichAuthor(ctx context.Context, a *store.Author) error {
 	}
 	a.OLKey = key
 	if !a.Edited || a.Bio == "" {
-		a.Bio, a.BioSource = info.Bio, info.BioSource
+		a.Bio, a.BioFull, a.BioSource = info.Bio, info.BioFull, info.BioSource
 	}
 	if !a.Edited || a.BirthDate == "" {
 		a.BirthDate = info.BirthDate
@@ -228,7 +228,7 @@ func (s *Server) handleListAuthors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range list {
-		list[i].Bio = shortBio(list[i].Bio)
+		list[i].Bio, list[i].BioFull = shortBio(list[i].Bio), ""
 	}
 	writeJSON(w, http.StatusOK, list)
 }
@@ -366,7 +366,7 @@ func (s *Server) handleUpdateAuthor(w http.ResponseWriter, r *http.Request) {
 	if a.Bio != cur.Bio || a.BirthDate != cur.BirthDate || a.DeathDate != cur.DeathDate {
 		a.Edited = true
 		if a.Bio != cur.Bio {
-			a.BioSource = ""
+			a.BioSource, a.BioFull = "", "" // the hand-written text replaces both
 		}
 	}
 	if err := s.store.UpdateAuthor(r.Context(), &a); err != nil {

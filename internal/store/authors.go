@@ -15,6 +15,7 @@ type Author struct {
 	Name       string `json:"name"`
 	OLKey      string `json:"ol_key"`
 	Bio        string `json:"bio"`
+	BioFull    string `json:"bio_full"` // longer biography for "Read more"; "" = only Bio
 	BioSource  string `json:"bio_source"`
 	BirthDate  string `json:"birth_date"`
 	DeathDate  string `json:"death_date"`
@@ -51,7 +52,7 @@ func SplitAuthors(s string) []string {
 	return out
 }
 
-const authorCols = `a.id, a.user_id, a.name, a.ol_key, a.bio, a.bio_source, a.birth_date, a.death_date, a.photo, a.wikipedia,
+const authorCols = `a.id, a.user_id, a.name, a.ol_key, a.bio, a.bio_full, a.bio_source, a.birth_date, a.death_date, a.photo, a.wikipedia,
 	a.followed, a.edited, a.enriched_at, a.created_at,
 	COUNT(b.id), COUNT(CASE WHEN b.status = 'read' THEN 1 END), COUNT(CASE WHEN b.status = 'reading' THEN 1 END),
 	COUNT(CASE WHEN b.status = 'want' THEN 1 END), COALESCE(ROUND(AVG(NULLIF(b.rating, 0)), 2), 0),
@@ -63,7 +64,7 @@ const authorFrom = ` FROM authors a LEFT JOIN book_authors ba ON ba.author_id = 
 func scanAuthor(row interface{ Scan(...any) error }) (*Author, error) {
 	var a Author
 	var followed, edited int
-	err := row.Scan(&a.ID, &a.UserID, &a.Name, &a.OLKey, &a.Bio, &a.BioSource, &a.BirthDate, &a.DeathDate, &a.Photo, &a.Wikipedia,
+	err := row.Scan(&a.ID, &a.UserID, &a.Name, &a.OLKey, &a.Bio, &a.BioFull, &a.BioSource, &a.BirthDate, &a.DeathDate, &a.Photo, &a.Wikipedia,
 		&followed, &edited, &a.EnrichedAt, &a.CreatedAt, &a.Books, &a.Read, &a.Reading, &a.Want, &a.AvgRating, &a.Pages, &a.LastRead)
 	if err != nil {
 		return nil, notFound(err)
@@ -80,17 +81,17 @@ func (s *Store) ListAuthors(ctx context.Context, userID int64, query, sort strin
 		q += ` AND (a.name_key LIKE ? OR LOWER(a.name) LIKE ?)`
 		args = append(args, "%"+fold.Name(t)+"%", "%"+strings.ToLower(t)+"%")
 	}
-	// Ordinals refer to authorCols: 15 books, 16 read, 19 avg rating, 21 last finished.
-	order := `16 DESC, 15 DESC, a.name_key` // most read
+	// Ordinals refer to authorCols: 16 books, 17 read, 20 avg rating, 22 last finished.
+	order := `17 DESC, 16 DESC, a.name_key` // most read
 	switch sort {
 	case "name":
 		order = `a.name_key`
 	case "added":
 		order = `a.created_at DESC`
 	case "rating":
-		order = `19 DESC, 16 DESC, a.name_key`
+		order = `20 DESC, 17 DESC, a.name_key`
 	case "recent":
-		order = `21 DESC, a.name_key`
+		order = `22 DESC, a.name_key`
 	}
 	q += ` GROUP BY a.id ORDER BY ` + order
 	rows, err := s.DB.QueryContext(ctx, q, args...)
@@ -302,9 +303,9 @@ func (s *Store) UpdateAuthor(ctx context.Context, a *Author) error {
 			return tx.Commit()
 		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE authors SET name = ?, name_key = ?, bio = ?, bio_source = ?, birth_date = ?, death_date = ?, wikipedia = ?,
+	_, err = tx.ExecContext(ctx, `UPDATE authors SET name = ?, name_key = ?, bio = ?, bio_full = ?, bio_source = ?, birth_date = ?, death_date = ?, wikipedia = ?,
 		ol_key = ?, followed = ?, edited = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
-		a.Name, newKey, a.Bio, a.BioSource, a.BirthDate, a.DeathDate, a.Wikipedia, a.OLKey, boolInt(a.Followed), boolInt(a.Edited), Now(), a.ID, a.UserID)
+		a.Name, newKey, a.Bio, a.BioFull, a.BioSource, a.BirthDate, a.DeathDate, a.Wikipedia, a.OLKey, boolInt(a.Followed), boolInt(a.Edited), Now(), a.ID, a.UserID)
 	if err != nil {
 		return err
 	}
@@ -313,8 +314,8 @@ func (s *Store) UpdateAuthor(ctx context.Context, a *Author) error {
 
 // SaveEnrichment stores what the catalogues know about an author.
 func (s *Store) SaveEnrichment(ctx context.Context, a *Author) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE authors SET ol_key = ?, bio = ?, bio_source = ?, birth_date = ?, death_date = ?, wikipedia = ?,
-		enriched_at = ?, updated_at = ? WHERE id = ?`, a.OLKey, a.Bio, a.BioSource, a.BirthDate, a.DeathDate, a.Wikipedia, Now(), Now(), a.ID)
+	_, err := s.DB.ExecContext(ctx, `UPDATE authors SET ol_key = ?, bio = ?, bio_full = ?, bio_source = ?, birth_date = ?, death_date = ?, wikipedia = ?,
+		enriched_at = ?, updated_at = ? WHERE id = ?`, a.OLKey, a.Bio, a.BioFull, a.BioSource, a.BirthDate, a.DeathDate, a.Wikipedia, Now(), Now(), a.ID)
 	return err
 }
 
