@@ -67,6 +67,17 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	in.Languages = strings.Join(langs, ",")
+	if in.ThoughtTemplates == nil {
+		in.ThoughtTemplates = cur.ThoughtTemplates
+	}
+	var tpls []store.ThoughtTemplate
+	for _, t := range in.ThoughtTemplates {
+		t.Name, t.Body = strings.TrimSpace(t.Name), strings.TrimRight(t.Body, " \n")+"\n"
+		if t.Name != "" && len(tpls) < 12 && len(t.Body) < 20000 {
+			tpls = append(tpls, t)
+		}
+	}
+	in.ThoughtTemplates = tpls
 	in.SetupComplete = cur.SetupComplete
 	if err := s.store.SaveSettings(r.Context(), in); err != nil {
 		s.fail(w, err, "save settings")

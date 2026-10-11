@@ -6,6 +6,7 @@ import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, progress, splitTags, STAT
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
+import { useApp } from '../lib/app-context'
 import { Stars } from '../components/Stars'
 import { EditBook } from '../components/BookForm'
 import { CoverPicker } from '../components/CoverPicker'
@@ -132,6 +133,8 @@ function PlanCard({ book, onSave, onStart }: { book: BookT; onSave: (f: Partial<
 }
 
 function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) => void }) {
+  const { settings } = useApp()
+  const templates = settings?.thought_templates || []
   const [text, setText] = useState(book.review)
   const [editing, setEditing] = useState(!book.review)
   useEffect(() => { setText(book.review); setEditing(!book.review) }, [book.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -140,7 +143,12 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
     <Card className="mt" title="My thoughts" actions={!editing && <button className="btn ghost sm" onClick={() => setEditing(true)}>Edit</button>}>
       {editing ? (
         <>
-          <textarea className="review-input" rows={7} value={text} onChange={e => setText(e.target.value)} placeholder={book.status === 'want' ? 'What do you expect from it?' : 'What stayed with you? What did you like, what not? Would you recommend it — to whom?'} />
+          {!text.trim() && templates.length > 0 && (
+            <div className="row wrap mb-sm template-pick"><span className="muted small">Start from:</span>
+              {templates.map(t => <button key={t.name} type="button" className="chip sm" onClick={() => setText(t.body)}>{t.name}</button>)}
+            </div>
+          )}
+          <textarea className="review-input" rows={text.split('\n').length > 7 ? Math.min(28, text.split('\n').length + 2) : 7} value={text} onChange={e => setText(e.target.value)} placeholder={book.status === 'want' ? 'What do you expect from it?' : 'What stayed with you? What did you like, what not? Would you recommend it — to whom?'} />
           <div className="form-actions">
             {book.review && <button className="btn ghost sm" onClick={() => { setText(book.review); setEditing(false) }}>Cancel</button>}
             <button className="btn primary sm" disabled={!dirty} onClick={() => { onSave(text); setEditing(!text) }}>Save</button>
@@ -151,16 +159,31 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
   )
 }
 
-/** Thoughts as written; lines starting with "## " become section titles. */
+/** Thoughts as written: "## " lines are section titles, "### " sub-titles.
+ *  Sections left empty (a template's unused headings, bare "1." prompts) are hidden. */
 function ReviewText({ text }: { text: string }) {
-  if (!/^## /m.test(text)) return <>{text}</>
-  const blocks: { title: string; body: string[] }[] = []
+  if (!/^#{2,3} /m.test(text)) return <>{text}</>
+  const blocks: { level: number; title: string; body: string }[] = []
   for (const line of text.split('\n')) {
-    if (line.startsWith('## ')) blocks.push({ title: line.slice(3), body: [] })
-    else if (blocks.length) blocks[blocks.length - 1].body.push(line)
-    else blocks.push({ title: '', body: [line] })
+    const m = line.match(/^(#{2,3}) (.*)$/)
+    if (m) blocks.push({ level: m[1].length, title: m[2], body: '' })
+    else if (blocks.length) blocks[blocks.length - 1].body += line + '\n'
+    else blocks.push({ level: 0, title: '', body: line + '\n' })
   }
-  return <>{blocks.map((b, i) => <div key={i} className="review-section">{b.title && <h4>{b.title}</h4>}<div>{b.body.join('\n').trim()}</div></div>)}</>
+  const filled = (b: { body: string }) => b.body.split('\n').some(l => l.trim() && !/^\s*(\d+\.|[-*])\s*$/.test(l))
+  // A section title stays when it, or one of its sub-sections, has text.
+  const keep = blocks.map((b, i) => {
+    if (filled(b)) return true
+    if (b.level !== 2) return false
+    for (let j = i + 1; j < blocks.length && blocks[j].level === 3; j++) if (filled(blocks[j])) return true
+    return false
+  })
+  return <>{blocks.map((b, i) => keep[i] && (
+    <div key={i} className={`review-section l${b.level}`}>
+      {b.title && (b.level === 3 ? <h5>{b.title}</h5> : <h4>{b.title}</h4>)}
+      {filled(b) && <div>{b.body.trim()}</div>}
+    </div>
+  ))}</>
 }
 
 function QuotesCard({ book, quotes, onChanged }: { book: BookT; quotes: Quote[]; onChanged: () => void }) {

@@ -70,7 +70,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 | Area | What you get |
 |---|---|
 | **Books** | Title, subtitle, authors, pages, year, publisher, language, ISBN-10/13, description, format (paper / e-book / audio), tags, cover. Statuses: want to read, reading, read, abandoned. |
-| **Your verdict** | Half-star rating (0.5–5), free-text thoughts, favourite flag. A *Finished* dialog asks for the date, rating and a few words in one go. |
+| **Your verdict** | Half-star rating (0.5–5), free-text thoughts (start from your own templates, e.g. fiction / non-fiction sections; editable under Settings → Templates), favourite flag. A *Finished* dialog asks for the date, rating and a few words in one go. |
 | **Reading history** | Every time through a book, with start and finish dates. Re-reads count again in that year, and abandoned reads are kept separately. Past reads can be added later. |
 | **Progress** | Current page with a percentage for books in progress, updated inline from the home page. |
 | **Quotes** | Text, page or location, your note. Searchable, with a random one on the home page and the Quotes page. |

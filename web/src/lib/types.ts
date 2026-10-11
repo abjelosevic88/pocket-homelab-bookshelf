@@ -73,7 +73,10 @@ export interface Settings {
   google_books_env: boolean
   sources: string[]
   languages: string
+  thought_templates: ThoughtTemplate[]
 }
+
+export interface ThoughtTemplate { name: string; body: string }
 
 export interface BookLine { id: number; title: string; authors: string; rating?: number; pages?: number; progress?: number; date?: string }
 export interface TagCount { name: string; count: number }

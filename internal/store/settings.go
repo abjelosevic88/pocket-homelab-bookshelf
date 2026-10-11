@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 )
 
@@ -10,7 +11,7 @@ const DefaultTitle = "Pocket Bookshelf"
 
 // GetSettings loads all settings with defaults applied.
 func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
-	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all", Languages: "en"}
+	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all", Languages: "en", ThoughtTemplates: DefaultThoughtTemplates}
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings`)
 	if err != nil {
 		return st, err
@@ -42,6 +43,11 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			st.GoogleBooksKey = v
 		case "languages":
 			st.Languages = v
+		case "thought_templates":
+			var t []ThoughtTemplate
+			if json.Unmarshal([]byte(v), &t) == nil {
+				st.ThoughtTemplates = t
+			}
 		case "setup_complete":
 			st.SetupComplete = v == "1"
 		}
@@ -51,14 +57,16 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 
 // SaveSettings persists all settings.
 func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
+	tpl, _ := json.Marshal(st.ThoughtTemplates)
 	kv := map[string]string{
-		"title":            st.Title,
-		"yearly_goal":      strconv.Itoa(st.YearlyGoal),
-		"landing":          st.Landing,
-		"search_source":    st.SearchSource,
-		"google_books_key": st.GoogleBooksKey,
-		"languages":        st.Languages,
-		"setup_complete":   map[bool]string{true: "1", false: "0"}[st.SetupComplete],
+		"thought_templates": string(tpl),
+		"title":             st.Title,
+		"yearly_goal":       strconv.Itoa(st.YearlyGoal),
+		"landing":           st.Landing,
+		"search_source":     st.SearchSource,
+		"google_books_key":  st.GoogleBooksKey,
+		"languages":         st.Languages,
+		"setup_complete":    map[bool]string{true: "1", false: "0"}[st.SetupComplete],
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {

@@ -458,3 +458,8 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
 .cover-option .spinner { position: absolute; top: 45%; left: 45%; }
 .cover-option.busy img { opacity: .5; }
 @media (max-width: 900px) { .cover-change { max-width: 120px; } .cover-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); } }
+.review-section.l3 { margin-top: 8px !important; }
+.review-section h5 { font-size: 13.5px; font-weight: 650; margin: 0 0 2px; }
+.template-pick .chip { font-weight: 600; }
+.template-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.template-edit textarea { font-size: 13.5px; line-height: 1.55; }

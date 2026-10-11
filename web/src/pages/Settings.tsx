@@ -1,24 +1,25 @@
 import { useEffect, useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Settings as SettingsT, User } from '../lib/types'
+import type { APIToken, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
 import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
 import { Avatar } from '../components/people'
 import { KindleImport } from '../components/KindleImport'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
-type Tab = 'general' | 'metadata' | 'users' | 'profile' | 'api' | 'data' | 'about'
+type Tab = 'general' | 'metadata' | 'templates' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
 export default function Settings() {
   const [tab, setTab] = useState<Tab>('general')
   return (
     <>
       <PageHeader title="Settings" />
-      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
       <div className="mt">
         {tab === 'general' && <General />}
         {tab === 'metadata' && <Metadata />}
+        {tab === 'templates' && <Templates />}
         {tab === 'users' && <Users />}
         {tab === 'profile' && <Profile />}
         {tab === 'api' && <Tokens />}
@@ -300,6 +301,37 @@ function LanguagePicker({ value, onChange }: { value: string; onChange: (v: stri
         <Select className="lang-add" value="" onChange={v => v && set([...list, v])} ariaLabel="Add a language" placeholder="+ Add language…"
           options={Object.entries(LANGUAGES).filter(([c]) => !list.includes(c)).map(([c, n]) => ({ value: c, label: n }))} />
       )}
+    </div>
+  )
+}
+
+/** Templates for "My thoughts": named sets of section headings. */
+function Templates() {
+  const { f, setF, save, busy } = useSettingsForm()
+  if (!f) return <Loading />
+  const list = f.thought_templates || []
+  const set = (l: ThoughtTemplate[]) => setF({ ...f, thought_templates: l })
+  const upd = (i: number, t: Partial<ThoughtTemplate>) => set(list.map((x, j) => j === i ? { ...x, ...t } : x))
+  return (
+    <div className="grid" style={{ gap: 16 }}>
+      <Card title="Thoughts templates" actions={<button className="btn sm" onClick={() => set([...list, { name: 'New template', body: '## 🧠 My thoughts\n\n## 🥰 Who would enjoy it?\n' }])}>+ Add template</button>}>
+        <p className="muted">When a book has no thoughts yet, its page offers these as a starting point. Write one heading per line: <code>## Heading</code> for a section, <code>### Sub-heading</code> under it; anything under a heading (like <code>1.</code> <code>2.</code> <code>3.</code>) is kept as a prompt. Sections you leave empty are hidden when the thoughts are shown.</p>
+        {list.length === 0 && <p className="muted">No templates. Add one above.</p>}
+        <div className="grid" style={{ gap: 14 }}>
+          {list.map((t, i) => (
+            <div key={i} className="template-edit">
+              <div className="row">
+                <input value={t.name} onChange={e => upd(i, { name: e.target.value })} placeholder="Name (e.g. Fiction)" style={{ maxWidth: 280 }} aria-label="Template name" />
+                <span className="spacer" />
+                {i > 0 && <button className="btn ghost sm" onClick={() => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }} title="Move up">↑</button>}
+                <button className="btn ghost sm danger-text" onClick={() => set(list.filter((_, j) => j !== i))}>Delete</button>
+              </div>
+              <textarea rows={Math.min(16, Math.max(6, t.body.split('\n').length + 1))} value={t.body} onChange={e => upd(i, { body: e.target.value })} className="mono-ish" aria-label={`${t.name} template`} />
+            </div>
+          ))}
+        </div>
+        <div className="mt"><button className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
+      </Card>
     </div>
   )
 }

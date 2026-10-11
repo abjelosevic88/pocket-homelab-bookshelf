@@ -106,8 +106,23 @@ type Settings struct {
 	GoogleBooksKey string `json:"google_books_key"`
 	// Languages are ISO 639-1 codes, most preferred first ("sr,en"): search
 	// results and bibliographies prefer editions in them.
-	Languages     string `json:"languages"`
-	SetupComplete bool   `json:"setup_complete"`
+	Languages string `json:"languages"`
+	// Templates for "My thoughts": section headings to start from.
+	ThoughtTemplates []ThoughtTemplate `json:"thought_templates"`
+	SetupComplete    bool              `json:"setup_complete"`
+}
+
+// ThoughtTemplate is a named starting point for a book's thoughts
+// ("## Heading" / "### Sub-heading" lines, optional prompts under them).
+type ThoughtTemplate struct {
+	Name string `json:"name"`
+	Body string `json:"body"`
+}
+
+// DefaultThoughtTemplates are offered until the user edits their own.
+var DefaultThoughtTemplates = []ThoughtTemplate{
+	{Name: "Fiction", Body: "## 🔍 How I found the book\n\n## 🧠 What I think\n\n### What I liked\n\n### What I didn't like\n\n## 🥰 Who would enjoy it?\n\n## 📚 Similar books\n"},
+	{Name: "Non-fiction", Body: "## 🚀 The book in 3 sentences\n1. \n2. \n3. \n\n## 🎨 Impressions\n\n### How I found the book\n\n### Who should read it?\n\n## ☘️ How it changed me\n"},
 }
 
 // Dashboard is the compact status used by widgets.

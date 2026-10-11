@@ -106,7 +106,7 @@ Authors are created from the books' `authors` strings and looked up on Open Libr
 | `GET` | `/auth/status` | `{needs_setup, auth_mode, authenticated, user, version, title}` |
 | `POST` | `/auth/setup` · `/auth/login` · `/auth/logout` | |
 | `GET` · `PUT` | `/auth/me` | Own profile, `{"name","email","current_password","new_password"}` |
-| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr"}` (+ read-only `sources`, `google_books_env`) |
+| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr", thought_templates: [{name, body}]}` (+ read-only `sources`, `google_books_env`) |
 | `GET` | `/settings/system` | Version, paths, sizes, counts. |
 | `GET` · `POST` · `PUT` · `DELETE` | `/users`, `/users/{id}` | Listing for everyone; changes admin only. |
 | `GET` · `POST` · `DELETE` | `/tokens` | Personal tokens. The plaintext is returned once on create. |
