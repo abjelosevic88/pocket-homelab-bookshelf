@@ -1,6 +1,9 @@
 package server
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestKindleTitleMatching(t *testing.T) {
 	cases := []struct {
@@ -20,5 +23,18 @@ func TestKindleTitleMatching(t *testing.T) {
 	}
 	if !authorMatches("Eckhart Tolle", "Eckhart Tolle") || authorMatches("Jo Nesbø", "Stephen King") || !authorMatches("Jo Nesbo", "Jo Nesbø") {
 		t.Error("authorMatches")
+	}
+}
+
+func TestDailyDue(t *testing.T) {
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 12, h, m, 0, 0, time.Local) }
+	cases := []struct {
+		now  time.Time
+		want bool
+	}{{at(7, 29), false}, {at(7, 30), true}, {at(9, 29), true}, {at(9, 31), false}, {at(23, 28), false}}
+	for _, c := range cases {
+		if got := dailyDue(c.now, "07:30"); got != c.want {
+			t.Errorf("%s: got %v", c.now.Format("15:04"), got)
+		}
 	}
 }

@@ -198,6 +198,18 @@ func (s *Server) sendDaily(ctx context.Context, userID int64) error {
 	return s.store.MarkDailySent(ctx, userID, set.Date)
 }
 
+// dailyDue: within two hours after the chosen time. Late enough to catch up
+// after a restart, but switching delivery on in the evening (or a server that
+// was down all morning) does not send anything until the next morning.
+func dailyDue(now time.Time, at string) bool {
+	t, err := time.ParseInLocation("15:04", at, now.Location())
+	if err != nil {
+		return false
+	}
+	due := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
+	return !now.Before(due) && now.Sub(due) < 2*time.Hour
+}
+
 // dailyScheduler checks every minute whether someone's daily highlights are due.
 func (s *Server) dailyScheduler(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
@@ -212,10 +224,10 @@ func (s *Server) dailyScheduler(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		now := time.Now().Format("15:04")
+		now := time.Now()
 		for _, uid := range users {
 			ds, err := s.store.GetDailySettings(ctx, uid)
-			if err != nil || now < ds.Time {
+			if err != nil || !dailyDue(now, ds.Time) {
 				continue
 			}
 			set, err := s.store.DailySetFor(ctx, uid, store.Today(), ds.Count)
