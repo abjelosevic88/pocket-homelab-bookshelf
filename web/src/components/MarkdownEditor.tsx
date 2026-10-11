@@ -52,7 +52,18 @@ export function MarkdownEditor({ value, onChange, rows = 8, placeholder, classNa
   const matches = useMemo(() => {
     if (!menu) return []
     const q = menu.query.toLowerCase()
-    return COMMANDS.filter(c => !q || c.label.toLowerCase().includes(q) || c.keys.includes(q))
+    if (!q) return COMMANDS
+    // Best first: name starts with the query, then a word of the name, then a keyword.
+    const words = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean)
+    const score = (c: Cmd) => {
+      const name = words(c.label)
+      if (name[0]?.startsWith(q)) return 0
+      if (name.some(w => w.startsWith(q))) return 1
+      if (c.keys.split(' ').some(w => w.startsWith(q))) return 2
+      if (c.label.toLowerCase().includes(q) || c.keys.includes(q)) return 3
+      return 9
+    }
+    return COMMANDS.map(c => ({ c, s: score(c) })).filter(x => x.s < 9).sort((a, b) => a.s - b.s).map(x => x.c)
   }, [menu])
   useEffect(() => { setHl(0) }, [menu?.query])
   useLayoutEffect(() => { // restore the caret after an insert
