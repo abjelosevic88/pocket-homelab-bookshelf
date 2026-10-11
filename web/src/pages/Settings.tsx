@@ -69,7 +69,13 @@ function Metadata() {
     try {
       const r = await api.get<{ results: unknown[]; warnings: string[] | null }>(`${V1}/search?q=9780441478125&source=google`)
       toast(r.results.length ? 'Google Books works' : 'Google Books answered, but found nothing')
-    } catch (e) { toast((e as Error).message, 'err') } finally { setTesting(false) }
+    } catch (e) {
+      const m = (e as Error).message
+      if (/HTTP 50[234]/.test(m)) toast('Your key is accepted, but Google Books is having temporary trouble (HTTP 503). New keys often do for a while. Searches use Open Library meanwhile; try again later.', 'err')
+      else if (/HTTP 400|API key not valid|keyInvalid/i.test(m)) toast('Google rejected the key. Check it was copied completely.', 'err')
+      else if (/HTTP 403/.test(m)) toast('Google refused the key: enable the “Books API” for its project, and remove website/IP restrictions from the key.', 'err')
+      else toast(m, 'err')
+    } finally { setTesting(false) }
   }
   return (
     <div className="two-col">

@@ -73,16 +73,38 @@ func (c *Client) Sources() []string {
 	return out
 }
 
+// getJSON fetches and decodes a JSON document. Temporary server failures
+// (502/503/504 — Google Books in particular answers "backendFailed" at random)
+// are retried a few times with a short pause.
 func (c *Client) getJSON(ctx context.Context, url string, v any) error {
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(150*attempt) * time.Millisecond):
+			}
+		}
+		var retry bool
+		retry, err = c.getJSONOnce(ctx, url, v)
+		if !retry {
+			return err
+		}
+	}
+	return err
+}
+
+func (c *Client) getJSONOnce(ctx context.Context, url string, v any) (retry bool, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	req.Header.Set("User-Agent", c.UserAgent)
 	req.Header.Set("Accept", "application/json")
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -99,9 +121,10 @@ func (c *Client) getJSON(ctx context.Context, url string, v any) error {
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
-		return fmt.Errorf("HTTP %d: %s", res.StatusCode, msg)
+		temporary := res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout
+		return temporary, fmt.Errorf("HTTP %d: %s", res.StatusCode, msg)
 	}
-	return json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(v)
+	return false, json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(v)
 }
 
 var nonDigit = regexp.MustCompile(`[^0-9Xx]`)
