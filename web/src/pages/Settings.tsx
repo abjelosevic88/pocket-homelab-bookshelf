@@ -6,6 +6,7 @@ import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useA
 import { Avatar } from '../components/people'
 import { KindleImport } from '../components/KindleImport'
 import { LANGUAGES, langName } from '../lib/languages'
+import { Select } from '../components/Select'
 
 type Tab = 'general' | 'metadata' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
@@ -290,10 +291,8 @@ function LanguagePicker({ value, onChange }: { value: string; onChange: (v: stri
         </span>
       ))}
       {list.length < 3 && (
-        <select value="" onChange={e => e.target.value && set([...list, e.target.value])} aria-label="Add a language" style={{ width: 'auto' }}>
-          <option value="">+ Add language…</option>
-          {Object.entries(LANGUAGES).filter(([c]) => !list.includes(c)).map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-        </select>
+        <Select className="lang-add" value="" onChange={v => v && set([...list, v])} ariaLabel="Add a language" placeholder="+ Add language…"
+          options={Object.entries(LANGUAGES).filter(([c]) => !list.includes(c)).map(([c, n]) => ({ value: c, label: n }))} />
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import type { Book, TagCount } from '../lib/types'
 import { Empty, Loading, PageHeader, Segmented, useAsync, useDebounce } from '../components/ui'
 import { BookCard, BookRow } from '../components/BookCard'
 import { AddBook } from '../components/AddBook'
+import { Select } from '../components/Select'
 
 const STATUSES = [
   { value: '', label: 'All' },
@@ -46,9 +47,9 @@ export default function Library() {
       <PageHeader title="Library" sub={data && `${data.length} ${data.length === 1 ? 'book' : 'books'}`} actions={<button className="btn primary" onClick={() => setAdding(true)}>+ Add book</button>} />
       <div className="toolbar">
         <div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search title, author, tag, review…" /></div>
-        <select value={sort} onChange={e => set('sort', e.target.value)} aria-label="Sort">{SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
+        <Select value={sort} onChange={v => set('sort', v)} ariaLabel="Sort" options={SORTS.map(s => ({ value: s.value, label: `Sort: ${s.label.toLowerCase()}` }))} />
         {tags.data && tags.data.length > 0 && (
-          <select value={tag} onChange={e => set('tag', e.target.value)} aria-label="Tag"><option value="">All tags</option>{tags.data.map(t => <option key={t.name} value={t.name}>{t.name} ({t.count})</option>)}</select>
+          <Select value={tag} onChange={v => set('tag', v)} ariaLabel="Tag" placeholder="All tags" clearLabel="All tags" options={tags.data.map(t => ({ value: t.name, label: t.name, hint: String(t.count) }))} />
         )}
         <Segmented size="sm" value={view} onChange={changeView} options={[{ value: 'grid', label: '▦', title: 'Covers' }, { value: 'list', label: '☰', title: 'List' }]} />
       </div>

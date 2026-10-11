@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import type { Book, Candidate, Status } from '../lib/types'
 import { Modal, useAsync, useToast } from './ui'
+import { Select } from './Select'
 
 interface Entry { text: string; note: string; page: string; loc_start: number; loc_end: number; added: string; note_only: boolean }
 interface PreviewBook {
@@ -95,18 +96,15 @@ export function KindleImport({ onClose, onDone }: { onClose: () => void; onDone?
                     <div className="sample small">“{b.entries[0]?.text.slice(0, 140)}{(b.entries[0]?.text.length || 0) > 140 ? '…' : ''}”</div>
                   </div>
                   <div className="target">
-                    <select value={c.target} onChange={e => set(i, { target: e.target.value })} aria-label="Import into">
-                      {b.match && <option value={String(b.match.book_id)}>→ {b.match.title} {b.match.by === 'openlibrary' ? '(same Open Library work)' : ''}</option>}
-                      <option value="new">＋ New book{b.candidate ? `: ${b.candidate.title} (Open Library)` : ''}</option>
-                      <option value="skip">— Skip —</option>
-                      <optgroup label="Another book on your shelf">
-                        {(shelf.data || []).filter(s => s.id !== b.match?.book_id).map(s => <option key={s.id} value={String(s.id)}>{s.title}{s.authors ? ` — ${s.authors}` : ''}</option>)}
-                      </optgroup>
-                    </select>
+                    <Select value={c.target} onChange={v => set(i, { target: v })} ariaLabel="Import into" options={[
+                      ...(b.match ? [{ value: String(b.match.book_id), label: `→ ${b.match.title}`, hint: b.match.by === 'openlibrary' ? 'same Open Library work' : 'same title' }] : []),
+                      { value: 'new', label: `＋ New book${b.candidate ? `: ${b.candidate.title}` : ''}`, hint: b.candidate ? 'from Open Library' : undefined },
+                      { value: 'skip', label: '— Skip —' },
+                      ...(shelf.data || []).filter(s => s.id !== b.match?.book_id).map(s => ({ value: String(s.id), label: s.title, hint: s.authors, group: 'Another book on your shelf' })),
+                    ]} />
                     {c.target === 'new' && (
-                      <select value={c.status} onChange={e => set(i, { status: e.target.value as Status })} aria-label="Status of the new book">
-                        <option value="read">as Read</option><option value="reading">as Reading</option><option value="want">as Want to read</option>
-                      </select>
+                      <Select value={c.status} onChange={v => set(i, { status: v as Status })} ariaLabel="Status of the new book"
+                        options={[{ value: 'read', label: 'as Read' }, { value: 'reading', label: 'as Reading' }, { value: 'want', label: 'as Want to read' }]} />
                     )}
                   </div>
                 </div>

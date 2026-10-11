@@ -6,6 +6,7 @@ import { lifespan } from '../lib/format'
 import { Empty, Loading, Modal, PageHeader, useAsync, useDebounce, useToast } from '../components/ui'
 import { AuthorPhoto } from '../components/AuthorBits'
 import { Stars } from '../components/Stars'
+import { Select } from '../components/Select'
 
 const SORTS = [{ value: 'read', label: 'Most read' }, { value: 'name', label: 'Name' }, { value: 'rating', label: 'Rating' }, { value: 'recent', label: 'Read recently' }, { value: 'added', label: 'Recently added' }]
 
@@ -24,7 +25,7 @@ export default function Authors() {
       <PageHeader title="Authors" sub={data && <>{data.length} authors{pending && <span className="muted"> · looking up bios and photos…</span>}</>} actions={<button className="btn primary" onClick={() => setFinding(true)}>+ Find author</button>} />
       <div className="toolbar">
         <div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter authors…" /></div>
-        <select value={sort} onChange={e => changeSort(e.target.value)} aria-label="Sort">{SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
+        <Select value={sort} onChange={changeSort} ariaLabel="Sort" options={SORTS.map(s => ({ value: s.value, label: `Sort: ${s.label.toLowerCase()}` }))} />
       </div>
       {loading && !data ? <Loading /> : data && data.length === 0 ? (
         <div className="card"><Empty title={dq ? 'No authors match' : 'No authors yet'}>Authors appear here as you add books, or find one with “+ Find author”.</Empty></div>
