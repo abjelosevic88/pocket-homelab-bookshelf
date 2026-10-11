@@ -642,6 +642,25 @@ func (s *Server) handleSetCover(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, b)
 }
 
+// handleCoverSuggestions lists covers to pick from: the other editions of the
+// book on Open Library and, with a key, Google Books volumes.
+func (s *Server) handleCoverSuggestions(w http.ResponseWriter, r *http.Request) {
+	b, err := s.store.GetBook(r.Context(), me(r), idParam(r, "id"))
+	if err != nil {
+		s.fail(w, err, "get book")
+		return
+	}
+	work := ""
+	if b.Source == "openlibrary" {
+		work = b.SourceID
+	}
+	covers := s.meta.CoverSuggestions(r.Context(), work, b.Title, b.Authors)
+	if covers == nil {
+		covers = []metadata.CoverOption{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"covers": covers})
+}
+
 func (s *Server) handleGetCover(w http.ResponseWriter, r *http.Request) {
 	b, err := s.store.GetBook(r.Context(), me(r), idParam(r, "id"))
 	if err != nil || b.Cover == "" {

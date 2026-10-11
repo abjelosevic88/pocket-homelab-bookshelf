@@ -153,6 +153,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/books/{id}/status", s.handleSetStatus)
 			r.Post("/books/{id}/progress", s.handleProgress)
 			r.Get("/books/{id}/cover", s.handleGetCover)
+			r.Get("/books/{id}/covers", s.handleCoverSuggestions)
 			r.Post("/books/{id}/cover", s.handleSetCover)
 			r.Delete("/books/{id}/cover", s.handleDeleteCover)
 			r.Post("/covers/fetch-missing", s.handleFetchCovers)

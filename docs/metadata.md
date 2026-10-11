@@ -31,6 +31,7 @@ Google refuses anonymous requests (the shared quota is zero), so Google Books ne
 ## Covers
 
 - Picking a search result downloads its cover with the book.
+- **Change cover** (click the cover on a book's page): a grid of the covers of every edition of the book on Open Library, and Google Books volumes when a key is set, labelled with language, year and publisher, your preferred languages first. One click downloads the chosen cover. The same window takes an upload or an image address.
 - **Edit details → Find details & cover** searches again for an existing book and replaces details and cover.
 - **Upload cover…** takes any JPEG/PNG/WebP/GIF, and you can paste an image URL from anywhere.
 - After an import, **Settings → Backup & data → Find missing covers** looks up every cover-less book with an ISBN on Open Library, one every 3 seconds to respect its rate limit.

@@ -19,6 +19,7 @@ Create tokens under **Settings → API tokens**. A token acts as the user who cr
 | `DELETE` | `/books/{id}` | Book, cover, reads and quotes. |
 | `POST` | `/books/{id}/status` | `{"status": "reading"}` · `{"status": "read", "date": "2026-10-11", "rating": 4.5, "review": "…"}` · `{"status": "abandoned"}` · `{"status": "want"}`. Keeps the reading history in step (see below). |
 | `POST` | `/books/{id}/progress` | `{"page": 142}` or `{"percent": 40}` (needs a page count). Starts a want-to-read book. |
+| `GET` | `/books/{id}/covers` | Covers to choose from: `{"covers": [{url, thumb, source, label, language}]}` — every edition of the book on Open Library (+ Google Books). Set one with `POST /books/{id}/cover {"url"}`. |
 | `GET` · `POST` · `DELETE` | `/books/{id}/cover` | Image / set (`multipart` field `cover`, or `{"url": "https://…"}`) / remove. |
 | `POST` | `/books/{id}/reads` | Record a past read: `{"started_on", "finished_on", "abandoned"}` (finish date required). |
 | `PUT` · `DELETE` | `/reads/{id}` | Edit / remove a read. |

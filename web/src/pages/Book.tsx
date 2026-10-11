@@ -8,6 +8,7 @@ import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
 import { Stars } from '../components/Stars'
 import { EditBook } from '../components/BookForm'
+import { CoverPicker } from '../components/CoverPicker'
 import { FinishModal } from '../components/FinishModal'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
@@ -20,6 +21,7 @@ export default function Book() {
   const [editing, setEditing] = useState(false)
   const [finishing, setFinishing] = useState<'read' | 'abandoned' | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [coverOpen, setCoverOpen] = useState(false)
 
   if (error) return <div className="card pad"><p>{error}</p><Link to="/library">← Library</Link></div>
   if (!data) return <Loading />
@@ -40,7 +42,10 @@ export default function Book() {
   return (
     <div className="book-page">
       <div className="book-side">
-        <Cover book={b} size="lg" />
+        <button type="button" className="cover-change" onClick={() => setCoverOpen(true)} title="Change cover">
+          <Cover book={b} size="lg" />
+          <span className="cover-change-label">Change cover</span>
+        </button>
         <Segmented value={b.status} onChange={changeStatus} options={(['want', 'reading', 'read', 'abandoned'] as Status[]).map(s => ({ value: s, label: s === 'want' ? 'Want' : s === 'abandoned' ? 'Stopped' : STATUS_LABEL[s] }))} />
         <dl className="facts">
           {b.pages > 0 && <><dt>Pages</dt><dd>{b.pages}</dd></>}
@@ -78,6 +83,7 @@ export default function Book() {
         {b.description && <Card title="About the book" className="mt"><Description text={b.description} /></Card>}
       </div>
 
+      {coverOpen && <CoverPicker book={b} onClose={() => setCoverOpen(false)} onChanged={nb => setBook({ ...b, cover: nb.cover })} />}
       {editing && <EditBook book={b} onClose={() => setEditing(false)} onSaved={nb => { setBook(nb); setEditing(false) }} />}
       {finishing && <FinishModal book={b} abandon={finishing === 'abandoned'} onClose={() => setFinishing(null)} onDone={() => { setFinishing(null); reload() }} />}
       {deleting && <Confirm title={`Delete “${b.title}”?`} message="The book, your rating, thoughts, quotes and reading history are removed for good." onCancel={() => setDeleting(false)} onConfirm={del} />}
