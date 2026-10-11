@@ -442,3 +442,5 @@ a.stat:hover { border-color: var(--accent); text-decoration: none; }
 @media (max-width: 900px) { .toolbar .sel { min-width: 0; flex: 1 1 45%; } }
 .lang-add { width: auto; min-width: 190px; }
 .lang-add .sel-btn.empty .sel-val { color: var(--text); }
+.review-section + .review-section { margin-top: 14px; }
+.review-section h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 4px; font-weight: 650; }

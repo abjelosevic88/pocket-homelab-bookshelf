@@ -140,9 +140,21 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
             <button className="btn primary sm" disabled={!dirty} onClick={() => { onSave(text); setEditing(!text) }}>Save</button>
           </div>
         </>
-      ) : <div className="review" onDoubleClick={() => setEditing(true)}>{book.review}</div>}
+      ) : <div className="review" onDoubleClick={() => setEditing(true)}><ReviewText text={book.review} /></div>}
     </Card>
   )
+}
+
+/** Thoughts as written; lines starting with "## " become section titles. */
+function ReviewText({ text }: { text: string }) {
+  if (!/^## /m.test(text)) return <>{text}</>
+  const blocks: { title: string; body: string[] }[] = []
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) blocks.push({ title: line.slice(3), body: [] })
+    else if (blocks.length) blocks[blocks.length - 1].body.push(line)
+    else blocks.push({ title: '', body: [line] })
+  }
+  return <>{blocks.map((b, i) => <div key={i} className="review-section">{b.title && <h4>{b.title}</h4>}<div>{b.body.join('\n').trim()}</div></div>)}</>
 }
 
 function QuotesCard({ book, quotes, onChanged }: { book: BookT; quotes: Quote[]; onChanged: () => void }) {
