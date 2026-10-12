@@ -50,6 +50,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
 	s.meta.Langs = s.languages
 	s.meta.Country = cfg.GoogleBooksCountry
+	s.meta.Cache = store.MetaCache{S: st}
 	return s
 }
 

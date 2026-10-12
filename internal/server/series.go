@@ -167,16 +167,22 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 		store.SeriesSummary
 		Total int `json:"total"`
 	}
-	out := make([]item, 0, len(list))
-	for _, ss := range list {
-		it := item{SeriesSummary: ss}
-		if ss.QID != "" {
-			if m, err := s.meta.SeriesMembers(r.Context(), ss.QID); err == nil {
-				it.Total = max(seriesTotal(m), ss.Read)
-			}
+	out := make([]item, len(list))
+	var wg sync.WaitGroup
+	for i, ss := range list {
+		out[i] = item{SeriesSummary: ss}
+		if ss.QID == "" {
+			continue
 		}
-		out = append(out, it)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if m, err := s.meta.SeriesMembers(r.Context(), ss.QID); err == nil {
+				out[i].Total = max(seriesTotal(m), ss.Read)
+			}
+		}()
 	}
+	wg.Wait()
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -188,6 +194,32 @@ type seriesEntry struct {
 	CoverURL string      `json:"cover_url,omitempty"`
 	ThumbURL string      `json:"thumb_url,omitempty"`
 	Book     *store.Book `json:"book,omitempty"` // on your shelf
+}
+
+// warmSeries fetches the members and covers of every series on any shelf
+// into the cache, so series pages and the plan never wait on a catalogue.
+func (s *Server) warmSeries(ctx context.Context) {
+	list, err := s.store.SeriesQIDs(ctx)
+	if err != nil {
+		return
+	}
+	for qid, author := range list {
+		members, err := s.meta.SeriesMembers(ctx, qid)
+		if err != nil {
+			continue
+		}
+		entries := make([]seriesEntry, len(members))
+		for i, m := range members {
+			entries[i] = seriesEntry{Title: m.Title}
+			if len(m.OLWorks) > 0 {
+				entries[i].OLWork = "/works/" + m.OLWorks[0]
+			}
+		}
+		s.addCovers(ctx, entries, author)
+		if ctx.Err() != nil {
+			return
+		}
+	}
 }
 
 // addCovers looks up covers (and Open Library works) for entries you do not

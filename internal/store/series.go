@@ -134,3 +134,22 @@ func (s *Store) ResetSeriesCheck(ctx context.Context, userID int64) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE books SET series_checked = 0 WHERE user_id = ? AND series = ''`, userID)
 	return err
 }
+
+// SeriesQIDs returns every Wikidata-linked series on any shelf with the
+// first author of one of its books.
+func (s *Store) SeriesQIDs(ctx context.Context) (map[string]string, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT series_qid, MIN(authors) FROM books WHERE series_qid != '' GROUP BY series_qid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var qid, authors string
+		if err := rows.Scan(&qid, &authors); err != nil {
+			return nil, err
+		}
+		out[qid] = strings.TrimSpace(strings.Split(authors, ",")[0])
+	}
+	return out, rows.Err()
+}

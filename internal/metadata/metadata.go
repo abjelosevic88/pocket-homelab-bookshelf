@@ -51,6 +51,8 @@ type Client struct {
 	Langs func() []string
 	// Country is the ISO 3166 country sent to Google Books (default US).
 	Country string
+	// Cache keeps Wikidata and cover answers across restarts (nil = memory only).
+	Cache Cache
 }
 
 // New returns a client with the given timeout.

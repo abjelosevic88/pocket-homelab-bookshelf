@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,43 +28,18 @@ type WDSeriesRef struct {
 	Ordinal string `json:"ordinal"` // "1", "0", "2.5"; "" when Wikidata has none
 }
 
-type wdCache struct {
-	mu   sync.Mutex
-	at   map[string]time.Time
-	data map[string]any
-}
-
-var wdc = wdCache{at: map[string]time.Time{}, data: map[string]any{}}
-
-func (w *wdCache) get(k string, ttl time.Duration) (any, bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if t, ok := w.at[k]; ok && time.Since(t) < ttl {
-		return w.data[k], true
-	}
-	return nil, false
-}
-
-func (w *wdCache) put(k string, v any) {
-	w.mu.Lock()
-	w.at[k], w.data[k] = time.Now(), v
-	w.mu.Unlock()
-}
-
 // AuthorWikidataID returns the Wikidata item of an Open Library author.
 func (c *Client) AuthorWikidataID(ctx context.Context, olKey string) (string, error) {
-	if v, ok := wdc.get("olq:"+olKey, 24*time.Hour); ok {
-		return v.(string), nil
-	}
-	var a struct {
-		RemoteIDs map[string]any `json:"remote_ids"`
-	}
-	if err := c.getJSON(ctx, olBase+"/authors/"+url.PathEscape(olKey)+".json", &a); err != nil {
-		return "", err
-	}
-	q, _ := a.RemoteIDs["wikidata"].(string)
-	wdc.put("olq:"+olKey, q)
-	return q, nil
+	return cached(c, "olq:"+olKey, 7*24*time.Hour, func(ctx context.Context) (string, error) {
+		var a struct {
+			RemoteIDs map[string]any `json:"remote_ids"`
+		}
+		if err := c.getJSON(ctx, olBase+"/authors/"+url.PathEscape(olKey)+".json", &a); err != nil {
+			return "", err
+		}
+		q, _ := a.RemoteIDs["wikidata"].(string)
+		return q, nil
+	}, ctx)
 }
 
 // wdSearch returns item ids matching a CirrusSearch query ("haswbstatement:…").
@@ -212,12 +186,14 @@ func (c *Client) SeriesWorksByAuthor(ctx context.Context, authorQID string) ([]W
 	return c.toWorks(ents, ""), nil
 }
 
-// SeriesMembers lists the works of a series, in order (cached for a day).
+// SeriesMembers lists the works of a series, in order. Kept in the cache,
+// refreshed in the background once a day.
 func (c *Client) SeriesMembers(ctx context.Context, seriesQID string) ([]WDWork, error) {
 	ck := "members:" + seriesQID + ":" + strings.Join(c.langs(), ",")
-	if v, ok := wdc.get(ck, 24*time.Hour); ok {
-		return v.([]WDWork), nil
-	}
+	return cached(c, ck, 24*time.Hour, func(ctx context.Context) ([]WDWork, error) { return c.seriesMembers(ctx, seriesQID) }, ctx)
+}
+
+func (c *Client) seriesMembers(ctx context.Context, seriesQID string) ([]WDWork, error) {
 	ids, err := c.wdSearch(ctx, "haswbstatement:P179="+seriesQID)
 	if err != nil {
 		return nil, err
@@ -269,7 +245,6 @@ func (c *Client) SeriesMembers(ctx context.Context, seriesQID string) ([]WDWork,
 		}
 		return a.Title < b.Title
 	})
-	wdc.put(ck, works)
 	return works, nil
 }
 
@@ -338,57 +313,60 @@ func Latin(s string) string { return cyr.Replace(s) }
 
 // OpenLibraryWorkTitle returns a work's title (cached), for matching.
 func (c *Client) OpenLibraryWorkTitle(ctx context.Context, key string) string {
-	if v, ok := wdc.get("olw:"+key, 7*24*time.Hour); ok {
-		return v.(string)
-	}
-	var w struct {
-		Title string `json:"title"`
-	}
-	if c.getJSON(ctx, olBase+key+".json", &w) != nil {
-		return ""
-	}
-	wdc.put("olw:"+key, w.Title)
-	return w.Title
+	t, _ := cached(c, "olw:"+key, 30*24*time.Hour, func(ctx context.Context) (string, error) {
+		var w struct {
+			Title string `json:"title"`
+		}
+		err := c.getJSON(ctx, olBase+key+".json", &w)
+		return w.Title, err
+	}, ctx)
+	return t
 }
 
 // WorkCover finds a cover for a series entry: from its Open Library work, or
 // by searching title and author when Wikidata has no Open Library link.
-// Returns the work key ("/works/OL…W", "" if unknown) and a cover id (0 = none). Cached for a week.
+// Returns the work key ("/works/OL…W", "" if unknown) and a cover id (0 = none).
 func (c *Client) WorkCover(ctx context.Context, olWork, title, author string) (string, int) {
-	ck := "cover:" + olWork + "|" + title + "|" + author
-	if v, ok := wdc.get(ck, 7*24*time.Hour); ok {
-		r := v.([2]any)
-		return r[0].(string), r[1].(int)
+	type result struct {
+		Key   string `json:"key"`
+		Cover int    `json:"cover"`
 	}
-	key, cover := olWork, 0
-	if key != "" {
-		var w struct {
-			Covers []int `json:"covers"`
-		}
-		if c.getJSON(ctx, olBase+key+".json", &w) == nil {
-			for _, id := range w.Covers {
-				if id > 0 {
-					cover = id
-					break
+	key := "cover:" + olWork
+	if olWork == "" {
+		key = "cover:" + title + "|" + author
+	}
+	r, _ := cached(c, key, 30*24*time.Hour, func(ctx context.Context) (result, error) {
+		res := result{Key: olWork}
+		var err error
+		if olWork != "" {
+			var w struct {
+				Covers []int `json:"covers"`
+			}
+			if err = c.getJSON(ctx, olBase+olWork+".json", &w); err == nil {
+				for _, id := range w.Covers {
+					if id > 0 {
+						res.Cover = id
+						break
+					}
 				}
 			}
 		}
-	}
-	if cover == 0 && title != "" {
-		v := url.Values{"title": {title}, "author": {author}, "limit": {"1"}, "fields": {"key,cover_i"}}
-		var r struct {
-			Docs []struct {
-				Key    string `json:"key"`
-				CoverI int    `json:"cover_i"`
-			} `json:"docs"`
-		}
-		if c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &r) == nil && len(r.Docs) > 0 {
-			if key == "" {
-				key = r.Docs[0].Key
+		if res.Cover == 0 && title != "" {
+			v := url.Values{"title": {title}, "author": {author}, "limit": {"1"}, "fields": {"key,cover_i"}}
+			var sr struct {
+				Docs []struct {
+					Key    string `json:"key"`
+					CoverI int    `json:"cover_i"`
+				} `json:"docs"`
 			}
-			cover = r.Docs[0].CoverI
+			if err = c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &sr); err == nil && len(sr.Docs) > 0 {
+				if res.Key == "" {
+					res.Key = sr.Docs[0].Key
+				}
+				res.Cover = sr.Docs[0].CoverI
+			}
 		}
-	}
-	wdc.put(ck, [2]any{key, cover})
-	return key, cover
+		return res, err // a failed lookup is tried again next time
+	}, ctx)
+	return r.Key, r.Cover
 }

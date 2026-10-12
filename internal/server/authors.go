@@ -58,8 +58,10 @@ func (s *Server) authorWorker(ctx context.Context) {
 				break
 			}
 		}
-		// Authors are linked now: look new books up for series.
+		// Authors are linked now: look new books up for series, then fetch
+		// what the series pages show so they open instantly.
 		s.detectSeries(ctx)
+		s.warmSeries(ctx)
 	}
 }
 
