@@ -69,9 +69,12 @@ List the book's characters: every main character and the important supporting on
 who they are, what they do, how they relate to the others.
 
 Spoilers — the reader may not have finished the book. Describe each character only as the reader meets them
-in the first chapters of THIS book:
-- no deaths, fates, betrayals, twists, secret or hidden identities, later relationships or how anything ends;
-- no "later", "eventually", "turns out", "is revealed", "ultimately";
+in the first chapters of THIS book, in the present tense: who they are and where they stand at that point.
+- nothing that happens after their introduction: no events from the middle or end of the book, no deaths,
+  fates, betrayals, twists, secret or hidden identities, later jobs, marriages or relationships;
+- no "later", "eventually", "turns out", "is revealed", "ultimately", "comes to" (nor "kasnije", "na kraju",
+  "ispostavi se" and the like in other languages);
+- a character who only appears later in the book: say who they are, not what happens when they appear;
 - in a later book of a series, what earlier books established is fine;
 - when in doubt, leave it out.
 
