@@ -121,7 +121,17 @@ def prompt_for(book, langs):
     return PROMPT.format(facts="\n".join(facts), langs=lang_lines, example=example)
 
 
-def run_engine(prompt):
+def schema(langs):
+    """JSON Schema of the answer — claude -p enforces it, so quotes inside texts can't break the JSON."""
+    person = {"type": "object", "required": ["name", "role", "description"], "properties": {
+        "name": {"type": "string"}, "role": {"type": "string", "enum": ["main", "supporting"]},
+        "description": {"type": "string"}}}
+    return {"type": "object", "required": ["kind", "characters"], "properties": {
+        "kind": {"type": "string", "enum": ["fiction", "nonfiction", "unknown"]},
+        "characters": {"type": "object", "properties": {l: {"type": "array", "items": person} for l in langs}}}}
+
+
+def run_engine(prompt, langs):
     """Returns the model's reply text."""
     with tempfile.TemporaryDirectory(prefix="pb-characters-") as work:
         if ENGINE == "codex":
@@ -132,7 +142,8 @@ def run_engine(prompt):
             subprocess.run(cmd + [prompt], cwd=work, capture_output=True, text=True, timeout=TIMEOUT, check=True)
             with open(out) as f:
                 return f.read()
-        cmd = ["claude", "-p", "--output-format", "json", "--allowedTools", "WebSearch", "WebFetch"]
+        cmd = ["claude", "-p", "--output-format", "json", "--json-schema", json.dumps(schema(langs)),
+               "--allowedTools", "WebSearch", "WebFetch"]
         if MODEL:
             cmd += ["--model", MODEL]
         # Run in an empty directory so no project instructions or memory are loaded.
@@ -140,6 +151,8 @@ def run_engine(prompt):
         reply = json.loads(p.stdout)
         if reply.get("is_error"):
             raise RuntimeError(reply.get("result") or "claude reported an error")
+        if isinstance(reply.get("structured_output"), dict):
+            return json.dumps(reply["structured_output"])
         return reply.get("result", "")
 
 
@@ -178,7 +191,7 @@ def lang_list(chars_by_lang, lang):
 
 
 def write_book(book, langs):
-    reply = parse(run_engine(prompt_for(book, langs)))
+    reply = parse(run_engine(prompt_for(book, langs), langs))
     kind = reply.get("kind")
     sets = {}
     for l in langs:
