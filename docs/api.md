@@ -85,6 +85,17 @@ Authors are created from the books' `authors` strings and looked up on Open Libr
 | `GET` | `/authors/{id}/photos` | Pictures to choose from: `{"photos": [{url, thumb, source, label}]}` — Open Library photos, the Wikidata portrait, images from the Wikipedia article, other Open Library records with the name. Set one with `POST /authors/{id}/photo {"url"}`. |
 | `GET` · `POST` · `DELETE` | `/authors/{id}/photo` | Image / set (`multipart` field `photo`, or `{"url"}`) / remove. |
 
+## Characters
+
+One set per book and language: `{"status": "ok" | "none" | "unknown", "characters": [{"name", "role": "main" | "supporting", "description"}], "source", "updated_at"}`. `none` = no characters (non-fiction), `unknown` = the writer could not name them reliably. Written by `scripts/characters.py` (see the README).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/books/{id}/characters` | `{"langs": ["en", "sr"], "sets": {"en": {…}, "sr": {…}}}` — `langs` are the preferred languages. |
+| `PUT` | `/books/{id}/characters` | `{"source": "claude sonnet", "sets": {"en": {"status": "ok", "characters": […]}}}` — replaces the given languages. Up to 40 characters; admins may write any user's book. |
+| `DELETE` | `/books/{id}/characters` | Forget them, so they are written again. |
+| `GET` | `/characters/missing?limit=20` | Books missing a preferred language: `{"langs", "books": [{id, title, subtitle, work_title, authors, published, series, series_no, description, source_url, missing: ["sr"]}]}`. Admin tokens see every user's books. |
+
 ## Search the catalogues
 
 | Method | Path | Notes |

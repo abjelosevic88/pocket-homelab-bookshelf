@@ -13,6 +13,7 @@ import { Stars } from '../components/Stars'
 import { EditBook } from '../components/BookForm'
 import { CoverPicker } from '../components/CoverPicker'
 import { FinishModal } from '../components/FinishModal'
+import { CharactersCard } from '../components/Characters'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
 
@@ -82,6 +83,7 @@ export default function Book() {
         {b.status === 'want' && <PlanCard book={b} onSave={patch} onStart={() => changeStatus('reading')} />}
 
         <ReviewCard book={b} onSave={review => patch({ review }, 'Thoughts saved')} />
+        <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />
         {b.description && <Card title="About the book" className="mt"><Description text={b.description} /></Card>}

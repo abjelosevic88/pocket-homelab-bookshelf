@@ -549,3 +549,9 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .series-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .series-list li.missing .cover { opacity: .85; }
 .next-no { width: 40px; height: 60px; border-radius: 4px; background: var(--surface-2); display: grid; place-items: center; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+
+/* characters */
+.characters { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 20px; }
+.characters li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.characters .ch-head { display: flex; align-items: center; gap: 8px; }
+.characters p { margin: 3px 0 0; font-size: 13.5px; color: var(--text); opacity: .85; line-height: 1.45; }

@@ -76,6 +76,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 | **Quotes** | Text, page or location, your note. Searchable, with a random one on the home page and the Quotes page. |
 | **Plan** | Want-to-read queue: reorder, plan for a month (overdue months are flagged), note why you want to read it or who recommended it, start reading with one tap. Yearly goal with pace (“3 behind schedule”). |
 | **Authors** | Created from your books automatically, then filled in from Open Library in the background: short biography (Wikipedia summary when linked), birth/death, photo. Per author: books read, reading, planned, average rating, pages; your books; their full bibliography (English titles where an English edition exists) with one-tap *Want* / *Read it*. Find and follow new authors, edit name (renames it on every book, merges duplicates), bio, dates and photo, re-link to the right Open Library author. |
+| **Characters** | Every novel's characters with a short, spoiler-free note on each, in each of your preferred languages (switch on the book page). Written by a language model you already use — `scripts/characters.py` runs `claude -p` or `codex exec` with web search, so no API key is needed — through the API, on a timer. See [Characters](#characters). |
 | **Stats** | Per year: books, pages, average rating, books per month, rating distribution, top authors and tags, formats, longest book, the finished list. All-time totals. |
 | **Metadata** | Open Library and Google Books, searched in parallel, deduplicated by ISBN. ISBN queries pin the exact edition. Covers are downloaded and stored locally, and any book can re-fetch details and cover later. See [docs/metadata.md](docs/metadata.md). |
 | **Import** | Goodreads and StoryGraph CSV exports (ratings, reviews, dates, shelves); missing covers are fetched afterwards by ISBN. **Kindle highlights** from `My Clippings.txt`: matched to your books (also across translations, via Open Library), notes attached, re-imports only add what is new. |
@@ -140,6 +141,25 @@ curl -H "Authorization: Bearer pb_…" https://bookshelf.example.com/api/v1/dash
 ```
 
 Everything else, including a Homepage `customapi` widget, is in [docs/api.md](docs/api.md).
+
+## Characters
+
+The book page lists each novel's characters with a one- or two-sentence note on each — only what you learn
+in the first chapters, so nothing is spoiled — in every preferred language (Settings → Metadata). Non-fiction
+gets none.
+
+The app doesn't call a language model itself. `scripts/characters.py` asks it which books are missing
+characters, has Claude Code (`claude -p`) or the Codex CLI (`codex exec`) write them — both may search the web
+to get the book right — and saves them back. It runs with whatever CLI you're signed in to, so there is no API
+key to manage. Run it from cron or a systemd timer next to the app:
+
+```bash
+BOOKSHELF_URL=http://localhost:8171 BOOKSHELF_TOKEN=pb_… ENGINE=claude MODEL=sonnet \
+  python3 scripts/characters.py          # writes what is missing; exits fast when nothing is
+```
+
+Use an admin token to cover every user's books. *↻* on the book page forgets a book's characters so the next
+run writes them again; `--book <id>` does it right away. The API is in [docs/api.md](docs/api.md#characters).
 
 ## Backups
 
