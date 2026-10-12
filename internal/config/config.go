@@ -31,6 +31,10 @@ type Config struct {
 	GoogleBooksCountry string
 	MetadataTimeout    time.Duration
 
+	// Writing book characters with OpenAI (the key can also be set in Settings → AI).
+	OpenAIKey     string
+	OpenAIBaseURL string
+
 	AuthMode             string // local | proxy | none
 	AuthProxyHeader      string
 	AuthProxyEmailHeader string
@@ -96,6 +100,8 @@ func Load() (*Config, error) {
 
 		GoogleBooksKey:     env("GOOGLE_BOOKS_API_KEY", ""),
 		GoogleBooksCountry: strings.ToUpper(env("GOOGLE_BOOKS_COUNTRY", "US")),
+		OpenAIKey:          env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:      env("OPENAI_BASE_URL", ""),
 		MetadataTimeout:    envDuration("METADATA_TIMEOUT", 12*time.Second),
 
 		AuthMode:             strings.ToLower(env("AUTH_MODE", "local")),

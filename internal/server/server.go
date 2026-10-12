@@ -35,6 +35,8 @@ type Server struct {
 	covers coverJob
 
 	authorKick chan struct{}
+	charKick   chan struct{}
+	chars      charWriter
 	log        *slog.Logger
 	webFS      fs.FS
 	started    time.Time
@@ -44,7 +46,7 @@ type Server struct {
 
 // New creates a server.
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Server {
-	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1)}
+	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1), charKick: make(chan struct{}, 1)}
 	st.OnAuthorsChanged = s.kickAuthors
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
@@ -108,6 +110,8 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	}
 	go s.authorWorker(ctx)
 	go s.dailyScheduler(ctx)
+	go s.characterWorker(ctx)
+	s.kickCharacters()
 	s.kickAuthors()
 	return nil
 }
@@ -164,6 +168,8 @@ func (s *Server) Router() http.Handler {
 			r.Put("/books/{id}/characters", s.handlePutCharacters)
 			r.Delete("/books/{id}/characters", s.handleDeleteCharacters)
 			r.Get("/characters/missing", s.handleMissingCharacters)
+			r.Get("/characters/status", s.handleCharacterStatus)
+			r.Post("/characters/run", s.handleRunCharacters)
 			r.Post("/books/{id}/reads", s.handleAddRead)
 			r.Put("/reads/{id}", s.handleUpdateRead)
 			r.Delete("/reads/{id}", s.handleDeleteRead)
@@ -207,6 +213,9 @@ func (s *Server) Router() http.Handler {
 			r.Get("/settings", s.handleGetSettings)
 			r.Put("/settings", s.handlePutSettings)
 			r.Get("/settings/system", s.handleSystemInfo)
+			r.Get("/settings/ai", s.handleGetAISettings)
+			r.Put("/settings/ai", s.handlePutAISettings)
+			r.Post("/settings/ai/test", s.handleTestAI)
 
 			r.Get("/tokens", s.handleListTokens)
 			r.Post("/tokens", s.handleCreateToken)

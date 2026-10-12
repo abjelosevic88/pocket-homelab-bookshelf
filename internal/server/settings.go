@@ -83,6 +83,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "save settings")
 		return
 	}
+	if in.Languages != cur.Languages {
+		s.kickCharacters() // a new preferred language needs characters
+	}
 	writeJSON(w, http.StatusOK, s.publicSettings(in))
 }
 

@@ -22,6 +22,7 @@ import (
 
 // kickAuthors wakes the background worker without blocking.
 func (s *Server) kickAuthors() {
+	s.kickCharacters() // books changed: some may need characters
 	select {
 	case s.authorKick <- struct{}{}:
 	default:

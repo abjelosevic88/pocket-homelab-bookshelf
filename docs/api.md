@@ -94,7 +94,11 @@ One set per book and language: `{"status": "ok" | "none" | "unknown", "character
 | `GET` | `/books/{id}/characters` | `{"langs": ["en", "sr"], "sets": {"en": {…}, "sr": {…}}}` — `langs` are the preferred languages. |
 | `PUT` | `/books/{id}/characters` | `{"source": "claude sonnet", "sets": {"en": {"status": "ok", "characters": […]}}}` — replaces the given languages. Up to 40 characters; admins may write any user's book. |
 | `DELETE` | `/books/{id}/characters` | Forget them, so they are written again. |
-| `GET` | `/characters/missing?limit=20` | Books missing a preferred language: `{"langs", "books": [{id, title, subtitle, work_title, authors, published, series, series_no, description, source_url, missing: ["sr"]}]}`. Admin tokens see every user's books. |
+| `GET` | `/characters/status` | `{"writer": "app" \| "external", "running", "paused", "waiting", "written", "failed", "last_error", "last_run"}` — `app` when the app has an OpenAI key. |
+| `POST` | `/characters/run` | Write what is missing now (also un-pauses and retries failed books). |
+| `GET` · `PUT` | `/settings/ai` | `{"key_set", "key_hint", "key_env", "model", "default_model", "web_search"}`. PUT (admin): `{"key": "sk-…"` (omit to keep)`, "clear_key": true, "model", "web_search"}`. |
+| `POST` | `/settings/ai/test` | Admin. `{"key"}` (or the saved key) → `{"models": [...]}` the key can use. |
+| `GET` | `/characters/missing?limit=20` | Books missing a preferred language: `{"langs", "books": [{id, title, subtitle, work_title, authors, published, series, series_no, description, source_url, missing: ["sr"]}]}`. Admin tokens see every user's books. `"writer": "app"` means the app writes them itself (external writers should stand aside). |
 
 ## Search the catalogues
 

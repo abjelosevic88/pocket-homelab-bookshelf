@@ -25,6 +25,8 @@ All settings are environment variables. Nothing is required.
 | Variable | Default | Description |
 |---|---|---|
 | `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue. A key saved under Settings → Metadata takes precedence. |
+| `OPENAI_API_KEY` | – | Lets the app write book characters itself. A key saved under Settings → AI takes precedence. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Another server speaking the OpenAI Responses API. |
 | `GOOGLE_BOOKS_COUNTRY` | `US` | Country sent to Google Books with every request (ISO code, e.g. `BA`). Google needs one and fails with *503 backendFailed* when it cannot place the server's IP address. |
 | `METADATA_TIMEOUT` | `12s` | Timeout for catalogue requests. |
 

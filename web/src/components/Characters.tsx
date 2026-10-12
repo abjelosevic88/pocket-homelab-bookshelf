@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, V1 } from '../lib/api'
 import { langName } from '../lib/languages'
 import { Card, Segmented, useAsync, useToast } from './ui'
 
 interface Character { name: string; role: 'main' | 'supporting'; description: string }
 interface CharacterSet { status: 'ok' | 'none' | 'unknown'; characters: Character[]; source: string; updated_at: string }
-interface Data { langs: string[]; sets: Record<string, CharacterSet> }
+interface Data { langs: string[]; sets: Record<string, CharacterSet>; writer?: 'app' | 'external' }
 
 // Role labels in the language being read; others fall back to English.
 const ROLE: Record<string, Record<string, string>> = {
@@ -19,20 +19,28 @@ const SHOWN = 8
  *  preferred language (written by the character writer, see scripts/characters.py). */
 export function CharactersCard({ bookId }: { bookId: number }) {
   const { toast } = useToast()
-  const { data, setData } = useAsync(() => api.get<Data>(`${V1}/books/${bookId}/characters`), [bookId])
+  const { data, setData, reload } = useAsync(() => api.get<Data>(`${V1}/books/${bookId}/characters`), [bookId])
   const [lang, setLang] = useState(() => localStorage.getItem(LANG_KEY) || '')
   const [all, setAll] = useState(false)
+  // While the app is writing them (it has an OpenAI key), look again every few seconds.
+  const pending = !!data && data.writer === 'app' && data.langs.some(l => !data.sets[l])
+  useEffect(() => {
+    if (!pending) return
+    const t = setInterval(reload, 5000)
+    const stop = setTimeout(() => clearInterval(t), 5 * 60_000)
+    return () => { clearInterval(t); clearTimeout(stop) }
+  }, [pending]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!data) return null
   const langs = data.langs.filter(l => data.sets[l]?.status === 'ok' && data.sets[l].characters.length > 0)
   const current = langs.includes(lang) ? lang : langs[0]
   const set = current ? data.sets[current] : Object.values(data.sets)[0]
   const pick = (l: string) => { setLang(l); localStorage.setItem(LANG_KEY, l) }
   const again = async () => {
-    try { await api.del(`${V1}/books/${bookId}/characters`); setData({ ...data, sets: {} }); toast('Characters will be written again shortly') } catch (e) { toast((e as Error).message, 'err') }
+    try { await api.del(`${V1}/books/${bookId}/characters`); setData({ ...data, sets: {} }); toast(data.writer === 'app' ? 'Writing the characters again…' : 'Characters will be written again shortly') } catch (e) { toast((e as Error).message, 'err') }
   }
 
   if (!set) {
-    return <Card className="mt" title="Characters"><p className="muted small">Being written — they appear here within about half an hour.</p></Card>
+    return <Card className="mt" title="Characters"><p className="muted small">{data.writer === 'app' ? 'Being written — they appear here in a minute or two.' : 'Being written — they appear here within about half an hour.'}</p></Card>
   }
   if (set.status === 'none') return null // non-fiction: nothing to show
   if (set.status !== 'ok' || !current) {

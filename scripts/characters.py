@@ -25,7 +25,9 @@ Usage:
   characters.py --book 42    write one book (even if it has characters)
   characters.py --dry-run    print the prompt for the first missing book
 
-Python 3.9+, standard library only. Run it from cron or a systemd timer.
+Python 3.9+, standard library only. Run it from cron or a systemd timer. While the
+app has its own OpenAI key (Settings → AI) it writes characters itself, and this
+script does nothing unless given --book.
 """
 import argparse
 import concurrent.futures
@@ -221,6 +223,8 @@ def main():
         sys.exit("BOOKSHELF_TOKEN is not set")
 
     missing = api("GET", f"/characters/missing?limit={LIMIT}")
+    if missing.get("writer") == "app" and not args.book:
+        return  # the app has an OpenAI key (Settings → AI) and writes characters itself
     if args.book:
         b = api("GET", f"/books/{args.book}")["book"]
         b = next((m for m in missing["books"] if m["id"] == args.book), b)

@@ -80,3 +80,46 @@ func (s *Store) SaveSettings(ctx context.Context, st Settings) error {
 	}
 	return tx.Commit()
 }
+
+// AISettings configure writing characters with OpenAI.
+type AISettings struct {
+	OpenAIKey string
+	Model     string
+	WebSearch bool
+}
+
+// GetAISettings loads the AI settings (web search on by default).
+func (s *Store) GetAISettings(ctx context.Context) (AISettings, error) {
+	a := AISettings{WebSearch: true}
+	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN ('ai_openai_key', 'ai_model', 'ai_web_search')`)
+	if err != nil {
+		return a, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return a, err
+		}
+		switch k {
+		case "ai_openai_key":
+			a.OpenAIKey = v
+		case "ai_model":
+			a.Model = v
+		case "ai_web_search":
+			a.WebSearch = v != "0"
+		}
+	}
+	return a, rows.Err()
+}
+
+// SaveAISettings persists the AI settings.
+func (s *Store) SaveAISettings(ctx context.Context, a AISettings) error {
+	kv := map[string]string{"ai_openai_key": a.OpenAIKey, "ai_model": a.Model, "ai_web_search": map[bool]string{true: "1", false: "0"}[a.WebSearch]}
+	for k, v := range kv {
+		if _, err := s.DB.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -9,19 +9,20 @@ import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
-type Tab = 'general' | 'metadata' | 'templates' | 'daily' | 'users' | 'profile' | 'api' | 'data' | 'about'
+type Tab = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'users' | 'profile' | 'api' | 'data' | 'about'
 
 export default function Settings() {
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'general')
   return (
     <>
       <PageHeader title="Settings" />
-      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'daily', label: 'Daily highlights' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'daily', label: 'Daily highlights' }, { id: 'ai', label: 'AI' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
       <div className="mt">
         {tab === 'general' && <General />}
         {tab === 'metadata' && <Metadata />}
         {tab === 'templates' && <Templates />}
         {tab === 'daily' && <DailyTab />}
+        {tab === 'ai' && <AITab />}
         {tab === 'users' && <Users />}
         {tab === 'profile' && <Profile />}
         {tab === 'api' && <Tokens />}
@@ -333,6 +334,93 @@ function Templates() {
           ))}
         </div>
         <div className="mt"><button className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
+      </Card>
+    </div>
+  )
+}
+
+interface AISettings { key_set: boolean; key_hint: string; key_env: boolean; model: string; default_model: string; web_search: boolean }
+interface CharacterStatus { writer: 'app' | 'external'; running: boolean; paused: boolean; waiting: number; written: number; failed: number; last_error: string; last_run?: string }
+
+/** AI: an OpenAI key lets the app write every book's characters itself. */
+function AITab() {
+  const { user } = useApp()
+  const { toast } = useToast()
+  const isAdmin = user?.role === 'admin'
+  const { data, setData } = useAsync(() => api.get<AISettings>(`${V1}/settings/ai`), [])
+  const status = useAsync(() => api.get<CharacterStatus>(`${V1}/characters/status`), [])
+  const [key, setKey] = useState('')
+  const [model, setModel] = useState('')
+  const [web, setWeb] = useState(true)
+  const [models, setModels] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (data) { setModel(data.model); setWeb(data.web_search) } }, [data])
+  // the model list comes from the account behind the saved key
+  useEffect(() => { if (isAdmin && (data?.key_set || data?.key_env)) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [isAdmin, data?.key_set, data?.key_env])
+  // follow a run while it is going
+  useEffect(() => {
+    if (!status.data?.running) return
+    const t = setInterval(() => status.reload(), 4000)
+    return () => clearInterval(t)
+  }, [status.data?.running]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data) return <Loading />
+  const hasKey = data.key_set || data.key_env
+  const test = async () => {
+    setBusy(true)
+    try {
+      const r = await api.post<{ models: string[] }>(`${V1}/settings/ai/test`, { key })
+      setModels(r.models)
+      if (!model) setModel(r.models.includes(data.default_model) ? data.default_model : r.models.find(m => m.startsWith('gpt-5')) || r.models[0] || '')
+      toast(`The key works — ${r.models.length} models available`)
+    } catch (e) { toast((e as Error).message.replace(/^HTTP \d+:\s*/, ''), 'err') } finally { setBusy(false) }
+  }
+  const save = async (extra: Record<string, unknown> = {}) => {
+    setBusy(true)
+    try {
+      const r = await api.put<AISettings>(`${V1}/settings/ai`, { key: key || undefined, model, web_search: web, ...extra })
+      setData(r); setKey(''); toast(extra.clear_key ? 'Key removed' : 'Saved'); setTimeout(status.reload, 1500)
+    } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const run = async () => { try { await api.post(`${V1}/characters/run`, {}); toast('Writing what is missing…'); setTimeout(status.reload, 1500) } catch (e) { toast((e as Error).message, 'err') } }
+  const st = status.data
+  return (
+    <div className="two-col">
+      <Card title="OpenAI">
+        <div className="grid" style={{ gap: 14 }}>
+          <p className="muted">With an OpenAI API key the app writes the characters of every novel itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account.</p>
+          <Field label="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database; only admins can change it. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
+            <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} disabled={!isAdmin} />
+          </Field>
+          <Field label="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
+            {models.length > 0
+              ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} disabled={!isAdmin} clearLabel="Default" />
+              : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} disabled={!isAdmin} />}
+          </Field>
+          <div>
+            <label className="row"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} style={{ width: 'auto' }} disabled={!isAdmin} /> Let it look books up on the web</label>
+            <p className="muted small" style={{ margin: '4px 0 0 26px' }}>More accurate for translations and lesser-known books. OpenAI charges a small fee per search.</p>
+          </div>
+          {isAdmin && (
+            <div className="row wrap">
+              <button className="btn primary" onClick={() => save()} disabled={busy}>Save</button>
+              <button className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
+              {data.key_set && <button className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
+            </div>
+          )}
+        </div>
+      </Card>
+      <Card title="Characters" actions={st?.writer === 'app' && isAdmin ? <button className="btn ghost sm" onClick={run} disabled={st.running}>{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
+        {st ? (
+          <table className="table compact">
+            <tbody>
+              <tr><th>Written by</th><td>{st.writer === 'app' ? <>OpenAI · {data.model || data.default_model}</> : <span className="muted">the external writer (scripts/characters.py), if you run one</span>}</td></tr>
+              <tr><th>Waiting</th><td>{st.waiting === 0 ? 'nothing — every book has them' : `${st.waiting} book${st.waiting === 1 ? '' : 's'}`}{st.running && <span className="badge cat" style={{ marginLeft: 8 }}>writing…</span>}</td></tr>
+              {st.writer === 'app' && <tr><th>Written</th><td>{st.written} since the app started{st.failed > 0 && <span className="muted"> · {st.failed} failed, retried in 2 hours</span>}</td></tr>}
+              {st.last_error && <tr><th>Last error</th><td className="danger-text small">{st.last_error}{st.paused && <div className="muted">Paused until the key or model changes, or you press “Write missing now”.</div>}</td></tr>}
+            </tbody>
+          </table>
+        ) : <Loading />}
+        <p className="muted small mt">↻ on a book page writes that book's characters again.</p>
       </Card>
     </div>
   )

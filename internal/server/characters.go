@@ -34,7 +34,7 @@ func (s *Server) handleGetCharacters(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "characters")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "sets": sets})
+	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "sets": sets, "writer": s.characterWriter(r.Context())})
 }
 
 // handlePutCharacters saves characters in one or more languages:
@@ -119,6 +119,10 @@ func (s *Server) handleDeleteCharacters(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, err, "delete characters")
 		return
 	}
+	s.chars.mu.Lock()
+	delete(s.chars.retryAt, b.ID)
+	s.chars.mu.Unlock()
+	s.kickCharacters()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -164,5 +168,6 @@ func (s *Server) handleMissingCharacters(w http.ResponseWriter, r *http.Request)
 		}
 		out[i] = it
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "books": out})
+	// "writer": "app" — the app writes characters itself (it has an OpenAI key); external writers stand aside.
+	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "books": out, "writer": s.characterWriter(r.Context())})
 }
