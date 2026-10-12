@@ -85,6 +85,9 @@ it up, answer with kind "unknown".
 Write the list in these languages, the same characters in the same order in each:
 {langs}
 
+Inside the texts never use straight double quotes (") — use „…“ or ‘…’ instead, so the JSON stays valid.
+Write Latin-script languages entirely in Latin letters — not a single Cyrillic letter.
+
 Reply with only this JSON object, no other text and no code fences:
 {{"kind": "fiction" | "nonfiction" | "unknown",
   "characters": {{{example}}}}}
@@ -153,16 +156,43 @@ def parse(text):
     raise ValueError("no answer in the reply: " + text[:200])
 
 
+# Languages asked for in the Latin script: stray Cyrillic letters are transliterated.
+LATIN = {"sr", "hr", "bs", "sl"}
+CYR = dict(zip("абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ",
+               ["a", "b", "v", "g", "d", "đ", "e", "ž", "z", "i", "j", "k", "l", "lj", "m", "n", "nj", "o", "p", "r",
+                "s", "t", "ć", "u", "f", "h", "c", "č", "dž", "š",
+                "A", "B", "V", "G", "D", "Đ", "E", "Ž", "Z", "I", "J", "K", "L", "Lj", "M", "N", "Nj", "O", "P", "R",
+                "S", "T", "Ć", "U", "F", "H", "C", "Č", "Dž", "Š"]))
+
+
+def latin(text):
+    return "".join(CYR.get(ch, ch) for ch in text)
+
+
+def lang_list(chars_by_lang, lang):
+    """The list for lang, also under keys like "sr-Latn" or "sr_latn"."""
+    for k, v in (chars_by_lang or {}).items():
+        if k.lower() == lang or re.split(r"[-_]", k.lower())[0] == lang:
+            return v or []
+    return []
+
+
 def write_book(book, langs):
     reply = parse(run_engine(prompt_for(book, langs)))
     kind = reply.get("kind")
     sets = {}
     for l in langs:
-        chars = (reply.get("characters") or {}).get(l) or []
-        if kind == "fiction" and chars:
+        chars = lang_list(reply.get("characters"), l)
+        if kind == "fiction":
+            if not chars:
+                continue  # this language came back empty: leave it missing, the next run asks again
+            if l in LATIN:
+                chars = [{**c, "name": latin(c.get("name", "")), "description": latin(c.get("description", ""))} for c in chars]
             sets[l] = {"status": "ok", "characters": chars}
         else:
             sets[l] = {"status": "none" if kind == "nonfiction" else "unknown", "characters": []}
+    if not sets:
+        raise ValueError("the reply had no characters in " + ", ".join(langs))
     source = ENGINE + (" " + MODEL if MODEL else "")
     api("PUT", f"/books/{book['id']}/characters", {"source": source, "sets": sets})
     counts = ", ".join(f"{l}:{len(s['characters'])}" for l, s in sets.items())
