@@ -30,7 +30,7 @@ export default function Layout() {
           {nav.map(n => <NavLink key={n.to} to={n.to} className={({ isActive }) => isActive ? 'active' : ''}><span className="ico">{n.ico}</span>{n.label}</NavLink>)}
         </nav>
         <div className="foot">
-          <span className="row" title={user?.email}>{user && <Avatar user={user} />}<span>{user?.name || user?.email}</span></span>
+          <span className="row" title={user?.email}>{user && <Avatar user={user} />}<span className="foot-id"><span>{user?.name || user?.email}</span>{status?.version && <a className="ver" href="https://github.com/abjelosevic88/pocket-homelab-bookshelf/releases" target="_blank" rel="noreferrer" title="Version — click for release notes">v{status.version}</a>}</span></span>
           <span className="row">
             <button className="btn ghost sm" onClick={toggleTheme} title="Toggle theme">{theme === 'dark' ? '☀' : '☾'}</button>
             {status?.auth_mode === 'local' && <button className="btn ghost sm" onClick={logout} title="Sign out">⎋</button>}

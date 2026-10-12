@@ -555,3 +555,9 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .characters li { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .characters .ch-head { display: flex; align-items: center; gap: 8px; }
 .characters p { margin: 3px 0 0; font-size: 13.5px; color: var(--text); opacity: .85; line-height: 1.45; }
+
+/* ---- version in the sidebar footer ---- */
+.sidebar .foot .foot-id { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.sidebar .foot .foot-id > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar .foot .ver { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.sidebar .foot .ver:hover { color: var(--accent-hover); text-decoration: none; }
