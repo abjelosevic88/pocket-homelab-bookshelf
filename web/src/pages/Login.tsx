@@ -38,7 +38,7 @@ export default function Login({ mode }: { mode: 'login' | 'setup' }) {
           </form>
         </Card>
         {mode === 'setup' && <p className="muted small mt">You become the admin. Others can get their own shelf under Settings → Users.</p>}
-        {status?.version && <p className="muted small right mt">v{status.version}</p>}
+        {status?.version && <p className="muted small right mt">v{status.version.replace(/^v/, '')}</p>}
       </div>
     </div>
   )
