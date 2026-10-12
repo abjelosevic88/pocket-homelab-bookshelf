@@ -246,7 +246,29 @@ func (c *Client) SeriesMembers(ctx context.Context, seriesQID string) ([]WDWork,
 		}
 	}
 	works = kept
-	sort.SliceStable(works, func(i, j int) bool { return ordinalLess(works[i].Series[0].Ordinal, works[j].Series[0].Ordinal) })
+	// By number; when Wikidata numbers fewer than half of the entries, by year
+	// (Space Odyssey: only "2001" carries a number).
+	numbered := 0
+	for _, w := range works {
+		if _, ok := OrdinalValue(w.Series[0].Ordinal); ok {
+			numbered++
+		}
+	}
+	byYear := numbered*2 < len(works)
+	sort.SliceStable(works, func(i, j int) bool {
+		a, b := works[i], works[j]
+		if !byYear {
+			_, oka := OrdinalValue(a.Series[0].Ordinal)
+			_, okb := OrdinalValue(b.Series[0].Ordinal)
+			if oka || okb {
+				return ordinalLess(a.Series[0].Ordinal, b.Series[0].Ordinal)
+			}
+		}
+		if a.Year != b.Year {
+			return a.Year != "" && (b.Year == "" || a.Year < b.Year)
+		}
+		return a.Title < b.Title
+	})
 	wdc.put(ck, works)
 	return works, nil
 }
@@ -327,4 +349,46 @@ func (c *Client) OpenLibraryWorkTitle(ctx context.Context, key string) string {
 	}
 	wdc.put("olw:"+key, w.Title)
 	return w.Title
+}
+
+// WorkCover finds a cover for a series entry: from its Open Library work, or
+// by searching title and author when Wikidata has no Open Library link.
+// Returns the work key ("/works/OL…W", "" if unknown) and a cover id (0 = none). Cached for a week.
+func (c *Client) WorkCover(ctx context.Context, olWork, title, author string) (string, int) {
+	ck := "cover:" + olWork + "|" + title + "|" + author
+	if v, ok := wdc.get(ck, 7*24*time.Hour); ok {
+		r := v.([2]any)
+		return r[0].(string), r[1].(int)
+	}
+	key, cover := olWork, 0
+	if key != "" {
+		var w struct {
+			Covers []int `json:"covers"`
+		}
+		if c.getJSON(ctx, olBase+key+".json", &w) == nil {
+			for _, id := range w.Covers {
+				if id > 0 {
+					cover = id
+					break
+				}
+			}
+		}
+	}
+	if cover == 0 && title != "" {
+		v := url.Values{"title": {title}, "author": {author}, "limit": {"1"}, "fields": {"key,cover_i"}}
+		var r struct {
+			Docs []struct {
+				Key    string `json:"key"`
+				CoverI int    `json:"cover_i"`
+			} `json:"docs"`
+		}
+		if c.getJSON(ctx, olBase+"/search.json?"+v.Encode(), &r) == nil && len(r.Docs) > 0 {
+			if key == "" {
+				key = r.Docs[0].Key
+			}
+			cover = r.Docs[0].CoverI
+		}
+	}
+	wdc.put(ck, [2]any{key, cover})
+	return key, cover
 }

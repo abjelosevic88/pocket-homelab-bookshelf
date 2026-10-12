@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { Book, Candidate, Dashboard, SeriesNext } from '../lib/types'
+import type { Book, Dashboard, SeriesNext } from '../lib/types'
 import { fmtMonth } from '../lib/format'
 import { Card, Confirm, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
-import { Cover } from '../components/Cover'
-import { AddBook } from '../components/AddBook'
+import { Cover, RemoteCover } from '../components/Cover'
+import { AddBook, workCandidate } from '../components/AddBook'
 
 function thisMonth(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
@@ -65,8 +65,8 @@ export default function Planner() {
           <ul className="mini-list">
             {next.data.map(n => (
               <li key={n.series}>
-                {n.book ? <Link to={`/books/${n.book.id}`}><Cover book={n.book} size="xs" /></Link> : <span className="next-no">#{n.no}</span>}
-                <span className="grow"><b>{n.book ? n.book.title : n.title}</b>
+                {n.book ? <Link to={`/books/${n.book.id}`}><Cover book={n.book} size="xs" /></Link> : <button type="button" className="series-open" onClick={() => setAddNext(n)} title="See the book"><RemoteCover url={n.thumb_url || ''} title={n.title} size="xs" /></button>}
+                <span className="grow">{n.book ? <b>{n.book.title}</b> : <button type="button" className="series-open" onClick={() => setAddNext(n)}><b>{n.title}</b></button>}
                   <span className="muted small block"><Link to={`/series/${encodeURIComponent(n.series)}`}>{n.series}</Link> · #{n.no}{n.total ? ` of ${n.total}` : ''} · you read {n.read}{n.book ? ' · already in your plan' : ''}</span></span>
                 {n.book ? <button className="btn sm" onClick={() => start(n.book!)}>Start</button> : <button className="btn sm" onClick={() => setAddNext(n)}>+ Add to plan</button>}
               </li>
@@ -102,8 +102,8 @@ export default function Planner() {
         </section>
       ))}
       {adding && <AddBook status="want" onClose={() => setAdding(false)} onAdded={reload} />}
-      {addNext && <AddBook status="want" initial={addNext.ol_work ? { source: 'openlibrary', source_id: addNext.ol_work, source_url: 'https://openlibrary.org' + addNext.ol_work, title: addNext.title, subtitle: '', authors: [], published: addNext.year || '', pages: 0, isbn13: '', isbn10: '', publisher: '', language: '', description: '', subjects: [], cover_url: '', thumb_url: '' } as Candidate : undefined}
-        query={addNext.ol_work ? undefined : addNext.title} extra={{ series: addNext.series, series_no: addNext.no }} onClose={() => setAddNext(null)} onAdded={() => { reload(); next.reload() }} />}
+      {addNext && <AddBook status="want" initial={workCandidate(addNext, addNext.author.split(',')[0])}
+        query={addNext.ol_work ? undefined : `${addNext.title} ${addNext.author.split(',')[0]}`} extra={{ series: addNext.series, series_no: addNext.no }} onClose={() => setAddNext(null)} onAdded={() => { reload(); next.reload() }} />}
       {removing && <Confirm title={`Remove “${removing.title}”?`} message="It is deleted from your shelf. (To keep it but not plan it, just leave it at the end.)" onCancel={() => setRemoving(null)} onConfirm={() => remove(removing)} />}
     </>
   )

@@ -13,6 +13,13 @@ import { BookFields, emptyBook, type BookDraft } from './BookForm'
 type Step = { kind: 'search' } | { kind: 'pick'; c: Candidate; loading: boolean } | { kind: 'manual' }
 
 /** Add a book: search the catalogues (or type it in), then say where it stands. */
+/** A catalogue record for an Open Library work known only by key and title
+ *  (series entries) — AddBook fetches the rest when it opens. */
+export function workCandidate(w: { ol_work?: string; title: string; year?: string; cover_url?: string; thumb_url?: string }, author: string): Candidate | undefined {
+  if (!w.ol_work) return undefined
+  return { source: 'openlibrary', source_id: w.ol_work, source_url: 'https://openlibrary.org' + w.ol_work, title: w.title, subtitle: '', authors: author ? [author] : [], published: w.year || '', pages: 0, isbn13: '', isbn10: '', publisher: '', language: '', description: '', subjects: [], cover_url: w.cover_url || '', thumb_url: w.thumb_url || '' }
+}
+
 export function AddBook({ status: initialStatus = 'want', initial, query, extra, onClose, onAdded }: { status?: Status; initial?: Candidate; query?: string; extra?: Record<string, unknown>; onClose: () => void; onAdded?: (b: Book) => void }) {
   const navigate = useNavigate()
   const { toast } = useToast()

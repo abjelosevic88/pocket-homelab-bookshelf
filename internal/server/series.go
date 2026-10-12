@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/fold"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
@@ -179,11 +181,41 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 }
 
 type seriesEntry struct {
-	No     string      `json:"no"`
-	Title  string      `json:"title"`
-	Year   string      `json:"year,omitempty"`
-	OLWork string      `json:"ol_work,omitempty"`
-	Book   *store.Book `json:"book,omitempty"` // on your shelf
+	No       string      `json:"no"`
+	Title    string      `json:"title"`
+	Year     string      `json:"year,omitempty"`
+	OLWork   string      `json:"ol_work,omitempty"`
+	CoverURL string      `json:"cover_url,omitempty"`
+	ThumbURL string      `json:"thumb_url,omitempty"`
+	Book     *store.Book `json:"book,omitempty"` // on your shelf
+}
+
+// addCovers looks up covers (and Open Library works) for entries you do not
+// own, a few at a time.
+func (s *Server) addCovers(ctx context.Context, entries []seriesEntry, author string) {
+	sem := make(chan struct{}, 6)
+	var wg sync.WaitGroup
+	for i := range entries {
+		e := &entries[i]
+		if e.Book != nil {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			key, cover := s.meta.WorkCover(ctx, e.OLWork, e.Title, author)
+			if e.OLWork == "" {
+				e.OLWork = key
+			}
+			if cover > 0 {
+				e.CoverURL = fmt.Sprintf("https://covers.openlibrary.org/b/id/%d-L.jpg", cover)
+				e.ThumbURL = fmt.Sprintf("https://covers.openlibrary.org/b/id/%d-M.jpg", cover)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // handleSeriesDetail lists a series in order: your books, and the others
@@ -235,12 +267,17 @@ func (s *Server) handleSeriesDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	read := 0
+	author := ""
 	for _, b := range books {
 		if b.Status == store.StatusRead {
 			read++
 		}
+		if author == "" {
+			author = strings.Split(b.Authors, ",")[0]
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"name": name, "qid": qid, "total": total, "read": read, "books": len(books), "entries": entries})
+	s.addCovers(r.Context(), entries, author)
+	writeJSON(w, http.StatusOK, map[string]any{"name": name, "author": author, "qid": qid, "total": total, "read": read, "books": len(books), "entries": entries})
 }
 
 // handleSeriesNext suggests what to read next in each series you are in:
@@ -252,14 +289,17 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type next struct {
-		Series string      `json:"series"`
-		No     string      `json:"no"`
-		Title  string      `json:"title"`
-		Year   string      `json:"year,omitempty"`
-		OLWork string      `json:"ol_work,omitempty"`
-		Book   *store.Book `json:"book,omitempty"` // already on your shelf
-		Read   int         `json:"read"`
-		Total  int         `json:"total"`
+		Series   string      `json:"series"`
+		Author   string      `json:"author"`
+		No       string      `json:"no"`
+		Title    string      `json:"title"`
+		Year     string      `json:"year,omitempty"`
+		OLWork   string      `json:"ol_work,omitempty"`
+		CoverURL string      `json:"cover_url,omitempty"`
+		ThumbURL string      `json:"thumb_url,omitempty"`
+		Book     *store.Book `json:"book,omitempty"` // already on your shelf
+		Read     int         `json:"read"`
+		Total    int         `json:"total"`
 	}
 	out := []next{}
 	for _, ss := range list {
@@ -299,6 +339,17 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if n.Book == nil || n.Book.Status == store.StatusWant {
+				n.Author = ss.Authors
+				if n.Book == nil {
+					key, cover := s.meta.WorkCover(r.Context(), n.OLWork, n.Title, ss.Authors)
+					if n.OLWork == "" {
+						n.OLWork = key
+					}
+					if cover > 0 {
+						n.CoverURL = fmt.Sprintf("https://covers.openlibrary.org/b/id/%d-L.jpg", cover)
+						n.ThumbURL = fmt.Sprintf("https://covers.openlibrary.org/b/id/%d-M.jpg", cover)
+					}
+				}
 				out = append(out, n)
 			}
 			break

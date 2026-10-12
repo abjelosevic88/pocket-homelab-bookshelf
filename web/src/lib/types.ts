@@ -143,5 +143,5 @@ export interface AuthorCandidate { key: string; name: string; birth_date: string
 export interface DailySet { date: string; quotes: Quote[]; sent_at: string }
 export interface DailySettings { enabled: boolean; count: number; time: string; channel: 'apprise' | 'ntfy' | 'webhook'; url: string }
 export interface SeriesSummary { name: string; qid: string; authors: string; books: number; read: number; reading: number; want: number; covers: Book[]; last_no: string; total: number }
-export interface SeriesEntry { no: string; title: string; year?: string; ol_work?: string; book?: Book }
-export interface SeriesNext { series: string; no: string; title: string; year?: string; ol_work?: string; book?: Book; read: number; total: number }
+export interface SeriesEntry { no: string; title: string; year?: string; ol_work?: string; cover_url?: string; thumb_url?: string; book?: Book }
+export interface SeriesNext { series: string; author: string; no: string; title: string; year?: string; ol_work?: string; cover_url?: string; thumb_url?: string; book?: Book; read: number; total: number }

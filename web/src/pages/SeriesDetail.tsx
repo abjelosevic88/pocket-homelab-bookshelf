@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Candidate, SeriesEntry } from '../lib/types'
+import type { SeriesEntry } from '../lib/types'
 import { STATUS_SHORT } from '../lib/format'
 import { Card, Loading, Modal, useAsync, useToast } from '../components/ui'
-import { Cover } from '../components/Cover'
+import { Cover, RemoteCover } from '../components/Cover'
 import { Stars } from '../components/Stars'
-import { AddBook } from '../components/AddBook'
+import { AddBook, workCandidate } from '../components/AddBook'
 
-interface Detail { name: string; qid: string; total: number; read: number; books: number; entries: SeriesEntry[] }
+interface Detail { name: string; author: string; qid: string; total: number; read: number; books: number; entries: SeriesEntry[] }
 
 export default function SeriesDetail() {
   const { name = '' } = useParams()
@@ -20,12 +20,11 @@ export default function SeriesDetail() {
   const [newName, setNewName] = useState(name)
   if (loading && !data) return <Loading />
   if (!data) return null
-  const author = data.entries.find(e => e.book)?.book?.authors.split(',')[0] || ''
+  const author = data.author || data.entries.find(e => e.book)?.book?.authors.split(',')[0] || ''
   const total = Math.max(data.total, data.books)
   const rename = async () => {
     try { const r = await api.put<{ books: number }>(`${V1}/series/rename`, { from: name, to: newName }); toast(`Renamed on ${r.books} books`); setRenaming(false); navigate(`/series/${encodeURIComponent(newName)}`, { replace: true }) } catch (e) { toast((e as Error).message, 'err') }
   }
-  const candidate = (e: SeriesEntry): Candidate | undefined => e.ol_work ? { source: 'openlibrary', source_id: e.ol_work, source_url: 'https://openlibrary.org' + e.ol_work, title: e.title, subtitle: '', authors: author ? [author] : [], published: e.year || '', pages: 0, isbn13: '', isbn10: '', publisher: '', language: '', description: '', subjects: [], cover_url: '', thumb_url: '' } : undefined
   return (
     <div className="series-page">
       <Link to="/series" className="muted small">← Series</Link>
@@ -52,7 +51,10 @@ export default function SeriesDetail() {
                 </Link>
               ) : (
                 <>
-                  <span className="grow"><b>{e.title || 'Untitled'}</b>{e.year && <span className="muted small"> · {e.year}</span>}<span className="muted small block">Not on your shelf</span></span>
+                  <button type="button" className="row grow series-open" onClick={() => setAdding(e)} title="See the book">
+                    <RemoteCover url={e.thumb_url || ''} title={e.title} size="xs" />
+                    <span className="grow"><b>{e.title || 'Untitled'}</b>{e.year && <span className="muted small"> · {e.year}</span>}<span className="muted small block">Not on your shelf</span></span>
+                  </button>
                   <button className="btn sm" onClick={() => setAdding(e)}>+ Want</button>
                 </>
               )}
@@ -61,7 +63,7 @@ export default function SeriesDetail() {
         </ol>
         {!data.qid && <p className="muted small mt">This series is not linked to Wikidata, so only your own books are listed.</p>}
       </Card>
-      {adding && <AddBook status="want" initial={candidate(adding)} query={adding.ol_work ? undefined : `${adding.title} ${author}`}
+      {adding && <AddBook status="want" initial={workCandidate(adding, author)} query={adding.ol_work ? undefined : `${adding.title} ${author}`}
         extra={{ series: data.name, series_no: adding.no, series_qid: data.qid }} onClose={() => setAdding(null)} onAdded={reload} />}
       {renaming && (
         <Modal title="Rename series" onClose={() => setRenaming(false)}>
