@@ -196,6 +196,74 @@ type seriesEntry struct {
 	Book     *store.Book `json:"book,omitempty"` // on your shelf
 }
 
+// matchMembers pairs series members with books on the shelf (member index →
+// book index): by number, by Open Library work, then by title — the shelf
+// title or its Open Library work's title, in any script. Open Library often
+// has duplicate works, so a Serbian "Mač od Šanare" can be linked to another
+// "The Sword of Shannara" record than the one Wikidata knows.
+func (s *Server) matchMembers(ctx context.Context, members []metadata.WDWork, books []store.Book) map[int]int {
+	out := map[int]int{}
+	used := map[int]bool{}
+	take := func(match func(m metadata.WDWork, b store.Book) bool) {
+		for mi, m := range members {
+			if _, done := out[mi]; done {
+				continue
+			}
+			for bi, b := range books {
+				if !used[bi] && match(m, b) {
+					out[mi], used[bi] = bi, true
+					break
+				}
+			}
+		}
+	}
+	take(func(m metadata.WDWork, b store.Book) bool {
+		return b.SeriesNo != "" && b.SeriesNo == m.Series[0].Ordinal
+	})
+	take(func(m metadata.WDWork, b store.Book) bool {
+		for _, k := range m.OLWorks {
+			if b.SourceID == "/works/"+k {
+				return true
+			}
+		}
+		return false
+	})
+	keys := make([]map[string]bool, len(books))
+	for bi, b := range books {
+		if used[bi] {
+			continue
+		}
+		keys[bi] = map[string]bool{}
+		titles := []string{metadata.Latin(b.Title)}
+		if b.Source == "openlibrary" && b.SourceID != "" {
+			if t := s.meta.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" {
+				titles = append(titles, metadata.Latin(t))
+			}
+		}
+		for _, t := range titles {
+			for _, k := range bookKeys(t) {
+				keys[bi][k] = true
+			}
+		}
+	}
+	for mi, m := range members {
+		if _, done := out[mi]; done {
+			continue
+		}
+		mk := bookKeys(metadata.Latin(m.Title))
+		for bi := range books {
+			if used[bi] || keys[bi] == nil {
+				continue
+			}
+			if keys[bi][mk[0]] || (len(mk) > 1 && keys[bi][mk[1]]) {
+				out[mi], used[bi] = bi, true
+				break
+			}
+		}
+	}
+	return out
+}
+
 // warmSeries fetches the members and covers of every series on any shelf
 // into the cache, so series pages and the plan never wait on a catalogue.
 func (s *Server) warmSeries(ctx context.Context) {
@@ -272,22 +340,14 @@ func (s *Server) handleSeriesDetail(w http.ResponseWriter, r *http.Request) {
 	if qid != "" {
 		if members, err := s.meta.SeriesMembers(r.Context(), qid); err == nil {
 			total = seriesTotal(members)
-			for _, m := range members {
+			owned := s.matchMembers(r.Context(), members, books)
+			for mi, m := range members {
 				e := seriesEntry{No: m.Series[0].Ordinal, Title: m.Title, Year: m.Year}
 				if len(m.OLWorks) > 0 {
 					e.OLWork = "/works/" + m.OLWorks[0]
 				}
-				for i := range books {
-					b := &books[i]
-					if used[b.ID] {
-						continue
-					}
-					sameNo := b.SeriesNo != "" && b.SeriesNo == e.No
-					sameWork := e.OLWork != "" && b.SourceID == e.OLWork
-					if sameNo || sameWork {
-						e.Book, used[b.ID] = b, true
-						break
-					}
+				if bi, ok := owned[mi]; ok {
+					e.Book, used[books[bi].ID] = &books[bi], true
 				}
 				entries = append(entries, e)
 			}
@@ -356,7 +416,8 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		for _, m := range members {
+		owned := s.matchMembers(r.Context(), members, books)
+		for mi, m := range members {
 			f, ok := metadata.OrdinalValue(m.Series[0].Ordinal)
 			if !ok || f <= maxRead || f != float64(int(f)) || f < 1 {
 				continue
@@ -365,10 +426,8 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 			if len(m.OLWorks) > 0 {
 				n.OLWork = "/works/" + m.OLWorks[0]
 			}
-			for i := range books {
-				if books[i].SeriesNo == n.No || (n.OLWork != "" && books[i].SourceID == n.OLWork) {
-					n.Book = &books[i]
-				}
+			if bi, ok := owned[mi]; ok {
+				n.Book = &books[bi]
 			}
 			if n.Book == nil || n.Book.Status == store.StatusWant {
 				n.Author = ss.Authors
