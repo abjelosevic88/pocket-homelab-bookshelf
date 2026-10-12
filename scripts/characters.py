@@ -138,11 +138,16 @@ def run_engine(prompt):
 
 
 def parse(text):
-    """The JSON object in a reply (tolerates code fences and stray prose)."""
-    m = re.search(r"\{.*\}", text, re.S)
-    if not m:
-        raise ValueError("no JSON in the reply: " + text[:200])
-    return json.loads(m.group(0))
+    """The answer object in a reply (tolerates code fences and prose around it)."""
+    dec = json.JSONDecoder()
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = dec.raw_decode(text, m.start())
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and "kind" in obj:
+            return obj
+    raise ValueError("no answer in the reply: " + text[:200])
 
 
 def write_book(book, langs):
