@@ -190,7 +190,7 @@ Requires Go 1.22+ and Node 20+. Stack: Go + chi + modernc SQLite (no CGO), and R
 
 ## Credits
 
-Book data and covers come from [Open Library](https://openlibrary.org/) (Internet Archive) and [Google Books](https://books.google.com/). Sibling projects built the same way are [Pocket Habits](https://github.com/abjelosevic88/pocket-homelab-habit-tracker), [Pocket Inventory](https://github.com/abjelosevic88/pocket-homelab-inventory) and [Pocket Invoicing](https://github.com/abjelosevic88/pocket-homelab-invoicing).
+Book data and covers come from [Open Library](https://openlibrary.org/) (Internet Archive) and [Google Books](https://books.google.com/). Sibling projects built the same way are [Pocket Habits](https://github.com/abjelosevic88/pocket-homelab-habit-tracker), [Pocket Inventory](https://github.com/abjelosevic88/pocket-homelab-inventory), [Pocket Invoicing](https://github.com/abjelosevic88/pocket-homelab-invoicing), [Pocket Split](https://github.com/abjelosevic88/pocket-homelab-cost-split) and [Pocket Subtitles](https://github.com/abjelosevic88/pocket-homelab-subtitles).
 
 ## License
 
