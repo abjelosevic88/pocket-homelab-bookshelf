@@ -21,9 +21,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/config"
-	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/core"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 )
 
 // Version is injected at build time.
