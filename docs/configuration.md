@@ -18,6 +18,8 @@ All settings are environment variables. Nothing is required.
 | `LOG_FORMAT` | `text` | `text` or `json`. |
 | `TRUST_PROXY` | `true` | Honour `X-Forwarded-For` / `X-Real-IP` for logging. |
 | `METRICS_ENABLED` | `true` | Serve Prometheus metrics on `/metrics` (unauthenticated — restrict at the proxy if exposed). |
+| `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `bookshelf.started` / `bookshelf.finished` / `bookshelf.abandoned` / `bookshelf.rated`, and accept the tokens Core hands to paired phones. |
+| `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8171`). |
 | `DEMO_DATA` | `false` | Seed a sample shelf into an *empty* database. |
 
 ## Book metadata
