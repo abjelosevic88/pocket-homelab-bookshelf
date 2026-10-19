@@ -103,7 +103,8 @@ type Quote struct {
 	BookCover   string `json:"book_cover"`
 }
 
-// Settings are preferences stored as key/value pairs, shared by everyone.
+// Settings are what the UI reads as one object: the box title and setup state
+// (shared, admin-only to change) plus the preferences of the signed-in person.
 type Settings struct {
 	Title          string `json:"title"`
 	YearlyGoal     int    `json:"yearly_goal"` // books per year, 0 = no goal

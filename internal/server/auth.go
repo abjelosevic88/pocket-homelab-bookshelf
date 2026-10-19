@@ -126,7 +126,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "count users")
 		return
 	}
-	st, _ := s.store.GetSettings(r.Context())
+	st, _ := s.store.GetSettings(r.Context(), 0)
 	u, _ := s.resolveUser(r)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"needs_setup":   n == 0 && s.cfg.AuthMode == "local",
@@ -171,9 +171,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "create user")
 		return
 	}
-	st, _ := s.store.GetSettings(ctx)
+	st, _ := s.store.GetSettings(ctx, 0)
 	st.SetupComplete = true
-	_ = s.store.SaveSettings(ctx, st)
+	_ = s.store.SaveBoxSettings(ctx, st)
 	id, err := s.store.CreateSession(ctx, u.ID, s.cfg.SessionTTL)
 	if err != nil {
 		s.fail(w, err, "create session")
@@ -259,8 +259,13 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 
 // ---- users (household members) ----
 
-// handleListUsers is open to every signed-in user so items can be linked to people.
+// handleListUsers lists the accounts for admins, who manage them; a member
+// sees only their own (shelves are private, nothing here links to others).
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	if u := userFrom(r.Context()); u == nil || u.Role != "admin" {
+		writeJSON(w, http.StatusOK, []*store.User{u})
+		return
+	}
 	users, err := s.store.ListUsers(r.Context())
 	if err != nil {
 		s.fail(w, err, "list users")

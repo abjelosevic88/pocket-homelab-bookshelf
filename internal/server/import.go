@@ -184,6 +184,7 @@ func formatFrom(s string) string {
 type coverJob struct {
 	mu      sync.Mutex
 	running bool
+	user    int64 // whose covers the (last) run fetched
 	done    int
 	found   int
 	total   int
@@ -201,7 +202,7 @@ func (s *Server) fetchMissingCovers(userID int64, ids []int64) bool {
 		s.covers.mu.Unlock()
 		return false
 	}
-	s.covers.running, s.covers.done, s.covers.found, s.covers.total = true, 0, 0, 0
+	s.covers.running, s.covers.user, s.covers.done, s.covers.found, s.covers.total = true, userID, 0, 0, 0
 	s.covers.mu.Unlock()
 	go func() {
 		defer func() { s.covers.mu.Lock(); s.covers.running = false; s.covers.mu.Unlock() }()
@@ -250,8 +251,14 @@ func (s *Server) handleFetchCovers(w http.ResponseWriter, r *http.Request) {
 	s.handleCoverStatus(w, r)
 }
 
+// handleCoverStatus reports the caller's own cover run; while someone else's
+// runs, it only says the job is busy.
 func (s *Server) handleCoverStatus(w http.ResponseWriter, r *http.Request) {
 	s.covers.mu.Lock()
 	defer s.covers.mu.Unlock()
+	if s.covers.user != me(r) {
+		writeJSON(w, http.StatusOK, map[string]any{"running": false, "busy": s.covers.running, "done": 0, "found": 0, "total": 0})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"running": s.covers.running, "done": s.covers.done, "found": s.covers.found, "total": s.covers.total})
 }

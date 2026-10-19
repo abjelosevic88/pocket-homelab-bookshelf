@@ -13,20 +13,31 @@ import (
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
 
-// With an OpenAI key (Settings → AI, or OPENAI_API_KEY) the app writes book
-// characters itself, in the background: new books right after they are
-// added, and every 30 minutes whatever is still missing. Without a key the
-// external writer (scripts/characters.py) does it; /characters/missing tells
-// it to stand aside while the app has a key.
+// With an OpenAI key (Settings → AI; for the owner also OPENAI_API_KEY) the
+// app writes book characters itself, in the background: new books right
+// after they are added, and every 30 minutes whatever is still missing. Each
+// person's books are written with their own key, in their own languages; a
+// person without a key gets none from the app (an external writer such as
+// scripts/characters.py can still do it with their API token, and
+// /characters/missing tells it to stand aside while the app has their key).
 
 type charWriter struct {
 	mu        sync.Mutex
 	running   bool
-	paused    bool // a key/quota problem: wait until the settings change
-	lastError string
+	paused    map[int64]bool   // per person: a key/quota problem, wait until their settings change
+	lastError map[int64]string // per person
 	lastRun   time.Time
-	written   int
-	retryAt   map[int64]time.Time // books that failed: not before
+	written   map[int64]int                 // per person
+	retryAt   map[int64]map[int64]time.Time // per person: books that failed, not before
+}
+
+// reset forgets a person's pause, error and back-offs (new settings, "write now").
+func (cw *charWriter) reset(uid int64) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	delete(cw.paused, uid)
+	delete(cw.lastError, uid)
+	delete(cw.retryAt, uid)
 }
 
 func (s *Server) kickCharacters() {
@@ -36,14 +47,14 @@ func (s *Server) kickCharacters() {
 	}
 }
 
-// openAI returns the configured client, or nil without a key.
-func (s *Server) openAI(ctx context.Context) *ai.OpenAI {
-	a, err := s.store.GetAISettings(ctx)
+// openAI returns the client for one person's key, or nil when they have none.
+func (s *Server) openAI(ctx context.Context, uid int64) *ai.OpenAI {
+	a, err := s.store.GetAISettings(ctx, uid)
 	if err != nil {
 		return nil
 	}
 	key := a.OpenAIKey
-	if key == "" {
+	if key == "" && s.cfg.OpenAIKey != "" && s.isOwner(ctx, uid) {
 		key = s.cfg.OpenAIKey
 	}
 	if key == "" {
@@ -66,11 +77,12 @@ func (s *Server) characterWorker(ctx context.Context) {
 	}
 }
 
+// writeMissingCharacters goes through everyone who has a key, one person at a
+// time, each with their own key and languages and only over their own books.
 func (s *Server) writeMissingCharacters(ctx context.Context) {
-	oa := s.openAI(ctx)
 	cw := &s.chars
 	cw.mu.Lock()
-	if oa == nil || cw.paused || cw.running {
+	if cw.running {
 		cw.mu.Unlock()
 		return
 	}
@@ -81,10 +93,32 @@ func (s *Server) writeMissingCharacters(ctx context.Context) {
 		cw.running, cw.lastRun = false, time.Now()
 		cw.mu.Unlock()
 	}()
+	users, err := s.store.ListUsers(ctx)
+	if err != nil {
+		return
+	}
+	for _, u := range users {
+		if ctx.Err() != nil {
+			return
+		}
+		cw.mu.Lock()
+		paused := cw.paused[u.ID]
+		cw.mu.Unlock()
+		if paused {
+			continue
+		}
+		if oa := s.openAI(ctx, u.ID); oa != nil {
+			s.writeMissingFor(ctx, u.ID, oa)
+		}
+	}
+}
 
+func (s *Server) writeMissingFor(ctx context.Context, uid int64, oa *ai.OpenAI) {
+	cw := &s.chars
+	langs := s.characterLangs(ctx, uid)
 	tried := map[int64]bool{} // one attempt per book and run: a language that keeps coming back empty must not loop
 	for ctx.Err() == nil {
-		books, missing, err := s.store.MissingCharacters(ctx, 0, s.characterLangs(), 0)
+		books, missing, err := s.store.MissingCharacters(ctx, uid, langs, 0)
 		if err != nil {
 			return
 		}
@@ -95,7 +129,7 @@ func (s *Server) writeMissingCharacters(ctx context.Context) {
 		var jobs []job
 		cw.mu.Lock()
 		for i, b := range books {
-			if t, ok := cw.retryAt[b.ID]; (!ok || time.Now().After(t)) && !tried[b.ID] {
+			if t, ok := cw.retryAt[uid][b.ID]; (!ok || time.Now().After(t)) && !tried[b.ID] {
 				jobs = append(jobs, job{b, missing[i]})
 			}
 		}
@@ -129,16 +163,25 @@ func (s *Server) writeMissingCharacters(ctx context.Context) {
 				cw.mu.Lock()
 				defer cw.mu.Unlock()
 				if err == nil {
-					cw.written++
-					delete(cw.retryAt, j.b.ID)
+					if cw.written == nil {
+						cw.written = map[int64]int{}
+					}
+					cw.written[uid]++
+					delete(cw.retryAt[uid], j.b.ID)
 					return
 				}
-				s.log.Warn("characters: OpenAI failed", "book", j.b.ID, "title", j.b.Title, "err", err)
-				cw.lastError = err.Error()
+				s.log.Warn("characters: OpenAI failed", "user", uid, "book", j.b.ID, "title", j.b.Title, "err", err)
+				if cw.lastError == nil {
+					cw.lastError = map[int64]string{}
+				}
+				cw.lastError[uid] = err.Error()
 				var ae *ai.APIError
 				if errors.As(err, &ae) && (ae.Fatal() || ae.Status == http.StatusTooManyRequests) {
 					if ae.Fatal() {
-						cw.paused = true
+						if cw.paused == nil {
+							cw.paused = map[int64]bool{}
+						}
+						cw.paused[uid] = true
 					}
 					stopMu.Lock()
 					stop = true
@@ -146,9 +189,12 @@ func (s *Server) writeMissingCharacters(ctx context.Context) {
 					return
 				}
 				if cw.retryAt == nil {
-					cw.retryAt = map[int64]time.Time{}
+					cw.retryAt = map[int64]map[int64]time.Time{}
 				}
-				cw.retryAt[j.b.ID] = time.Now().Add(2 * time.Hour)
+				if cw.retryAt[uid] == nil {
+					cw.retryAt[uid] = map[int64]time.Time{}
+				}
+				cw.retryAt[uid][j.b.ID] = time.Now().Add(2 * time.Hour)
 			}()
 		}
 		wg.Wait()
@@ -195,7 +241,7 @@ func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Boo
 				cs.Characters = append(cs.Characters, store.Character{Name: c.Name, Role: c.Role, Description: c.Description})
 			}
 		}
-		if err := s.store.PutCharacters(ctx, b.ID, l, cleanCharacters(cs, "openai "+model)); err != nil {
+		if err := s.store.PutCharacters(ctx, b.UserID, b.ID, l, cleanCharacters(cs, "openai "+model)); err != nil {
 			return err
 		}
 		saved++
@@ -215,23 +261,21 @@ func keyHint(k string) string {
 	return k[:3] + "…" + k[len(k)-4:]
 }
 
+// The AI settings are personal: everyone sees and changes only their own key.
 func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
-	a, err := s.store.GetAISettings(r.Context())
+	a, err := s.store.GetAISettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"key_set": a.OpenAIKey != "", "key_hint": keyHint(a.OpenAIKey), "key_env": s.cfg.OpenAIKey != "",
+		"key_set": a.OpenAIKey != "", "key_hint": keyHint(a.OpenAIKey), "key_env": s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r)),
 		"model": a.Model, "default_model": ai.DefaultModel, "web_search": a.WebSearch,
 	})
 }
 
 // handlePutAISettings: {"key": "sk-…" (omit to keep), "clear_key": true, "model", "web_search"}.
 func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	var in struct {
 		Key       *string `json:"key"`
 		ClearKey  bool    `json:"clear_key"`
@@ -242,7 +286,7 @@ func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	a, err := s.store.GetAISettings(r.Context())
+	a, err := s.store.GetAISettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
@@ -254,27 +298,22 @@ func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 		a.OpenAIKey = ""
 	}
 	a.Model, a.WebSearch = strings.TrimSpace(in.Model), in.WebSearch
-	if err := s.store.SaveAISettings(r.Context(), a); err != nil {
+	if err := s.store.SaveAISettings(r.Context(), me(r), a); err != nil {
 		s.fail(w, err, "save settings")
 		return
 	}
-	s.chars.mu.Lock()
-	s.chars.paused, s.chars.lastError, s.chars.retryAt = false, "", nil
-	s.chars.mu.Unlock()
+	s.chars.reset(me(r))
 	s.kickCharacters()
 	s.handleGetAISettings(w, r)
 }
 
-// handleTestAI checks a key ({"key"}, or the saved one) and lists its models.
+// handleTestAI checks a key ({"key"}, or the caller's saved one) and lists its models.
 func (s *Server) handleTestAI(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	var in struct {
 		Key string `json:"key"`
 	}
 	_ = decode(r, &in)
-	oa := s.openAI(r.Context())
+	oa := s.openAI(r.Context(), me(r))
 	if k := strings.TrimSpace(in.Key); k != "" {
 		oa = &ai.OpenAI{Key: k, BaseURL: s.cfg.OpenAIBaseURL}
 	}
@@ -292,14 +331,17 @@ func (s *Server) handleTestAI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
+// handleCharacterStatus reports on the caller's own books and key.
 func (s *Server) handleCharacterStatus(w http.ResponseWriter, r *http.Request) {
-	books, _, _ := s.store.MissingCharacters(r.Context(), 0, s.characterLangs(), 0)
+	uid := me(r)
+	books, _, _ := s.store.MissingCharacters(r.Context(), uid, s.characterLangs(r.Context(), uid), 0)
+	writer := s.characterWriter(r.Context(), uid)
 	cw := &s.chars
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 	out := map[string]any{
-		"writer": s.characterWriter(r.Context()), "running": cw.running, "paused": cw.paused, "waiting": len(books),
-		"written": cw.written, "last_error": cw.lastError, "failed": len(cw.retryAt),
+		"writer": writer, "running": cw.running, "paused": cw.paused[uid], "waiting": len(books),
+		"written": cw.written[uid], "last_error": cw.lastError[uid], "failed": len(cw.retryAt[uid]),
 	}
 	if !cw.lastRun.IsZero() {
 		out["last_run"] = cw.lastRun.UTC().Format(time.RFC3339)
@@ -307,18 +349,16 @@ func (s *Server) handleCharacterStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleRunCharacters writes what is missing now (failed books included).
+// handleRunCharacters writes what is missing now (the caller's failed books included).
 func (s *Server) handleRunCharacters(w http.ResponseWriter, r *http.Request) {
-	s.chars.mu.Lock()
-	s.chars.paused, s.chars.retryAt = false, nil
-	s.chars.mu.Unlock()
+	s.chars.reset(me(r))
 	s.kickCharacters()
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// characterWriter is "app" when the app writes characters itself, else "external".
-func (s *Server) characterWriter(ctx context.Context) string {
-	if s.openAI(ctx) != nil {
+// characterWriter is "app" when the app writes the person's characters itself, else "external".
+func (s *Server) characterWriter(ctx context.Context, uid int64) string {
+	if s.openAI(ctx, uid) != nil {
 		return "app"
 	}
 	return "external"

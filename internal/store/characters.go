@@ -25,9 +25,16 @@ type CharacterSet struct {
 // ValidCharacterStatus reports whether s is a known status.
 func ValidCharacterStatus(s string) bool { return s == "ok" || s == "none" || s == "unknown" }
 
-// Characters returns a book's character sets by language.
-func (s *Store) Characters(ctx context.Context, bookID int64) (map[string]CharacterSet, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT lang, status, characters, source, updated_at FROM book_characters WHERE book_id = ?`, bookID)
+// bookOwned checks that a book is the user's.
+func (s *Store) bookOwned(ctx context.Context, userID, bookID int64) error {
+	var one int
+	return notFound(s.DB.QueryRowContext(ctx, `SELECT 1 FROM books WHERE id = ? AND user_id = ?`, bookID, userID).Scan(&one))
+}
+
+// Characters returns the character sets of one of the user's books by language.
+func (s *Store) Characters(ctx context.Context, userID, bookID int64) (map[string]CharacterSet, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT c.lang, c.status, c.characters, c.source, c.updated_at FROM book_characters c
+		JOIN books b ON b.id = c.book_id WHERE c.book_id = ? AND b.user_id = ?`, bookID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +54,11 @@ func (s *Store) Characters(ctx context.Context, bookID int64) (map[string]Charac
 	return out, rows.Err()
 }
 
-// PutCharacters saves (replaces) a book's characters in one language.
-func (s *Store) PutCharacters(ctx context.Context, bookID int64, lang string, cs CharacterSet) error {
+// PutCharacters saves (replaces) the characters of one of the user's books in one language.
+func (s *Store) PutCharacters(ctx context.Context, userID, bookID int64, lang string, cs CharacterSet) error {
+	if err := s.bookOwned(ctx, userID, bookID); err != nil {
+		return err
+	}
 	if cs.Characters == nil {
 		cs.Characters = []Character{}
 	}
@@ -62,21 +72,25 @@ func (s *Store) PutCharacters(ctx context.Context, bookID int64, lang string, cs
 	return err
 }
 
-// DeleteCharacters forgets a book's characters (in all languages), so they are written again.
-func (s *Store) DeleteCharacters(ctx context.Context, bookID int64) error {
+// DeleteCharacters forgets the characters of one of the user's books (in all
+// languages), so they are written again.
+func (s *Store) DeleteCharacters(ctx context.Context, userID, bookID int64) error {
+	if err := s.bookOwned(ctx, userID, bookID); err != nil {
+		return err
+	}
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM book_characters WHERE book_id = ?`, bookID)
 	return err
 }
 
-// MissingCharacters lists books that lack characters in any of langs, with
-// the languages they lack; userID 0 means every user's books.
+// MissingCharacters lists the user's books that lack characters in any of
+// langs, with the languages they lack.
 func (s *Store) MissingCharacters(ctx context.Context, userID int64, langs []string, limit int) ([]Book, [][]string, error) {
-	books, err := s.ListBooks(ctx, BookFilter{UserID: userID, AllUsers: userID == 0})
+	books, err := s.ListBooks(ctx, BookFilter{UserID: userID})
 	if err != nil {
 		return nil, nil, err
 	}
 	have := map[int64]map[string]bool{}
-	rows, err := s.DB.QueryContext(ctx, `SELECT book_id, lang FROM book_characters`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT c.book_id, c.lang FROM book_characters c JOIN books b ON b.id = c.book_id WHERE b.user_id = ?`, userID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -113,9 +127,4 @@ func (s *Store) MissingCharacters(ctx context.Context, userID int64, langs []str
 		}
 	}
 	return outB, outL, nil
-}
-
-// GetBookAnyUser returns a book whoever owns it.
-func (s *Store) GetBookAnyUser(ctx context.Context, id int64) (*Book, error) {
-	return scanBook(s.DB.QueryRowContext(ctx, `SELECT `+bookCols+` FROM books b WHERE b.id = ?`, id))
 }

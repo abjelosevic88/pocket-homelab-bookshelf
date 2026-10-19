@@ -109,10 +109,10 @@ func (s *Store) DeleteQuote(ctx context.Context, userID, id int64) error {
 
 func squashText(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
 
-// ExistingQuoteTexts returns the normalised texts of a book's quotes, for
-// telling which incoming highlights are already there.
-func (s *Store) ExistingQuoteTexts(ctx context.Context, bookID int64) ([]string, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT text FROM quotes WHERE book_id = ?`, bookID)
+// ExistingQuoteTexts returns the normalised texts of the quotes of one of the
+// user's books, for telling which incoming highlights are already there.
+func (s *Store) ExistingQuoteTexts(ctx context.Context, userID, bookID int64) ([]string, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT q.text FROM quotes q JOIN books b ON b.id = q.book_id WHERE q.book_id = ? AND b.user_id = ?`, bookID, userID)
 	if err != nil {
 		return nil, err
 	}

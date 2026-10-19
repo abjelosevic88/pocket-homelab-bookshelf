@@ -92,13 +92,13 @@ One set per book and language: `{"status": "ok" | "none" | "unknown", "character
 | Method | Path | Notes |
 |---|---|---|
 | `GET` | `/books/{id}/characters` | `{"langs": ["en", "sr"], "sets": {"en": {…}, "sr": {…}}}` — `langs` are the preferred languages. |
-| `PUT` | `/books/{id}/characters` | `{"source": "claude sonnet", "sets": {"en": {"status": "ok", "characters": […]}}}` — replaces the given languages. Up to 40 characters; admins may write any user's book. |
+| `PUT` | `/books/{id}/characters` | `{"source": "claude sonnet", "sets": {"en": {"status": "ok", "characters": […]}}}` — replaces the given languages. Up to 40 characters. Only your own books (admins included); another user's book is a 404. |
 | `DELETE` | `/books/{id}/characters` | Forget them, so they are written again. |
 | `GET` | `/characters/status` | `{"writer": "app" \| "external", "running", "paused", "waiting", "written", "failed", "last_error", "last_run"}` — `app` when the app has an OpenAI key. |
 | `POST` | `/characters/run` | Write what is missing now (also un-pauses and retries failed books). |
-| `GET` · `PUT` | `/settings/ai` | `{"key_set", "key_hint", "key_env", "model", "default_model", "web_search"}`. PUT (admin): `{"key": "sk-…"` (omit to keep)`, "clear_key": true, "model", "web_search"}`. |
-| `POST` | `/settings/ai/test` | Admin. `{"key"}` (or the saved key) → `{"models": [...]}` the key can use. |
-| `GET` | `/characters/missing?limit=20` | Books missing a preferred language: `{"langs", "books": [{id, title, subtitle, work_title, authors, published, series, series_no, description, source_url, missing: ["sr"]}]}`. Admin tokens see every user's books. `"writer": "app"` means the app writes them itself (external writers should stand aside). |
+| `GET` · `PUT` | `/settings/ai` | `{"key_set", "key_hint", "key_env", "model", "default_model", "web_search"}`. Your own key: everyone has their own. PUT: `{"key": "sk-…"` (omit to keep)`, "clear_key": true, "model", "web_search"}`. `key_env` is true only for the owner (first account), whose fallback `OPENAI_API_KEY` is. |
+| `POST` | `/settings/ai/test` | `{"key"}` (or your saved key) → `{"models": [...]}` the key can use. |
+| `GET` | `/characters/missing?limit=20` | Books missing a preferred language: `{"langs", "books": [{id, title, subtitle, work_title, authors, published, series, series_no, description, source_url, missing: ["sr"]}]}`. Only the token owner's books. `"writer": "app"` means the app writes them itself with that person's key (external writers should stand aside). |
 
 ## Search the catalogues
 
@@ -122,11 +122,11 @@ One set per book and language: `{"status": "ok" | "none" | "unknown", "character
 | `GET` | `/auth/status` | `{needs_setup, auth_mode, authenticated, user, version, title}` |
 | `POST` | `/auth/setup` · `/auth/login` · `/auth/logout` | |
 | `GET` · `PUT` | `/auth/me` | Own profile, `{"name","email","current_password","new_password"}` |
-| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr", thought_templates: [{name, body}]}` (+ read-only `sources`, `google_books_env`) |
-| `GET` | `/settings/system` | Version, paths, sizes, counts. |
-| `GET` · `POST` · `PUT` · `DELETE` | `/users`, `/users/{id}` | Listing for everyone; changes admin only. |
+| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr", thought_templates: [{name, body}]}` (+ read-only `sources`, `google_books_env`). `title` is the box's and only admins change it; everything else is the caller's own. `google_books_env` (the `GOOGLE_BOOKS_API_KEY` fallback) applies to the owner only. |
+| `GET` | `/settings/system` | Version, paths, sizes, and the counts of your own shelf (`users` too for admins). |
+| `GET` · `POST` · `PUT` · `DELETE` | `/users`, `/users/{id}` | Admin only; a member's listing holds just their own account. |
 | `GET` · `POST` · `DELETE` | `/tokens` | Personal tokens. The plaintext is returned once on create. |
-| `GET` | `/backup` | Consistent SQLite copy. |
+| `GET` | `/backup` | Consistent SQLite copy of the whole box — admin only. Everyone can export their own shelf below. |
 | `GET` | `/export.json` · `/export.csv` | Your shelf: complete / one row per book. |
 | `POST` | `/import` | The JSON export. Books already on the shelf are skipped. |
 | `POST` | `/import/kindle/preview` | Kindle `My Clippings.txt` (body or `multipart` field `file`) → `{"clippings", "books": [{title, author, entries: [{text, note, page, loc_start, loc_end, added, note_only}], highlights, notes, known, match: {book_id, title, by: "title"\|"openlibrary"}, candidate}]}`. Nothing is saved. |

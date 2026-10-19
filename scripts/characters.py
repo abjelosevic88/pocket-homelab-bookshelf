@@ -14,7 +14,7 @@ no API key is needed:
 
 Environment:
   BOOKSHELF_URL     e.g. http://localhost:8171
-  BOOKSHELF_TOKEN   an API token (Settings → API); an admin token covers every user's books
+  BOOKSHELF_TOKEN   an API token (Settings → API); it covers the books of the person it belongs to
   ENGINE            claude | codex (default claude)
   MODEL             model for the engine (default: sonnet for claude, the CLI default for codex)
   CONCURRENCY       books written at once (default 2)

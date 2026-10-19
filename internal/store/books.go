@@ -41,7 +41,6 @@ type BookFilter struct {
 	Series   string
 	Sort     string // recent | added | title | author | rating | finished | queue | series
 	Limit    int
-	AllUsers bool // every user's books (UserID ignored) — for background jobs
 }
 
 // tagMatch is a SQL fragment that matches one tag in the comma-separated list.
@@ -51,9 +50,6 @@ const tagMatch = `(',' || REPLACE(LOWER(b.tags), ', ', ',') || ',') LIKE ('%,' |
 func (s *Store) ListBooks(ctx context.Context, f BookFilter) ([]Book, error) {
 	where := []string{"b.user_id = ?"}
 	args := []any{f.UserID}
-	if f.AllUsers {
-		where, args = []string{"1 = 1"}, nil
-	}
 	if f.Status != "" {
 		where = append(where, "b.status = ?")
 		args = append(args, f.Status)

@@ -25,33 +25,51 @@ func bookKeys(s string) []string {
 	return out
 }
 
-// detectSeries looks at books detection has not seen yet.
+// detectSeries looks at books detection has not seen yet, one person's
+// books at a time (with their languages for series names).
 func (s *Server) detectSeries(ctx context.Context) {
 	byAuthor, noKey, err := s.store.UncheckedSeriesBooks(ctx)
 	if err != nil {
 		return
 	}
 	_ = s.store.MarkSeriesChecked(ctx, noKey)
+	type group struct {
+		user  int64
+		olKey string
+	}
+	byUser := map[group][]store.Book{}
 	for olKey, books := range byAuthor {
+		for _, b := range books {
+			g := group{b.UserID, olKey}
+			byUser[g] = append(byUser[g], b)
+		}
+	}
+	metas := map[int64]*metadata.Client{}
+	for g, books := range byUser {
 		if ctx.Err() != nil {
 			return
+		}
+		m := metas[g.user]
+		if m == nil {
+			m = s.metaFor(ctx, g.user)
+			metas[g.user] = m
 		}
 		ids := make([]int64, len(books))
 		for i, b := range books {
 			ids[i] = b.ID
 		}
-		qid, err := s.meta.AuthorWikidataID(ctx, olKey)
+		qid, err := m.AuthorWikidataID(ctx, g.olKey)
 		if err != nil {
 			continue // catalogue unreachable: try again on the next pass
 		}
 		var works []metadata.WDWork
 		if qid != "" {
-			if works, err = s.meta.SeriesWorksByAuthor(ctx, qid); err != nil {
+			if works, err = m.SeriesWorksByAuthor(ctx, qid); err != nil {
 				continue
 			}
 		}
 		if len(works) > 0 {
-			s.assignSeries(ctx, books, works)
+			s.assignSeries(ctx, m, books, works)
 		}
 		_ = s.store.MarkSeriesChecked(ctx, ids)
 	}
@@ -60,7 +78,7 @@ func (s *Server) detectSeries(ctx context.Context) {
 // assignSeries matches shelf books to an author's series works: by Open
 // Library work id, else by the whole title in any language (Cyrillic read as
 // Latin). A work in several series goes to the one most of the matched books share.
-func (s *Server) assignSeries(ctx context.Context, books []store.Book, works []metadata.WDWork) {
+func (s *Server) assignSeries(ctx context.Context, m *metadata.Client, books []store.Book, works []metadata.WDWork) {
 	byOL := map[string]*metadata.WDWork{}
 	byTitle := map[string]*metadata.WDWork{}
 	var seriesIDs []string
@@ -80,7 +98,7 @@ func (s *Server) assignSeries(ctx context.Context, books []store.Book, works []m
 			seriesIDs = append(seriesIDs, r.QID)
 		}
 	}
-	info, _ := s.meta.SeriesNames(ctx, uniq(seriesIDs))
+	info, _ := m.SeriesNames(ctx, uniq(seriesIDs))
 	matched := map[int64]*metadata.WDWork{}
 	for _, b := range books {
 		var w *metadata.WDWork
@@ -93,7 +111,7 @@ func (s *Server) assignSeries(ctx context.Context, books []store.Book, works []m
 			}
 		}
 		if w == nil && b.Source == "openlibrary" {
-			if t := s.meta.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" {
+			if t := m.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" {
 				for _, k := range bookKeys(metadata.Latin(t)) {
 					if w == nil {
 						w = byTitle[k]
@@ -168,6 +186,7 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 		Total int `json:"total"`
 	}
 	out := make([]item, len(list))
+	meta := s.metaFor(r.Context(), me(r))
 	var wg sync.WaitGroup
 	for i, ss := range list {
 		out[i] = item{SeriesSummary: ss}
@@ -177,7 +196,7 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if m, err := s.meta.SeriesMembers(r.Context(), ss.QID); err == nil {
+			if m, err := meta.SeriesMembers(r.Context(), ss.QID); err == nil {
 				out[i].Total = max(seriesTotal(m), ss.Read)
 			}
 		}()
@@ -201,7 +220,7 @@ type seriesEntry struct {
 // title or its Open Library work's title, in any script. Open Library often
 // has duplicate works, so a Serbian "Mač od Šanare" can be linked to another
 // "The Sword of Shannara" record than the one Wikidata knows.
-func (s *Server) matchMembers(ctx context.Context, members []metadata.WDWork, books []store.Book) map[int]int {
+func (s *Server) matchMembers(ctx context.Context, meta *metadata.Client, members []metadata.WDWork, books []store.Book) map[int]int {
 	out := map[int]int{}
 	used := map[int]bool{}
 	take := func(match func(m metadata.WDWork, b store.Book) bool) {
@@ -236,7 +255,7 @@ func (s *Server) matchMembers(ctx context.Context, members []metadata.WDWork, bo
 		keys[bi] = map[string]bool{}
 		titles := []string{metadata.Latin(b.Title)}
 		if b.Source == "openlibrary" && b.SourceID != "" {
-			if t := s.meta.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" {
+			if t := meta.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" {
 				titles = append(titles, metadata.Latin(t))
 			}
 		}
@@ -264,35 +283,43 @@ func (s *Server) matchMembers(ctx context.Context, members []metadata.WDWork, bo
 	return out
 }
 
-// warmSeries fetches the members and covers of every series on any shelf
-// into the cache, so series pages and the plan never wait on a catalogue.
+// warmSeries fetches the members and covers of every series on each shelf
+// into the cache (in that person's languages), so series pages and the plan
+// never wait on a catalogue.
 func (s *Server) warmSeries(ctx context.Context) {
-	list, err := s.store.SeriesQIDs(ctx)
+	users, err := s.store.ListUsers(ctx)
 	if err != nil {
 		return
 	}
-	for qid, author := range list {
-		members, err := s.meta.SeriesMembers(ctx, qid)
-		if err != nil {
+	for _, u := range users {
+		list, err := s.store.SeriesQIDs(ctx, u.ID)
+		if err != nil || len(list) == 0 {
 			continue
 		}
-		entries := make([]seriesEntry, len(members))
-		for i, m := range members {
-			entries[i] = seriesEntry{Title: m.Title}
-			if len(m.OLWorks) > 0 {
-				entries[i].OLWork = "/works/" + m.OLWorks[0]
+		meta := s.metaFor(ctx, u.ID)
+		for qid, author := range list {
+			members, err := meta.SeriesMembers(ctx, qid)
+			if err != nil {
+				continue
 			}
-		}
-		s.addCovers(ctx, entries, author)
-		if ctx.Err() != nil {
-			return
+			entries := make([]seriesEntry, len(members))
+			for i, m := range members {
+				entries[i] = seriesEntry{Title: m.Title}
+				if len(m.OLWorks) > 0 {
+					entries[i].OLWork = "/works/" + m.OLWorks[0]
+				}
+			}
+			s.addCovers(ctx, meta, entries, author)
+			if ctx.Err() != nil {
+				return
+			}
 		}
 	}
 }
 
 // addCovers looks up covers (and Open Library works) for entries you do not
 // own, a few at a time.
-func (s *Server) addCovers(ctx context.Context, entries []seriesEntry, author string) {
+func (s *Server) addCovers(ctx context.Context, meta *metadata.Client, entries []seriesEntry, author string) {
 	sem := make(chan struct{}, 6)
 	var wg sync.WaitGroup
 	for i := range entries {
@@ -305,7 +332,7 @@ func (s *Server) addCovers(ctx context.Context, entries []seriesEntry, author st
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			key, cover := s.meta.WorkCover(ctx, e.OLWork, e.Title, author)
+			key, cover := meta.WorkCover(ctx, e.OLWork, e.Title, author)
 			if e.OLWork == "" {
 				e.OLWork = key
 			}
@@ -337,10 +364,11 @@ func (s *Server) handleSeriesDetail(w http.ResponseWriter, r *http.Request) {
 	var entries []seriesEntry
 	used := map[int64]bool{}
 	total := 0
+	meta := s.metaFor(r.Context(), me(r))
 	if qid != "" {
-		if members, err := s.meta.SeriesMembers(r.Context(), qid); err == nil {
+		if members, err := meta.SeriesMembers(r.Context(), qid); err == nil {
 			total = seriesTotal(members)
-			owned := s.matchMembers(r.Context(), members, books)
+			owned := s.matchMembers(r.Context(), meta, members, books)
 			for mi, m := range members {
 				e := seriesEntry{No: m.Series[0].Ordinal, Title: m.Title, Year: m.Year}
 				if len(m.OLWorks) > 0 {
@@ -368,7 +396,7 @@ func (s *Server) handleSeriesDetail(w http.ResponseWriter, r *http.Request) {
 			author = strings.Split(b.Authors, ",")[0]
 		}
 	}
-	s.addCovers(r.Context(), entries, author)
+	s.addCovers(r.Context(), meta, entries, author)
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "author": author, "qid": qid, "total": total, "read": read, "books": len(books), "entries": entries})
 }
 
@@ -394,6 +422,7 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 		Total    int         `json:"total"`
 	}
 	out := []next{}
+	meta := s.metaFor(r.Context(), me(r))
 	for _, ss := range list {
 		if ss.Read == 0 || ss.QID == "" {
 			continue
@@ -412,11 +441,11 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 		if reading { // you are in the middle of one already
 			continue
 		}
-		members, err := s.meta.SeriesMembers(r.Context(), ss.QID)
+		members, err := meta.SeriesMembers(r.Context(), ss.QID)
 		if err != nil {
 			continue
 		}
-		owned := s.matchMembers(r.Context(), members, books)
+		owned := s.matchMembers(r.Context(), meta, members, books)
 		for mi, m := range members {
 			f, ok := metadata.OrdinalValue(m.Series[0].Ordinal)
 			if !ok || f <= maxRead || f != float64(int(f)) || f < 1 {
@@ -432,7 +461,7 @@ func (s *Server) handleSeriesNext(w http.ResponseWriter, r *http.Request) {
 			if n.Book == nil || n.Book.Status == store.StatusWant {
 				n.Author = ss.Authors
 				if n.Book == nil {
-					key, cover := s.meta.WorkCover(r.Context(), n.OLWork, n.Title, ss.Authors)
+					key, cover := meta.WorkCover(r.Context(), n.OLWork, n.Title, ss.Authors)
 					if n.OLWork == "" {
 						n.OLWork = key
 					}

@@ -51,7 +51,7 @@ func TestStatusFlowKeepsReadsInStep(t *testing.T) {
 	if got.FinishedOn != "2026-01-20" || got.ReadCount != 1 || got.CurrentPage != 600 {
 		t.Fatalf("after finish: %+v", got)
 	}
-	reads, _ := s.ListReads(ctx, b.ID)
+	reads, _ := s.ListReads(ctx, uid, b.ID)
 	if len(reads) != 1 || reads[0].StartedOn != "2026-01-02" {
 		t.Fatalf("reads: %+v", reads)
 	}
@@ -66,7 +66,7 @@ func TestStatusFlowKeepsReadsInStep(t *testing.T) {
 	if got.Status != StatusWant || got.QueuePos == 0 {
 		t.Fatalf("after want: %+v", got)
 	}
-	if reads, _ = s.ListReads(ctx, b.ID); len(reads) != 2 {
+	if reads, _ = s.ListReads(ctx, uid, b.ID); len(reads) != 2 {
 		t.Fatalf("want 2 reads, got %d", len(reads))
 	}
 }
@@ -244,5 +244,106 @@ func TestPickQuotesPrefersUnseenAndSpreadsBooks(t *testing.T) {
 	}
 	if unseen < 2 {
 		t.Fatalf("expected mostly never-shown quotes, got %v", got)
+	}
+}
+
+// 0008 moves the personal settings of the old shared table to the owner (the
+// first user) and can run again without harm.
+func TestPerUserSettingsMigration(t *testing.T) {
+	s, owner := openTest(t)
+	ctx := context.Background()
+	member := &User{Email: "member@example.com", Role: "member"}
+	if err := s.CreateUser(ctx, member); err != nil {
+		t.Fatal(err)
+	}
+	// Roll back to the shared table as it was before 0008.
+	for _, q := range []string{
+		`DELETE FROM schema_migrations WHERE name = '0008_per_user_settings.sql'`,
+		`DELETE FROM user_settings`,
+		`INSERT INTO settings (key, value) VALUES ('title', 'Our Books'), ('setup_complete', '1'), ('yearly_goal', '24'),
+			('languages', 'sr,en'), ('google_books_key', 'gk'), ('ai_openai_key', 'sk-owner'), ('ai_model', 'm'), ('landing', 'planner')`,
+	} {
+		if _, err := s.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ { // the second run finds it applied; a forced re-run is harmless too
+		if err := s.migrate(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.DB.Exec(`DELETE FROM schema_migrations WHERE name = '0008_per_user_settings.sql'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.migrate(); err != nil {
+		t.Fatalf("re-running 0008: %v", err)
+	}
+	st, _ := s.GetSettings(ctx, owner)
+	if st.YearlyGoal != 24 || st.Languages != "sr,en" || st.GoogleBooksKey != "gk" || st.Landing != "planner" || st.Title != "Our Books" || !st.SetupComplete {
+		t.Fatalf("owner after migration: %+v", st)
+	}
+	if a, _ := s.GetAISettings(ctx, owner); a.OpenAIKey != "sk-owner" || a.Model != "m" {
+		t.Fatalf("owner AI after migration: %+v", a)
+	}
+	ms, _ := s.GetSettings(ctx, member.ID)
+	if ms.YearlyGoal != 0 || ms.Languages != "en" || ms.GoogleBooksKey != "" || ms.Landing != "now" || ms.Title != "Our Books" {
+		t.Fatalf("member after migration: %+v", ms)
+	}
+	if a, _ := s.GetAISettings(ctx, member.ID); a.OpenAIKey != "" {
+		t.Fatalf("member got the owner's OpenAI key")
+	}
+	var left int
+	_ = s.DB.QueryRow(`SELECT COUNT(1) FROM settings WHERE key NOT IN ('title', 'setup_complete')`).Scan(&left)
+	if left != 0 {
+		t.Fatalf("%d personal keys left in the shared table", left)
+	}
+	if s.OwnerID(ctx) != owner {
+		t.Fatalf("owner id %d, want %d", s.OwnerID(ctx), owner)
+	}
+}
+
+// Rows that hang off a book (reads, quotes, characters) are reached only
+// through a book the user owns.
+func TestChildRowsFollowTheirBook(t *testing.T) {
+	s, a := openTest(t)
+	ctx := context.Background()
+	other := &User{Email: "b@example.com", Role: "member"}
+	if err := s.CreateUser(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	b := &Book{UserID: a, Title: "Mine", Status: StatusRead}
+	if err := s.CreateBook(ctx, b, "", "2026-01-01"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateQuote(ctx, a, &Quote{BookID: b.ID, Text: "kept"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutCharacters(ctx, a, b.ID, "en", CharacterSet{Status: "none"}); err != nil {
+		t.Fatal(err)
+	}
+	b2 := other.ID
+	if r, _ := s.ListReads(ctx, b2, b.ID); len(r) != 0 {
+		t.Error("reads of another user's book")
+	}
+	if q, _ := s.ExistingQuoteTexts(ctx, b2, b.ID); len(q) != 0 {
+		t.Error("quote texts of another user's book")
+	}
+	if c, _ := s.Characters(ctx, b2, b.ID); len(c) != 0 {
+		t.Error("characters of another user's book")
+	}
+	if err := s.PutCharacters(ctx, b2, b.ID, "en", CharacterSet{Status: "ok"}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("wrote characters on another user's book: %v", err)
+	}
+	if err := s.DeleteCharacters(ctx, b2, b.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("deleted characters of another user's book: %v", err)
+	}
+	if books, _, _ := s.MissingCharacters(ctx, b2, []string{"sr"}, 0); len(books) != 0 {
+		t.Error("missing characters lists another user's book")
+	}
+	if c := s.UserCounts(ctx, b2); c["books"] != 0 || c["reads"] != 0 || c["quotes"] != 0 {
+		t.Errorf("counts of another user's shelf: %v", c)
+	}
+	if c := s.UserCounts(ctx, a); c["books"] != 1 || c["reads"] != 1 || c["quotes"] != 1 {
+		t.Errorf("own counts: %v", c)
 	}
 }

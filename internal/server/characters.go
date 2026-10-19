@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -9,14 +10,16 @@ import (
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
 
-// Characters are written outside the app — by a language model through the
-// API (scripts/characters.py lists what is missing and sends results back) —
-// in each preferred language, and shown on the book page.
+// Characters are written by a language model — by the app with the person's
+// own OpenAI key, or outside it through the API with their API token
+// (scripts/characters.py lists what is missing and sends results back) — in
+// each of the person's preferred languages, and shown on the book page. Only
+// the owner of a book can read or write its characters.
 
 var langCode = regexp.MustCompile(`^[a-z]{2,3}$`)
 
-func (s *Server) characterLangs() []string {
-	langs := s.languages()
+func (s *Server) characterLangs(ctx context.Context, uid int64) []string {
+	langs := s.languages(ctx, uid)
 	if len(langs) == 0 {
 		return []string{"en"}
 	}
@@ -29,12 +32,12 @@ func (s *Server) handleGetCharacters(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "get book")
 		return
 	}
-	sets, err := s.store.Characters(r.Context(), b.ID)
+	sets, err := s.store.Characters(r.Context(), b.UserID, b.ID)
 	if err != nil {
 		s.fail(w, err, "characters")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "sets": sets, "writer": s.characterWriter(r.Context())})
+	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(r.Context(), b.UserID), "sets": sets, "writer": s.characterWriter(r.Context(), b.UserID)})
 }
 
 // handlePutCharacters saves characters in one or more languages:
@@ -68,23 +71,19 @@ func (s *Server) handlePutCharacters(w http.ResponseWriter, r *http.Request) {
 		in.Sets[lang] = cleanCharacters(cs, in.Source)
 	}
 	for lang, cs := range in.Sets {
-		if err := s.store.PutCharacters(r.Context(), b.ID, lang, cs); err != nil {
+		if err := s.store.PutCharacters(r.Context(), b.UserID, b.ID, lang, cs); err != nil {
 			s.fail(w, err, "save characters")
 			return
 		}
 	}
-	sets, _ := s.store.Characters(r.Context(), b.ID)
-	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "sets": sets})
+	sets, _ := s.store.Characters(r.Context(), b.UserID, b.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(r.Context(), b.UserID), "sets": sets})
 }
 
-// characterBook is the book a write is for: the user's own, or any book for
-// an admin (the character writer runs with an admin token for the household).
+// characterBook is the book a write is for: always one of the caller's own
+// (admins included — an external writer uses the token of the shelf's owner).
 func (s *Server) characterBook(r *http.Request) (*store.Book, error) {
-	id := idParam(r, "id")
-	if u := userFrom(r.Context()); u != nil && u.Role == "admin" {
-		return s.store.GetBookAnyUser(r.Context(), id)
-	}
-	return s.store.GetBook(r.Context(), me(r), id)
+	return s.store.GetBook(r.Context(), me(r), idParam(r, "id"))
 }
 
 func cleanCharacters(cs store.CharacterSet, source string) store.CharacterSet {
@@ -115,30 +114,26 @@ func (s *Server) handleDeleteCharacters(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, err, "get book")
 		return
 	}
-	if err := s.store.DeleteCharacters(r.Context(), b.ID); err != nil {
+	if err := s.store.DeleteCharacters(r.Context(), b.UserID, b.ID); err != nil {
 		s.fail(w, err, "delete characters")
 		return
 	}
 	s.chars.mu.Lock()
-	delete(s.chars.retryAt, b.ID)
+	delete(s.chars.retryAt[b.UserID], b.ID)
 	s.chars.mu.Unlock()
 	s.kickCharacters()
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleMissingCharacters lists books without characters in some preferred
-// language, with what a writer needs to identify the book. Admins get every
-// user's books.
+// handleMissingCharacters lists the caller's books without characters in
+// some preferred language, with what a writer needs to identify the book.
 func (s *Server) handleMissingCharacters(w http.ResponseWriter, r *http.Request) {
 	uid := me(r)
-	if u := userFrom(r.Context()); u != nil && u.Role == "admin" {
-		uid = 0
-	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 {
 		limit = 20
 	}
-	books, missing, err := s.store.MissingCharacters(r.Context(), uid, s.characterLangs(), limit)
+	books, missing, err := s.store.MissingCharacters(r.Context(), uid, s.characterLangs(r.Context(), uid), limit)
 	if err != nil {
 		s.fail(w, err, "characters")
 		return
@@ -169,5 +164,5 @@ func (s *Server) handleMissingCharacters(w http.ResponseWriter, r *http.Request)
 		out[i] = it
 	}
 	// "writer": "app" — the app writes characters itself (it has an OpenAI key); external writers stand aside.
-	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(), "books": out, "writer": s.characterWriter(r.Context())})
+	writeJSON(w, http.StatusOK, map[string]any{"langs": s.characterLangs(r.Context(), uid), "books": out, "writer": s.characterWriter(r.Context(), uid)})
 }

@@ -65,8 +65,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1), charKick: make(chan struct{}, 1)}
 	st.OnAuthorsChanged = s.kickAuthors
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
-	s.meta = metadata.New(ua, cfg.MetadataTimeout, s.googleKey)
-	s.meta.Langs = s.languages
+	s.meta = metadata.New(ua, cfg.MetadataTimeout, nil) // no key, no languages: see metaFor
 	s.meta.Country = cfg.GoogleBooksCountry
 	s.meta.Cache = store.MetaCache{S: st}
 	s.core = core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token", UserAgent: ua})
@@ -75,21 +74,45 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	return s
 }
 
-// googleKey prefers the key saved in Settings over GOOGLE_BOOKS_API_KEY.
-func (s *Server) googleKey() string {
-	if st, err := s.store.GetSettings(context.Background()); err == nil && st.GoogleBooksKey != "" {
-		return st.GoogleBooksKey
-	}
-	return s.cfg.GoogleBooksKey
+// isOwner reports whether uid is the account the box was set up with. Keys
+// given to the whole box through the environment (GOOGLE_BOOKS_API_KEY,
+// OPENAI_API_KEY) are the owner's; other people bring their own.
+func (s *Server) isOwner(ctx context.Context, uid int64) bool {
+	return uid > 0 && uid == s.store.OwnerID(ctx)
 }
 
-// languages are the preferred edition languages from Settings → Metadata.
-func (s *Server) languages() []string {
-	st, err := s.store.GetSettings(context.Background())
+// googleKey is the person's Google Books key from Settings → Metadata, else
+// (for the owner) GOOGLE_BOOKS_API_KEY.
+func (s *Server) googleKey(ctx context.Context, uid int64, st store.Settings) string {
+	if st.GoogleBooksKey != "" {
+		return st.GoogleBooksKey
+	}
+	if s.cfg.GoogleBooksKey != "" && s.isOwner(ctx, uid) {
+		return s.cfg.GoogleBooksKey
+	}
+	return ""
+}
+
+// languages are the person's preferred edition languages from Settings → Metadata.
+func (s *Server) languages(ctx context.Context, uid int64) []string {
+	st, err := s.store.GetSettings(ctx, uid)
 	if err != nil || st.Languages == "" {
 		return nil
 	}
 	return strings.Split(st.Languages, ",")
+}
+
+// metaFor is the catalogue client with one person's Google Books key and
+// preferred languages. The catalogue cache behind it is shared: it holds
+// public catalogue answers only.
+func (s *Server) metaFor(ctx context.Context, uid int64) *metadata.Client {
+	st, _ := s.store.GetSettings(ctx, uid)
+	key := s.googleKey(ctx, uid, st)
+	var langs []string
+	if st.Languages != "" {
+		langs = strings.Split(st.Languages, ",")
+	}
+	return s.meta.With(func() string { return key }, func() []string { return langs })
 }
 
 // Bootstrap seeds the first admin (if configured) and demo data.
@@ -110,9 +133,9 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		if err := s.store.CreateUser(ctx, u); err != nil {
 			return err
 		}
-		st, _ := s.store.GetSettings(ctx)
+		st, _ := s.store.GetSettings(ctx, 0)
 		st.SetupComplete = true
-		if err := s.store.SaveSettings(ctx, st); err != nil {
+		if err := s.store.SaveBoxSettings(ctx, st); err != nil {
 			return err
 		}
 		s.log.Info("admin user created from environment", "email", u.Email)
@@ -390,14 +413,20 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 	return nil
 }
 
-// publish sends an event to Core without blocking the request.
-func (s *Server) publish(topic, subject string, payload map[string]any) {
+// publish sends an event to Core without blocking the request. The payload
+// names whose shelf it happened on (user_id, user_email), so subscribers can
+// keep one person's reading apart from another's.
+func (s *Server) publish(userID int64, topic, subject string, payload map[string]any) {
 	if !s.core.Configured() {
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		payload["user_id"] = userID
+		if u, err := s.store.GetUser(ctx, userID); err == nil {
+			payload["user_email"] = u.Email
+		}
 		if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
 			s.log.Warn("pocket core: publish failed", "topic", topic, "err", err)
 		}

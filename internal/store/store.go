@@ -119,13 +119,30 @@ func (s *Store) Backup(ctx context.Context, dst string) error {
 	return err
 }
 
-// Counts returns row counts per table for metrics / the About page.
+// Counts returns row counts per table for /metrics (whole box, numbers only).
 func (s *Store) Counts(ctx context.Context) map[string]int {
 	out := map[string]int{}
 	for _, t := range []string{"books", "reads", "quotes", "authors", "users", "api_tokens"} {
 		var n int
 		if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM `+t).Scan(&n); err == nil {
 			out[t] = n
+		}
+	}
+	return out
+}
+
+// UserCounts returns how much is on one user's shelf, for the About page.
+func (s *Store) UserCounts(ctx context.Context, userID int64) map[string]int {
+	out := map[string]int{}
+	for k, q := range map[string]string{
+		"books":   `SELECT COUNT(1) FROM books WHERE user_id = ?`,
+		"reads":   `SELECT COUNT(1) FROM reads r JOIN books b ON b.id = r.book_id WHERE b.user_id = ?`,
+		"quotes":  `SELECT COUNT(1) FROM quotes q JOIN books b ON b.id = q.book_id WHERE b.user_id = ?`,
+		"authors": `SELECT COUNT(1) FROM authors WHERE user_id = ?`,
+	} {
+		var n int
+		if err := s.DB.QueryRowContext(ctx, q, userID).Scan(&n); err == nil {
+			out[k] = n
 		}
 	}
 	return out

@@ -85,12 +85,12 @@ func namesMatch(want string, names []string) bool {
 
 // resolveAuthorKey finds the Open Library key of a shelf author: through the
 // works of their books first (exact), then by name search.
-func (s *Server) resolveAuthorKey(ctx context.Context, a *store.Author) (string, *metadata.AuthorInfo, error) {
+func (s *Server) resolveAuthorKey(ctx context.Context, m *metadata.Client, a *store.Author) (string, *metadata.AuthorInfo, error) {
 	if a.OLKey != "" {
-		info, err := s.meta.AuthorDetails(ctx, a.OLKey)
+		info, err := m.AuthorDetails(ctx, a.OLKey)
 		return a.OLKey, info, err
 	}
-	keys, books, err := s.store.AuthorWorkKeys(ctx, a.ID)
+	keys, books, err := s.store.AuthorWorkKeys(ctx, a.UserID, a.ID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -100,7 +100,7 @@ func (s *Server) resolveAuthorKey(ctx context.Context, a *store.Author) (string,
 		if n++; n > 3 {
 			break
 		}
-		authorKeys, err := s.meta.WorkAuthorKeys(ctx, workKey)
+		authorKeys, err := m.WorkAuthorKeys(ctx, workKey)
 		if err != nil {
 			return "", nil, err
 		}
@@ -116,7 +116,7 @@ func (s *Server) resolveAuthorKey(ctx context.Context, a *store.Author) (string,
 				continue
 			}
 			tried[k] = true
-			info, err := s.meta.AuthorDetails(ctx, k)
+			info, err := m.AuthorDetails(ctx, k)
 			if err != nil {
 				return "", nil, err
 			}
@@ -124,8 +124,8 @@ func (s *Server) resolveAuthorKey(ctx context.Context, a *store.Author) (string,
 				// Open Library has duplicate, nearly empty author records and a work
 				// may point at one. When the name search finds the same person with
 				// far more works, that is the real record.
-				if k2, n2, n1 := s.bestByName(ctx, a.Name, k); k2 != "" && k2 != k && n2 > 2*n1+5 {
-					if info2, err := s.meta.AuthorDetails(ctx, k2); err == nil {
+				if k2, n2, n1 := s.bestByName(ctx, m, a.Name, k); k2 != "" && k2 != k && n2 > 2*n1+5 {
+					if info2, err := m.AuthorDetails(ctx, k2); err == nil {
 						return k2, info2, nil
 					}
 				}
@@ -133,14 +133,14 @@ func (s *Server) resolveAuthorKey(ctx context.Context, a *store.Author) (string,
 			}
 		}
 	}
-	k, info := s.searchAuthorKey(ctx, a.Name)
+	k, info := s.searchAuthorKey(ctx, m, a.Name)
 	return k, info, nil
 }
 
 // bestByName returns the most prolific search result whose name matches,
 // its work count, and the work count of `other` among the same results.
-func (s *Server) bestByName(ctx context.Context, name, other string) (key string, works, otherWorks int) {
-	found, err := s.meta.SearchAuthors(ctx, name, 10)
+func (s *Server) bestByName(ctx context.Context, m *metadata.Client, name, other string) (key string, works, otherWorks int) {
+	found, err := m.SearchAuthors(ctx, name, 10)
 	if err != nil {
 		return "", 0, 0
 	}
@@ -160,12 +160,12 @@ func (s *Server) bestByName(ctx context.Context, name, other string) (key string
 }
 
 // searchAuthorKey finds an author by name alone.
-func (s *Server) searchAuthorKey(ctx context.Context, name string) (string, *metadata.AuthorInfo) {
-	key, _, _ := s.bestByName(ctx, name, "")
+func (s *Server) searchAuthorKey(ctx context.Context, m *metadata.Client, name string) (string, *metadata.AuthorInfo) {
+	key, _, _ := s.bestByName(ctx, m, name, "")
 	if key == "" {
 		return "", nil
 	}
-	info, err := s.meta.AuthorDetails(ctx, key)
+	info, err := m.AuthorDetails(ctx, key)
 	if err != nil {
 		return "", nil
 	}
@@ -174,8 +174,9 @@ func (s *Server) searchAuthorKey(ctx context.Context, name string) (string, *met
 
 // enrichAuthor fills bio, dates, Wikipedia link and photo from the catalogues.
 // The name on the shelf is kept; hand-edited fields are not overwritten.
+// Lookups use the settings (languages) of the person whose author it is.
 func (s *Server) enrichAuthor(ctx context.Context, a *store.Author) error {
-	key, info, err := s.resolveAuthorKey(ctx, a)
+	key, info, err := s.resolveAuthorKey(ctx, s.metaFor(ctx, a.UserID), a)
 	if err != nil {
 		return err
 	}
@@ -276,7 +277,7 @@ func (s *Server) handleResolveAuthor(w http.ResponseWriter, r *http.Request) {
 // handleSearchAuthors searches Open Library; results already on the shelf
 // carry their author id.
 func (s *Server) handleSearchAuthors(w http.ResponseWriter, r *http.Request) {
-	found, err := s.meta.SearchAuthors(r.Context(), r.URL.Query().Get("q"), 12)
+	found, err := s.metaFor(r.Context(), me(r)).SearchAuthors(r.Context(), r.URL.Query().Get("q"), 12)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"results": []any{}})
 		return
@@ -313,7 +314,7 @@ func (s *Server) handleCreateAuthor(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name, in.Key = strings.TrimSpace(in.Name), strings.TrimSpace(strings.TrimPrefix(in.Key, "/authors/"))
 	if in.Name == "" && in.Key != "" {
-		if info, err := s.meta.AuthorDetails(r.Context(), in.Key); err == nil {
+		if info, err := s.metaFor(r.Context(), me(r)).AuthorDetails(r.Context(), in.Key); err == nil {
 			in.Name = info.Name
 		}
 	}
@@ -446,12 +447,12 @@ func (s *Server) handleAuthorWorks(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"works": []any{}, "linked": false})
 		return
 	}
-	works, err := s.meta.AuthorWorks(r.Context(), a.OLKey, 80)
+	works, err := s.metaFor(r.Context(), me(r)).AuthorWorks(r.Context(), a.OLKey, 80)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"works": []any{}, "linked": true, "unavailable": true})
 		return
 	}
-	keys, books, _ := s.store.AuthorWorkKeys(r.Context(), a.ID)
+	keys, books, _ := s.store.AuthorWorkKeys(r.Context(), a.UserID, a.ID)
 	type work struct {
 		metadata.Candidate
 		OnShelf int64 `json:"on_shelf,omitempty"`
@@ -481,7 +482,7 @@ func (s *Server) handleAuthorPhotoSuggestions(w http.ResponseWriter, r *http.Req
 		s.fail(w, err, "get author")
 		return
 	}
-	photos := s.meta.AuthorPhotoSuggestions(r.Context(), a.OLKey, a.Name, a.Wikipedia)
+	photos := s.metaFor(r.Context(), me(r)).AuthorPhotoSuggestions(r.Context(), a.OLKey, a.Name, a.Wikipedia)
 	if photos == nil {
 		photos = []metadata.CoverOption{}
 	}

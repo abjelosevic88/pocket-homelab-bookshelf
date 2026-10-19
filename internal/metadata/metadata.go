@@ -63,6 +63,17 @@ func New(userAgent string, timeout time.Duration, googleKey func() string) *Clie
 	return &Client{HTTP: &http.Client{Timeout: timeout}, UserAgent: userAgent, GoogleKey: googleKey}
 }
 
+// With returns a copy of the client that uses another Google Books key and
+// other preferred languages (one person's settings); caches stay shared.
+func (c *Client) With(googleKey func() string, langs func() []string) *Client {
+	cp := *c
+	if googleKey == nil {
+		googleKey = func() string { return "" }
+	}
+	cp.GoogleKey, cp.Langs = googleKey, langs
+	return &cp
+}
+
 // ErrNoGoogleKey is returned when Google Books is asked for without a key.
 var ErrNoGoogleKey = errors.New("Google Books needs an API key (Settings → Metadata)")
 

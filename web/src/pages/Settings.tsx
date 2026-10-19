@@ -50,11 +50,13 @@ function useSettingsForm() {
 
 function General() {
   const { f, setF, save, busy } = useSettingsForm()
+  const { user } = useApp()
   if (!f) return <Loading />
   return (
     <Card title="Preferences">
       <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
-        <Field label="App title" help="Shown in the sidebar and browser tab."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>
+        <p className="muted">These are yours: everyone in the household has their own goal, start page, languages, templates and keys.</p>
+        {user?.role === 'admin' && <Field label="App title" help="Shown in the sidebar and browser tab, for everyone."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>}
         <Field label="Yearly reading goal" help="Books per year. 0 = no goal. Shown on Now, Plan and Stats."><input type="number" min={0} max={1000} value={f.yearly_goal} onChange={e => setF({ ...f, yearly_goal: Math.max(0, Number(e.target.value) || 0) })} style={{ maxWidth: 120 }} /></Field>
         <Field group label="Open on"><Segmented value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'now', label: 'Now' }, { value: 'library', label: 'Library' }, { value: 'planner', label: 'Plan' }]} /></Field>
         <div><button className="btn primary" onClick={save} disabled={busy}>Save</button></div>
@@ -120,7 +122,7 @@ function Users() {
   const run = async (fn: () => Promise<unknown>, msg: string) => { try { await fn(); await reloadMeta(); toast(msg) } catch (e) { toast((e as Error).message, 'err') } }
   return (
     <Card title="Users" actions={isAdmin && <button className="btn primary sm" onClick={() => setEdit({ role: 'member' })}>+ Add user</button>}>
-      <p className="muted">Everyone signs in with their own account and keeps their own shelf: books, ratings, thoughts, quotes and plan are private to each person. Admins manage users and the shared settings.</p>
+      <p className="muted">Everyone signs in with their own account and keeps their own shelf: books, ratings, thoughts, quotes, plan, goal, settings and keys are private to each person — admins included. Admins manage the accounts and the app title.</p>
       <table className="table compact">
         <thead><tr><th /><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
         <tbody>
@@ -219,8 +221,9 @@ function Tokens() {
 
 function Data() {
   const { toast } = useToast()
+  const { user } = useApp()
   const [busy, setBusy] = useState(false)
-  const [covers, setCovers] = useState<{ running: boolean; done: number; found: number; total: number } | null>(null)
+  const [covers, setCovers] = useState<{ running: boolean; busy?: boolean; done: number; found: number; total: number } | null>(null)
   const [kindle, setKindle] = useState(false)
   const importJSON = async (file: File) => {
     setBusy(true)
@@ -237,10 +240,10 @@ function Data() {
   }
   return (
     <div className="two-col">
-      <Card title="Backup">
-        <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>). Covers live next to it in <code>covers/</code>. Restore by stopping the app and replacing <code>pocket-bookshelf.db</code> in the data directory.</p>
+      {user?.role === 'admin' && <Card title="Backup">
+        <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>) — every account's shelf, so only admins can take it. Covers live next to it in <code>covers/</code>. Restore by stopping the app and replacing <code>pocket-bookshelf.db</code> in the data directory.</p>
         <a className="btn primary" href={`${V1}/backup`}>Download database</a>
-      </Card>
+      </Card>}
       <Card title="Export & import">
         <p className="muted">JSON is complete (books, thoughts, reading history, quotes) and can be imported again. CSV is one row per book for spreadsheets.</p>
         <div className="row mb wrap"><a className="btn" href={`${V1}/export.json`}>Export JSON</a><a className="btn" href={`${V1}/export.csv`}>Export CSV</a></div>
@@ -253,7 +256,7 @@ function Data() {
         <p className="muted small mt">Goodreads: My Books → Import and export → Export library. StoryGraph: Manage account → Export. Ratings, reviews, read dates and shelves come along; books already on your shelf are skipped. Covers are looked up afterwards by ISBN.</p>
         <hr className="mt mb" />
         <div className="row wrap"><button className="btn" onClick={() => pollCovers(true)} disabled={covers?.running}>Find missing covers</button>
-          {covers && <span className="muted small">{covers.running ? `Looking up… ${covers.done}/${covers.total}` : `Done: ${covers.found} of ${covers.total} found`}</span>}</div>
+          {covers && <span className="muted small">{covers.running ? `Looking up… ${covers.done}/${covers.total}` : covers.busy ? 'Another cover lookup is running; try again in a few minutes' : `Done: ${covers.found} of ${covers.total} found`}</span>}</div>
         <p className="muted small mt">Checks Open Library by ISBN for books without a cover, one every few seconds.</p>
       </Card>
     </div>
@@ -277,7 +280,7 @@ function About() {
             <tr><th>Covers</th><td className="mono">{String(data.covers)} files · {(Number(data.cover_bytes) / 1024 / 1024).toFixed(1)} MB</td></tr>
             <tr><th>Timezone</th><td className="mono">{String(data.timezone)}</td></tr>
             <tr><th>Uptime</th><td className="mono">{String(data.uptime)}</td></tr>
-            <tr><th>Rows</th><td className="mono">{counts.books} books · {counts.reads} reads · {counts.quotes} quotes · {counts.users} users</td></tr>
+            <tr><th>Your shelf</th><td className="mono">{counts.books} books · {counts.reads} reads · {counts.quotes} quotes{counts.users !== undefined && <> · {counts.users} accounts on this box</>}</td></tr>
           </tbody>
         </table>
       )}
@@ -342,11 +345,9 @@ function Templates() {
 interface AISettings { key_set: boolean; key_hint: string; key_env: boolean; model: string; default_model: string; web_search: boolean }
 interface CharacterStatus { writer: 'app' | 'external'; running: boolean; paused: boolean; waiting: number; written: number; failed: number; last_error: string; last_run?: string }
 
-/** AI: an OpenAI key lets the app write every book's characters itself. */
+/** AI: your own OpenAI key lets the app write the characters of your books itself. */
 function AITab() {
-  const { user } = useApp()
   const { toast } = useToast()
-  const isAdmin = user?.role === 'admin'
   const { data, setData } = useAsync(() => api.get<AISettings>(`${V1}/settings/ai`), [])
   const status = useAsync(() => api.get<CharacterStatus>(`${V1}/characters/status`), [])
   const [key, setKey] = useState('')
@@ -356,7 +357,7 @@ function AITab() {
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (data) { setModel(data.model); setWeb(data.web_search) } }, [data])
   // the model list comes from the account behind the saved key
-  useEffect(() => { if (isAdmin && (data?.key_set || data?.key_env)) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [isAdmin, data?.key_set, data?.key_env])
+  useEffect(() => { if (data?.key_set || data?.key_env) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [data?.key_set, data?.key_env])
   // follow a run while it is going
   useEffect(() => {
     if (!status.data?.running) return
@@ -387,29 +388,27 @@ function AITab() {
     <div className="two-col">
       <Card title="OpenAI">
         <div className="grid" style={{ gap: 14 }}>
-          <p className="muted">With an OpenAI API key the app writes the characters of every novel itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account.</p>
-          <Field label="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database; only admins can change it. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
-            <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} disabled={!isAdmin} />
+          <p className="muted">With your own OpenAI API key the app writes the characters of the novels on your shelf itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account. Other people's keys are never used for your books.</p>
+          <Field label="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
+            <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} />
           </Field>
           <Field label="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
             {models.length > 0
-              ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} disabled={!isAdmin} clearLabel="Default" />
-              : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} disabled={!isAdmin} />}
+              ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} clearLabel="Default" />
+              : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} />}
           </Field>
           <div>
-            <label className="row"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} style={{ width: 'auto' }} disabled={!isAdmin} /> Let it look books up on the web</label>
+            <label className="row"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} style={{ width: 'auto' }} /> Let it look books up on the web</label>
             <p className="muted small" style={{ margin: '4px 0 0 26px' }}>More accurate for translations and lesser-known books. OpenAI charges a small fee per search.</p>
           </div>
-          {isAdmin && (
-            <div className="row wrap">
-              <button className="btn primary" onClick={() => save()} disabled={busy}>Save</button>
-              <button className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
-              {data.key_set && <button className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
-            </div>
-          )}
+          <div className="row wrap">
+            <button className="btn primary" onClick={() => save()} disabled={busy}>Save</button>
+            <button className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
+            {data.key_set && <button className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
+          </div>
         </div>
       </Card>
-      <Card title="Characters" actions={st?.writer === 'app' && isAdmin ? <button className="btn ghost sm" onClick={run} disabled={st.running}>{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
+      <Card title="Characters" actions={st?.writer === 'app' ? <button className="btn ghost sm" onClick={run} disabled={st.running}>{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
         {st ? (
           <table className="table compact">
             <tbody>
