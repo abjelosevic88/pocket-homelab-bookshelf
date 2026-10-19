@@ -50,6 +50,9 @@ type Server struct {
 	coreOK   bool
 	coreErr  string
 	resolved map[string]resolvedURL
+
+	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
+	oidcMu sync.Mutex
 }
 
 type resolvedURL struct {
@@ -68,6 +71,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	s.meta.Cache = store.MetaCache{S: st}
 	s.core = core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token", UserAgent: ua})
 	s.resolved = map[string]resolvedURL{}
+	s.oidc = &oidcProvider{issuerURL: cfg.OIDCIssuer}
 	return s
 }
 
@@ -157,6 +161,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/setup", s.handleSetup)
 		r.Get("/auth/status", s.handleAuthStatus)
+		r.Get("/auth/oidc/start", s.handleOIDCStart)
+		r.Get("/auth/oidc/callback", s.handleOIDCCallback)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
@@ -361,13 +367,18 @@ func (s *Server) coreLoop(ctx context.Context) {
 }
 
 func (s *Server) registerWithCore(ctx context.Context) error {
-	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, core.Manifest{
+	m := core.Manifest{
 		Slug: "bookshelf", Name: "Pocket Bookshelf",
 		Description: "A small self-hosted reading log: what you read, what you thought of it, the lines worth keeping, and what to read next.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
-	})
+	}
+	if s.cfg.BaseURL != "" {
+		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
+		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
+	}
+	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, m)
 	if err != nil {
 		return err
 	}

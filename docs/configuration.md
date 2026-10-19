@@ -44,8 +44,16 @@ See [metadata.md](metadata.md) for what each catalogue gives you and how covers 
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | – | In `local` mode, create this admin on first start instead of showing the setup screen. Password must be 8+ characters. |
 | `SESSION_TTL` | `720h` | Browser session lifetime. |
 | `SECURE_COOKIES` | `false` | Mark the session cookie `Secure`. Turn on behind HTTPS. |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | – | Sign in with an OpenID Connect provider (PocketID, Authelia, Authentik, Keycloak…). Needs `BASE_URL`; the callback is `BASE_URL/api/v1/auth/oidc/callback`. On a box with Pocket Core none of these are needed — the app receives its client when it registers. |
+| `OIDC_NAME` | `single sign-on` | Button label: "Sign in with …" (the Core-issued client is labelled "Pocket Core"). |
+| `OIDC_AUTO_CREATE` | `true` | Give an unknown (verified) email a member account on first sign-in instead of refusing it. Always on for the Core-issued client. |
 
 Every user has **their own shelf** — books, ratings, thoughts, quotes, reading history and plan are private to each account. Roles: **admin** manages users and the shared settings; **member** has their shelf. API tokens (`Authorization: Bearer …` or `X-API-Key`) work in every mode and act as the user who created them.
+
+### Single sign-on (OIDC)
+
+In `local` mode a configured provider adds a "Sign in with …" button above the password form; the password form stays. Pocket Bookshelf uses the authorization-code flow with PKCE and the client secret, checks the ID token's RS256 signature against the provider's published keys (plus issuer, audience, expiry and nonce) and matches the person to a user by **verified** email. With Pocket Core on the box this is zero configuration: the app asks for a relying-party client when it registers and uses the one Core issues (kept in `$DATA_DIR/core.token.oidc.json`); explicit `OIDC_*` variables take precedence when set. Without Core and without `OIDC_*` nothing changes: no button, and `/api/v1/auth/oidc/*` answers 404.
+
 
 ## In-app settings
 
