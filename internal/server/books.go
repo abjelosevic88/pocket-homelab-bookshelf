@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -225,10 +226,12 @@ func (s *Server) handleUpdateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if newStatus != cur.Status && store.ValidStatus(newStatus) {
-		if _, err := s.store.SetStatus(r.Context(), b.UserID, b.ID, newStatus, ""); err != nil {
+		nb, err := s.store.SetStatus(r.Context(), b.UserID, b.ID, newStatus, "")
+		if err != nil {
 			s.fail(w, err, "set status")
 			return
 		}
+		s.publishStatus(nb, "")
 	}
 	resp := map[string]any{}
 	if ex.CoverURL != "" {
@@ -240,6 +243,9 @@ func (s *Server) handleUpdateBook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, err, "get book")
 		return
+	}
+	if saved.Rating != cur.Rating {
+		s.publishRated(saved)
 	}
 	resp["book"] = saved
 	writeJSON(w, http.StatusOK, resp)
@@ -285,6 +291,7 @@ func (s *Server) handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "set status")
 		return
 	}
+	s.publishStatus(b, in.Date)
 	if in.Rating != nil || in.Review != nil {
 		if in.Rating != nil {
 			b.Rating = *in.Rating
@@ -301,8 +308,47 @@ func (s *Server) handleSetStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		b, _ = s.store.GetBook(r.Context(), b.UserID, b.ID)
+		if in.Rating != nil && b != nil {
+			s.publishRated(b)
+		}
 	}
 	writeJSON(w, http.StatusOK, b)
+}
+
+// publishStatus tells Pocket Core a book was started, finished or abandoned
+// (a move back to "want" is not an event).
+func (s *Server) publishStatus(b *store.Book, date string) {
+	if b == nil {
+		return
+	}
+	var topic string
+	switch b.Status {
+	case store.StatusReading:
+		topic = "bookshelf.started"
+		if date == "" {
+			date = b.StartedOn
+		}
+	case store.StatusRead:
+		topic = "bookshelf.finished"
+		if date == "" {
+			date = b.FinishedOn
+		}
+	case store.StatusAbandoned:
+		topic = "bookshelf.abandoned"
+	default:
+		return
+	}
+	s.publish(topic, fmt.Sprintf("book:%d", b.ID), map[string]any{
+		"book_id": b.ID, "title": b.Title, "authors": b.Authors, "status": b.Status, "date": date,
+		"pages": b.Pages, "rating": b.Rating, "read_count": b.ReadCount, "series": b.Series,
+	})
+}
+
+// publishRated tells Pocket Core a book got a (new) rating.
+func (s *Server) publishRated(b *store.Book) {
+	s.publish("bookshelf.rated", fmt.Sprintf("book:%d", b.ID), map[string]any{
+		"book_id": b.ID, "title": b.Title, "authors": b.Authors, "rating": b.Rating, "status": b.Status, "favorite": b.Favorite,
+	})
 }
 
 // handleProgress records the current page ({"page": 120}) or percent
@@ -341,6 +387,7 @@ func (s *Server) handleProgress(w http.ResponseWriter, r *http.Request) {
 	}
 	if b.Status == store.StatusWant {
 		b, _ = s.store.SetStatus(r.Context(), b.UserID, b.ID, store.StatusReading, "")
+		s.publishStatus(b, "")
 	}
 	writeJSON(w, http.StatusOK, b)
 }

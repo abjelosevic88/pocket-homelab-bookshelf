@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/config"
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/core"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
@@ -42,6 +44,17 @@ type Server struct {
 	started    time.Time
 	requests   atomic.Int64
 	errors     atomic.Int64
+
+	core     *core.Client
+	coreMu   sync.Mutex
+	coreOK   bool
+	coreErr  string
+	resolved map[string]resolvedURL
+}
+
+type resolvedURL struct {
+	url string
+	at  time.Time
 }
 
 // New creates a server.
@@ -53,6 +66,8 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	s.meta.Langs = s.languages
 	s.meta.Country = cfg.GoogleBooksCountry
 	s.meta.Cache = store.MetaCache{S: st}
+	s.core = core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token", UserAgent: ua})
+	s.resolved = map[string]resolvedURL{}
 	return s
 }
 
@@ -113,6 +128,9 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	go s.characterWorker(ctx)
 	s.kickCharacters()
 	s.kickAuthors()
+	if s.core.Configured() {
+		go s.coreLoop(ctx)
+	}
 	return nil
 }
 
@@ -311,6 +329,91 @@ func validMonth(s string) bool {
 }
 
 // ---------- health / metrics ----------
+
+// ---- Pocket Core ----
+
+// coreLoop registers with Core on start (retrying until it answers) and
+// re-registers every 30 minutes so version and last-seen stay fresh.
+func (s *Server) coreLoop(ctx context.Context) {
+	wait := 5 * time.Second
+	for {
+		err := s.registerWithCore(ctx)
+		s.coreMu.Lock()
+		s.coreOK, s.coreErr = err == nil, ""
+		if err != nil {
+			s.coreErr = err.Error()
+		}
+		s.coreMu.Unlock()
+		if err != nil {
+			s.log.Warn("pocket core: registration failed, retrying", "err", err, "in", wait.String())
+		} else {
+			wait = 30 * time.Minute
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		if err != nil && wait < 5*time.Minute {
+			wait *= 2
+		}
+	}
+}
+
+func (s *Server) registerWithCore(ctx context.Context) error {
+	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, core.Manifest{
+		Slug: "bookshelf", Name: "Pocket Bookshelf",
+		Description: "A small self-hosted reading log: what you read, what you thought of it, the lines worth keeping, and what to read next.",
+		Icon:        "/favicon.svg", Version: Version,
+		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
+		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
+	})
+	if err != nil {
+		return err
+	}
+	if reg.Token != "" {
+		s.log.Info("pocket core: registered, app token stored", "core", s.cfg.CoreURL)
+	} else {
+		s.log.Debug("pocket core: re-registered", "core", s.cfg.CoreURL)
+	}
+	return nil
+}
+
+// publish sends an event to Core without blocking the request.
+func (s *Server) publish(topic, subject string, payload map[string]any) {
+	if !s.core.Configured() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
+			s.log.Warn("pocket core: publish failed", "topic", topic, "err", err)
+		}
+	}()
+}
+
+// resolveSibling asks Core where a sibling app lives (cached a minute) so the
+// *_URL settings may stay empty on a box with Core.
+func (s *Server) resolveSibling(ctx context.Context, slug string) string {
+	if !s.core.Configured() {
+		return ""
+	}
+	s.coreMu.Lock()
+	if r, ok := s.resolved[slug]; ok && time.Since(r.at) < time.Minute {
+		s.coreMu.Unlock()
+		return r.url
+	}
+	s.coreMu.Unlock()
+	url := ""
+	if res, err := s.core.Resolve(ctx, slug); err == nil {
+		url = res.URL
+	}
+	s.coreMu.Lock()
+	s.resolved[slug] = resolvedURL{url: url, at: time.Now()}
+	s.coreMu.Unlock()
+	return url
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": Version, "uptime": time.Since(s.started).Round(time.Second).String()})
