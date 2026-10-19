@@ -51,7 +51,7 @@ func (s *Server) handleGetBook(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "get book")
 		return
 	}
-	reads, err := s.store.ListReads(r.Context(), b.ID)
+	reads, err := s.store.ListReads(r.Context(), b.UserID, b.ID)
 	if err != nil {
 		s.fail(w, err, "list reads")
 		return
@@ -338,7 +338,7 @@ func (s *Server) publishStatus(b *store.Book, date string) {
 	default:
 		return
 	}
-	s.publish(topic, fmt.Sprintf("book:%d", b.ID), map[string]any{
+	s.publish(b.UserID, topic, fmt.Sprintf("book:%d", b.ID), map[string]any{
 		"book_id": b.ID, "title": b.Title, "authors": b.Authors, "status": b.Status, "date": date,
 		"pages": b.Pages, "rating": b.Rating, "read_count": b.ReadCount, "series": b.Series,
 	})
@@ -346,7 +346,7 @@ func (s *Server) publishStatus(b *store.Book, date string) {
 
 // publishRated tells Pocket Core a book got a (new) rating.
 func (s *Server) publishRated(b *store.Book) {
-	s.publish("bookshelf.rated", fmt.Sprintf("book:%d", b.ID), map[string]any{
+	s.publish(b.UserID, "bookshelf.rated", fmt.Sprintf("book:%d", b.ID), map[string]any{
 		"book_id": b.ID, "title": b.Title, "authors": b.Authors, "rating": b.Rating, "status": b.Status, "favorite": b.Favorite,
 	})
 }
@@ -417,7 +417,7 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	st, _ := s.store.GetSettings(r.Context())
+	st, _ := s.store.GetSettings(r.Context(), me(r))
 	d, err := s.store.GetDashboard(r.Context(), me(r), st.YearlyGoal)
 	if err != nil {
 		s.fail(w, err, "dashboard")
@@ -427,7 +427,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	st, _ := s.store.GetSettings(r.Context())
+	st, _ := s.store.GetSettings(r.Context(), me(r))
 	year := int(queryInt(r, "year"))
 	goal := 0
 	if year == 0 || year == time.Now().Year() {
@@ -571,11 +571,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	source := q.Get("source")
 	if source == "" {
-		st, _ := s.store.GetSettings(r.Context())
+		st, _ := s.store.GetSettings(r.Context(), me(r))
 		source = st.SearchSource
 	}
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	results, warnings, err := s.meta.Search(r.Context(), q.Get("q"), source, limit)
+	meta := s.metaFor(r.Context(), me(r))
+	results, warnings, err := meta.Search(r.Context(), q.Get("q"), source, limit)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "warnings": warnings})
 		return
@@ -603,12 +604,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, res)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"results": out, "warnings": warnings, "sources": s.meta.Sources()})
+	writeJSON(w, http.StatusOK, map[string]any{"results": out, "warnings": warnings, "sources": meta.Sources()})
 }
 
 func (s *Server) handleSearchDetails(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	c, err := s.meta.Details(r.Context(), q.Get("source"), q.Get("id"))
+	c, err := s.metaFor(r.Context(), me(r)).Details(r.Context(), q.Get("source"), q.Get("id"))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
@@ -708,7 +709,7 @@ func (s *Server) handleCoverSuggestions(w http.ResponseWriter, r *http.Request) 
 	if b.Source == "openlibrary" {
 		work = b.SourceID
 	}
-	covers := s.meta.CoverSuggestions(r.Context(), work, b.Title, b.Authors)
+	covers := s.metaFor(r.Context(), me(r)).CoverSuggestions(r.Context(), work, b.Title, b.Authors)
 	if covers == nil {
 		covers = []metadata.CoverOption{}
 	}

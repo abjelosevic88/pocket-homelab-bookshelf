@@ -363,8 +363,9 @@ func (s *Store) PendingAuthors(ctx context.Context, limit int) ([]Author, error)
 
 // AuthorWorkKeys returns the Open Library work keys and titles of the user's
 // books by an author, for marking a bibliography.
-func (s *Store) AuthorWorkKeys(ctx context.Context, authorID int64) (map[string]int64, []Book, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT b.id, b.source, b.source_id, b.title FROM books b JOIN book_authors ba ON ba.book_id = b.id WHERE ba.author_id = ?`, authorID)
+func (s *Store) AuthorWorkKeys(ctx context.Context, userID, authorID int64) (map[string]int64, []Book, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT b.id, b.source, b.source_id, b.title FROM books b JOIN book_authors ba ON ba.book_id = b.id
+		WHERE ba.author_id = ? AND b.user_id = ?`, authorID, userID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -393,6 +394,6 @@ func (s *Store) DeleteAuthor(ctx context.Context, userID, id int64) error {
 	if a.Books > 0 {
 		return ErrConflict
 	}
-	_, err = s.DB.ExecContext(ctx, `DELETE FROM authors WHERE id = ?`, id)
+	_, err = s.DB.ExecContext(ctx, `DELETE FROM authors WHERE id = ? AND user_id = ?`, id, userID)
 	return err
 }

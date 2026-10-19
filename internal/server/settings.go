@@ -17,27 +17,30 @@ import (
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
 
+// Settings are the box title (admins change it) plus the caller's own
+// preferences: goal, landing page, search, languages, templates, Google key.
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	st, err := s.store.GetSettings(r.Context())
+	st, err := s.store.GetSettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, s.publicSettings(st))
+	writeJSON(w, http.StatusOK, s.publicSettings(r.Context(), me(r), st))
 }
 
 // publicSettings adds what the UI needs to know about the environment.
-func (s *Server) publicSettings(st store.Settings) map[string]any {
+func (s *Server) publicSettings(ctx context.Context, uid int64, st store.Settings) map[string]any {
 	return map[string]any{
 		"title": st.Title, "yearly_goal": st.YearlyGoal, "landing": st.Landing, "search_source": st.SearchSource,
-		"google_books_key": st.GoogleBooksKey, "google_books_env": s.cfg.GoogleBooksKey != "", "sources": s.meta.Sources(),
+		"google_books_key": st.GoogleBooksKey, "google_books_env": s.cfg.GoogleBooksKey != "" && s.isOwner(ctx, uid),
+		"sources":   s.metaFor(ctx, uid).Sources(),
 		"languages": st.Languages, "thought_templates": st.ThoughtTemplates,
 		"setup_complete": st.SetupComplete,
 	}
 }
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	cur, err := s.store.GetSettings(r.Context())
+	cur, err := s.store.GetSettings(r.Context(), me(r))
 	if err != nil {
 		s.fail(w, err, "settings")
 		return
@@ -79,14 +82,23 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	in.ThoughtTemplates = tpls
 	in.SetupComplete = cur.SetupComplete
-	if err := s.store.SaveSettings(r.Context(), in); err != nil {
+	if u := userFrom(r.Context()); u == nil || u.Role != "admin" {
+		in.Title = cur.Title // the title is the box's: only admins change it
+	}
+	if err := s.store.SaveSettings(r.Context(), me(r), in); err != nil {
 		s.fail(w, err, "save settings")
 		return
+	}
+	if in.Title != cur.Title {
+		if err := s.store.SaveBoxSettings(r.Context(), in); err != nil {
+			s.fail(w, err, "save settings")
+			return
+		}
 	}
 	if in.Languages != cur.Languages {
 		s.kickCharacters() // a new preferred language needs characters
 	}
-	writeJSON(w, http.StatusOK, s.publicSettings(in))
+	writeJSON(w, http.StatusOK, s.publicSettings(r.Context(), me(r), in))
 }
 
 func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
@@ -103,13 +115,20 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
+	// Row counts are of the caller's own shelf; how many accounts exist is for admins.
+	counts := s.store.UserCounts(r.Context(), me(r))
+	if u := userFrom(r.Context()); u != nil && u.Role == "admin" {
+		if n, err := s.store.CountUsers(r.Context()); err == nil {
+			counts["users"] = n
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": Version, "go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH,
 		"core":      s.coreStatus(),
 		"auth_mode": s.cfg.AuthMode, "data_dir": s.cfg.DataDir, "db_path": s.cfg.DBPath, "db_bytes": size,
 		"cover_dir": s.cfg.CoverDir, "covers": covers, "cover_bytes": coverBytes,
 		"uptime": time.Since(s.started).Round(time.Second).String(), "timezone": time.Now().Location().String(),
-		"counts": s.store.Counts(r.Context()), "sources": s.meta.Sources(),
+		"counts": counts, "sources": s.metaFor(r.Context(), me(r)).Sources(),
 	})
 }
 
@@ -122,7 +141,14 @@ func (s *Server) coreStatus() map[string]any {
 
 // ---------- backup / export / import ----------
 
+// handleBackup downloads the whole database — every account's shelf — so only
+// an admin, as the operator of the box, may take it. Everyone can export
+// their own shelf (export.json / export.csv).
 func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
+	if u := userFrom(r.Context()); u == nil || u.Role != "admin" {
+		writeErr(w, http.StatusForbidden, "only an admin can download the database; export your shelf instead")
+		return
+	}
 	dir := filepath.Join(s.cfg.DataDir, "backups")
 	name := fmt.Sprintf("pocket-bookshelf-%s.db", time.Now().Format("20060102-150405"))
 	dst := filepath.Join(dir, name)
@@ -162,7 +188,7 @@ func (s *Server) buildExport(ctx context.Context, userID int64) (*Export, error)
 		return nil, err
 	}
 	for _, b := range books {
-		reads, err := s.store.ListReads(ctx, b.ID)
+		reads, err := s.store.ListReads(ctx, userID, b.ID)
 		if err != nil {
 			return nil, err
 		}

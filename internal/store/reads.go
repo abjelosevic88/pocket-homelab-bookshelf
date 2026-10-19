@@ -2,10 +2,11 @@ package store
 
 import "context"
 
-// ListReads returns the reads of a book, newest first.
-func (s *Store) ListReads(ctx context.Context, bookID int64) ([]Read, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, book_id, started_on, finished_on, abandoned, created_at FROM reads WHERE book_id = ?
-		ORDER BY (finished_on = '') DESC, COALESCE(NULLIF(finished_on, ''), started_on) DESC, id DESC`, bookID)
+// ListReads returns the reads of one of the user's books, newest first.
+func (s *Store) ListReads(ctx context.Context, userID, bookID int64) ([]Read, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT r.id, r.book_id, r.started_on, r.finished_on, r.abandoned, r.created_at FROM reads r
+		JOIN books b ON b.id = r.book_id WHERE r.book_id = ? AND b.user_id = ?
+		ORDER BY (r.finished_on = '') DESC, COALESCE(NULLIF(r.finished_on, ''), r.started_on) DESC, r.id DESC`, bookID, userID)
 	if err != nil {
 		return nil, err
 	}

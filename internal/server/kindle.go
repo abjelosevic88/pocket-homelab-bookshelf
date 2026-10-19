@@ -98,6 +98,7 @@ func (s *Server) handleKindlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]kindlePreview, len(books))
+	meta := s.metaFor(r.Context(), me(r))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4) // be gentle with Open Library
 	for i, kb := range books {
@@ -122,7 +123,7 @@ func (s *Server) handleKindlePreview(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			p.Candidate = s.lookupKindleBook(r.Context(), kb)
+			p.Candidate = s.lookupKindleBook(r.Context(), meta, kb)
 			if p.Candidate != nil {
 				for _, b := range shelf {
 					if b.Source == "openlibrary" && b.SourceID == p.Candidate.SourceID {
@@ -138,7 +139,7 @@ func (s *Server) handleKindlePreview(w http.ResponseWriter, r *http.Request) {
 		if out[i].Match == nil {
 			continue
 		}
-		known, _ := s.store.ExistingQuoteTexts(r.Context(), out[i].Match.BookID)
+		known, _ := s.store.ExistingQuoteTexts(r.Context(), me(r), out[i].Match.BookID)
 		for _, e := range out[i].Entries {
 			if store.QuoteIsKnown(known, e.Text) {
 				out[i].Known++
@@ -170,7 +171,7 @@ func matchByTitle(kb kindle.Book, shelf []store.Book) *kindleMatch {
 
 // lookupKindleBook finds the catalogue record of a Kindle book; nil when no
 // result has a matching title and author.
-func (s *Server) lookupKindleBook(ctx context.Context, kb kindle.Book) *metadata.Candidate {
+func (s *Server) lookupKindleBook(ctx context.Context, m *metadata.Client, kb kindle.Book) *metadata.Candidate {
 	short := kb.Title
 	for _, sep := range []string{":", " (", "["} {
 		if i := strings.Index(short, sep); i > 0 {
@@ -178,7 +179,7 @@ func (s *Server) lookupKindleBook(ctx context.Context, kb kindle.Book) *metadata
 		}
 	}
 	for _, q := range []string{strings.TrimSpace(short + " " + kb.Author), kb.Title} {
-		results, err := s.meta.SearchOpenLibrary(ctx, q, 6)
+		results, err := m.SearchOpenLibrary(ctx, q, 6)
 		if err != nil {
 			continue
 		}
@@ -264,7 +265,7 @@ func (s *Server) createKindleBook(r *http.Request, kb kindleImportBook) (*store.
 	}
 	coverURL := ""
 	if c := kb.Candidate; c != nil {
-		if full, err := s.meta.Details(r.Context(), c.Source, c.SourceID); err == nil {
+		if full, err := s.metaFor(r.Context(), me(r)).Details(r.Context(), c.Source, c.SourceID); err == nil {
 			if c.Description == "" {
 				c.Description = full.Description
 			}

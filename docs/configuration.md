@@ -26,8 +26,8 @@ All settings are environment variables. Nothing is required.
 
 | Variable | Default | Description |
 |---|---|---|
-| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue. A key saved under Settings → Metadata takes precedence. |
-| `OPENAI_API_KEY` | – | Lets the app write book characters itself. A key saved under Settings → AI takes precedence. |
+| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue for the owner (first account). A key saved under Settings → Metadata takes precedence; other people save their own. |
+| `OPENAI_API_KEY` | – | Lets the app write the characters of the owner's books itself. A key saved under Settings → AI takes precedence; other people save their own. |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Another server speaking the OpenAI Responses API. |
 | `GOOGLE_BOOKS_COUNTRY` | `US` | Country sent to Google Books with every request (ISO code, e.g. `BA`). Google needs one and fails with *503 backendFailed* when it cannot place the server's IP address. |
 | `METADATA_TIMEOUT` | `12s` | Timeout for catalogue requests. |
@@ -48,7 +48,7 @@ See [metadata.md](metadata.md) for what each catalogue gives you and how covers 
 | `OIDC_NAME` | `single sign-on` | Button label: "Sign in with …" (the Core-issued client is labelled "Pocket Core"). |
 | `OIDC_AUTO_CREATE` | `true` | Give an unknown (verified) email a member account on first sign-in instead of refusing it. Always on for the Core-issued client. |
 
-Every user has **their own shelf** — books, ratings, thoughts, quotes, reading history and plan are private to each account. Roles: **admin** manages users and the shared settings; **member** has their shelf. API tokens (`Authorization: Bearer …` or `X-API-Key`) work in every mode and act as the user who created them.
+Every user has **their own shelf** — books, ratings, thoughts, quotes, reading history and plan are private to each account. Settings are personal too — yearly goal, start page, languages, templates, daily highlights, and the Google Books and OpenAI keys — and admins get no access to anyone else's shelf. Roles: **admin** manages the accounts, the app title and can download the whole database (`/backup`); **member** has their shelf. Keys set through the environment (`GOOGLE_BOOKS_API_KEY`, `OPENAI_API_KEY`) belong to the owner (the first account); others bring their own. API tokens (`Authorization: Bearer …` or `X-API-Key`) work in every mode and act as the user who created them.
 
 ### Single sign-on (OIDC)
 

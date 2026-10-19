@@ -116,7 +116,7 @@ Everything is an environment variable with a sensible default. The important one
 | `AUTH_MODE` | `local` | `local` (built-in login, multi-user), `proxy` (trust `Remote-User` from your SSO proxy; users auto-created), `none` (single implicit user with no login, for a trusted LAN only). |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | – | Create the first admin without the setup screen. |
 | `SECURE_COOKIES` | `false` | Set `true` behind HTTPS. |
-| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books (can also be set in Settings → Metadata). |
+| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books for the owner (everyone can also set their own in Settings → Metadata). |
 | `DEMO_DATA` | `false` | Seed a sample shelf into an empty database. |
 
 The full list is in [docs/configuration.md](docs/configuration.md), and reverse-proxy snippets are in [docs/reverse-proxy.md](docs/reverse-proxy.md).
@@ -148,7 +148,7 @@ The book page lists each novel's characters with a one- or two-sentence note on 
 in the first chapters, so nothing is spoiled — in every preferred language (Settings → Metadata). Non-fiction
 gets none.
 
-**With an OpenAI key** (Settings → AI, or `OPENAI_API_KEY`) the app writes them itself, in the background:
+**With an OpenAI key** (Settings → AI — each person their own; `OPENAI_API_KEY` counts for the owner) the app writes the characters of that person's books itself, in the background:
 right after a book is added, whenever *↻* on a book page asks for a rewrite, and every 30 minutes for anything
 still missing. Pick the model there (the list comes from your account; default `gpt-5-mini`) and whether it
 may search the web — more accurate for translations and lesser-known books. Answers come back as strict,
@@ -165,7 +165,7 @@ BOOKSHELF_URL=http://localhost:8171 BOOKSHELF_TOKEN=pb_… ENGINE=claude MODEL=s
   python3 scripts/characters.py          # writes what is missing; exits fast when nothing is
 ```
 
-Use an admin token to cover every user's books. The API is in [docs/api.md](docs/api.md#characters).
+A token covers the books of the person it belongs to (admins too); each person runs it with their own token. The API is in [docs/api.md](docs/api.md#characters).
 
 ## Backups
 

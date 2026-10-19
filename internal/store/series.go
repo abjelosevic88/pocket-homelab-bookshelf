@@ -135,10 +135,10 @@ func (s *Store) ResetSeriesCheck(ctx context.Context, userID int64) error {
 	return err
 }
 
-// SeriesQIDs returns every Wikidata-linked series on any shelf with the
-// first author of one of its books.
-func (s *Store) SeriesQIDs(ctx context.Context) (map[string]string, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT series_qid, MIN(authors) FROM books WHERE series_qid != '' GROUP BY series_qid`)
+// SeriesQIDs returns every Wikidata-linked series on the user's shelf with
+// the first author of one of its books.
+func (s *Store) SeriesQIDs(ctx context.Context, userID int64) (map[string]string, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT series_qid, MIN(authors) FROM books WHERE user_id = ? AND series_qid != '' GROUP BY series_qid`, userID)
 	if err != nil {
 		return nil, err
 	}
