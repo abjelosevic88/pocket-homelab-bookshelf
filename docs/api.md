@@ -8,6 +8,17 @@ Authorization: Bearer pb_xxxxxxxx…
 
 Create tokens under **Settings → API tokens**. A token acts as the user who created it and sees only their shelf. Dates are `YYYY-MM-DD`, months `YYYY-MM`, ratings `0.5`–`5` in half steps (`0` = not rated).
 
+### Pocket Core app links
+
+With Pocket Core on the box, another Pocket app can act for a person with a five-minute `pcx_` token Core issues (`Authorization: Bearer pcx_…`). The token resolves to that person's account and sees only their shelf, and only these routes are open to it:
+
+| Scope | Name | Routes |
+|---|---|---|
+| (any link) | | `GET /auth/me` |
+| `books:read` | See your books | `GET /books` (all its filters), `GET /books/{id}` |
+
+Anything else answers `403` ("this Pocket Core link does not cover …"). Links are switched on and off in Core → **Links** (box-wide) and **Settings → Apps acting for me** (per person).
+
 ## Books
 
 | Method | Path | Notes |

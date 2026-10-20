@@ -142,6 +142,8 @@ curl -H "Authorization: Bearer pb_…" https://bookshelf.example.com/api/v1/dash
 
 Everything else, including a Homepage `customapi` widget, is in [docs/api.md](docs/api.md).
 
+**App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Bookshelf offers `books:read` ("See your books": `GET /books`, `GET /books/{id}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their shelf; every other route answers 403. Pocket Day uses it for the day's reading. The link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
+
 ## Characters
 
 The book page lists each novel's characters with a one- or two-sentence note on each — only what you learn
