@@ -68,7 +68,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Se
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, nil) // no key, no languages: see metaFor
 	s.meta.Country = cfg.GoogleBooksCountry
 	s.meta.Cache = store.MetaCache{S: st}
-	s.core = core.New(cfg.CoreURL, core.Options{TokenFile: cfg.DataDir + "/core.token", UserAgent: ua})
+	s.core = core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: ua})
 	s.resolved = map[string]resolvedURL{}
 	s.oidc = &oidcProvider{issuerURL: cfg.OIDCIssuer}
 	return s
@@ -117,6 +117,9 @@ func (s *Server) metaFor(ctx context.Context, uid int64) *metadata.Client {
 
 // Bootstrap seeds the first admin (if configured) and demo data.
 func (s *Server) Bootstrap(ctx context.Context) error {
+	if err := s.core.Start(ctx); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(s.cfg.CoverDir, 0o755); err != nil {
 		return fmt.Errorf("create cover dir: %w", err)
 	}
@@ -416,24 +419,22 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 	return nil
 }
 
-// publish sends an event to Core without blocking the request. The payload
+// publish persists an event locally; the SDK retries network delivery. The payload
 // names whose shelf it happened on (user_id, user_email), so subscribers can
 // keep one person's reading apart from another's.
 func (s *Server) publish(userID int64, topic, subject string, payload map[string]any) {
 	if !s.core.Configured() {
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		payload["user_id"] = userID
-		if u, err := s.store.GetUser(ctx, userID); err == nil {
-			payload["user_email"] = u.Email
-		}
-		if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
-			s.log.Warn("pocket core: publish failed", "topic", topic, "err", err)
-		}
-	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	payload["user_id"] = userID
+	if u, err := s.store.GetUser(ctx, userID); err == nil {
+		payload["user_email"] = u.Email
+	}
+	if err := s.core.Publish(ctx, topic, subject, payload); err != nil {
+		s.log.Warn("pocket core: outbox enqueue failed", "topic", topic, "err", err)
+	}
 }
 
 // resolveSibling asks Core where a sibling app lives (cached a minute) so the
@@ -459,7 +460,7 @@ func (s *Server) resolveSibling(ctx context.Context, slug string) string {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": Version, "uptime": time.Since(s.started).Round(time.Second).String()})
+	writeJSON(w, http.StatusOK, map[string]any{"core_outbox": s.coreOutboxHealth(r.Context()), "status": "ok", "version": Version, "uptime": time.Since(s.started).Round(time.Second).String()})
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {

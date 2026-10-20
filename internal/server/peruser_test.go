@@ -88,6 +88,9 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 	anaTok, _, _ := st.CreateAPIToken(ctx, ana.ID, "ana")
 	bobTok, _, _ := st.CreateAPIToken(ctx, bob.ID, "bob")
 	s := New(cfg, st, log, nil)
+	if err := s.core.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	ts := httptest.NewServer(s.Router())
 	t.Cleanup(ts.Close)
 	*h = shelfHarness{t: t, ts: ts, st: st, s: s, cfg: cfg, ana: ana, bob: bob, anaTok: anaTok, bobTok: bobTok}
