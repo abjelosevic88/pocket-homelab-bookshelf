@@ -181,7 +181,17 @@ func (s *Store) syncBookAuthors(ctx context.Context, userID, bookID int64, autho
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer tx.Rollback()
+	if err := syncBookAuthorsTx(ctx, tx, userID, bookID, authors); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.authorsChanged()
+	return nil
+}
+func syncBookAuthorsTx(ctx context.Context, tx *sql.Tx, userID, bookID int64, authors string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM book_authors WHERE book_id = ?`, bookID); err != nil {
 		return err
 	}
@@ -197,10 +207,6 @@ func (s *Store) syncBookAuthors(ctx context.Context, userID, bookID int64, autho
 	if err := pruneAuthors(ctx, tx, userID); err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	s.authorsChanged()
 	return nil
 }
 
