@@ -30,11 +30,18 @@ type shelfHarness struct {
 	ana, bob *store.User
 	anaTok   string
 	bobTok   string
+	// linkToken, when set, answers the fake Core's POST /api/v1/links/token.
+	linkToken http.HandlerFunc
 }
 
 func newShelfHarness(t *testing.T) *shelfHarness {
 	t.Helper()
+	h := &shelfHarness{}
 	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/links/token" && h.linkToken != nil {
+			h.linkToken(w, r)
+			return
+		}
 		if r.URL.Path != "/api/v1/auth/introspect" {
 			http.NotFound(w, r)
 			return
@@ -83,7 +90,8 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 	s := New(cfg, st, log, nil)
 	ts := httptest.NewServer(s.Router())
 	t.Cleanup(ts.Close)
-	return &shelfHarness{t: t, ts: ts, st: st, s: s, cfg: cfg, ana: ana, bob: bob, anaTok: anaTok, bobTok: bobTok}
+	*h = shelfHarness{t: t, ts: ts, st: st, s: s, cfg: cfg, ana: ana, bob: bob, anaTok: anaTok, bobTok: bobTok}
+	return h
 }
 
 // do sends a request with a bearer token and returns status and body.
