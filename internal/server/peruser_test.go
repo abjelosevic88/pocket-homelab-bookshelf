@@ -47,6 +47,16 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 			out = map[string]any{"active": true, "kind": "device", "user": map[string]any{"id": 7, "email": "bob@example.com", "name": "Bob", "role": "member"}}
 		case "pcd_carolphone": // a Core admin who never used Bookshelf before
 			out = map[string]any{"active": true, "kind": "device", "user": map[string]any{"id": 9, "email": "carol@example.com", "name": "Carol", "role": "admin"}}
+		case "pcx_bob_books", "pcx_bob_other", "pcx_ana_books": // a linked app (Pocket Day) acting for Bob or Ana
+			scope, user := "books:read", map[string]any{"id": 7, "email": "bob@example.com", "name": "Bob", "role": "member"}
+			if in.Token == "pcx_bob_other" {
+				scope = "something:else"
+			}
+			if in.Token == "pcx_ana_books" {
+				user = map[string]any{"id": 1, "email": "ana@example.com", "name": "Ana", "role": "admin"}
+			}
+			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf", "user": user,
+				"app": map[string]any{"id": 4, "slug": "day", "name": "Pocket Day"}}
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
