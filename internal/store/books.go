@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"strings"
 )
 
@@ -209,10 +210,15 @@ func nextQueuePos(ctx context.Context, q interface {
 }
 
 // UpdateBook saves the editable fields. Status changes go through SetStatus.
-func (s *Store) UpdateBook(ctx context.Context, b *Book) error {
+func (s *Store) UpdateBook(ctx context.Context, b *Book, after ...core.CommitHook) error {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	b.Tags = NormalizeTags(b.Tags)
 	b.UpdatedAt = Now()
-	res, err := s.DB.ExecContext(ctx, `UPDATE books SET title = ?, subtitle = ?, authors = ?, isbn13 = ?, isbn10 = ?, pages = ?, published = ?,
+	res, err := tx.ExecContext(ctx, `UPDATE books SET title = ?, subtitle = ?, authors = ?, isbn13 = ?, isbn10 = ?, pages = ?, published = ?,
 		publisher = ?, language = ?, description = ?, format = ?, tags = ?, source = ?, source_id = ?, source_url = ?, rating = ?, review = ?,
 		favorite = ?, current_page = ?, planned_for = ?, plan_note = ?, series = ?, series_no = ?, series_qid = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
 		b.Title, b.Subtitle, b.Authors, b.ISBN13, b.ISBN10, b.Pages, b.Published, b.Publisher, b.Language, b.Description, b.Format, b.Tags,
@@ -223,7 +229,14 @@ func (s *Store) UpdateBook(ctx context.Context, b *Book) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return s.syncBookAuthors(ctx, b.UserID, b.ID, b.Authors)
+	if err := syncBookAuthorsTx(ctx, tx, b.UserID, b.ID, b.Authors); err != nil {
+		return err
+	}
+	if err := core.Commit(tx, after...); err != nil {
+		return err
+	}
+	s.authorsChanged()
+	return nil
 }
 
 // SetCover records the cover file name of a book.
@@ -250,7 +263,7 @@ func (s *Store) DeleteBook(ctx context.Context, userID, id int64) error {
 //	→ read       closes the open read, or records a read finished on date
 //	→ abandoned  same, marked abandoned
 //	→ want       drops an open read and puts the book at the end of the queue
-func (s *Store) SetStatus(ctx context.Context, userID, id int64, to, date string) (*Book, error) {
+func (s *Store) SetStatus(ctx context.Context, userID, id int64, to, date string, after ...func(*sql.Tx, *Book) error) (*Book, error) {
 	if !ValidStatus(to) {
 		return nil, ErrNotFound
 	}
@@ -305,10 +318,23 @@ func (s *Store) SetStatus(ctx context.Context, userID, id int64, to, date string
 	if err != nil {
 		return nil, err
 	}
+	book, err := scanBook(tx.QueryRowContext(ctx, `SELECT `+bookCols+` FROM books b WHERE b.id=? AND b.user_id=?`, id, userID))
+	if err != nil {
+		return nil, err
+	}
+	if from != to {
+		for _, hook := range after {
+			if hook != nil {
+				if err := hook(tx, book); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return s.GetBook(ctx, userID, id)
+	return book, nil
 }
 
 // ReorderQueue sets the plan order of want-to-read books to the given order.
