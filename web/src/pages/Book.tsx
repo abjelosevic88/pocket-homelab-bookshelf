@@ -14,6 +14,7 @@ import { EditBook } from '../components/BookForm'
 import { CoverPicker } from '../components/CoverPicker'
 import { FinishModal } from '../components/FinishModal'
 import { CharactersCard } from '../components/Characters'
+import { NotesCard } from '../components/NotesCard'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
 
@@ -83,6 +84,7 @@ export default function Book() {
         {b.status === 'want' && <PlanCard book={b} onSave={patch} onStart={() => changeStatus('reading')} />}
 
         <ReviewCard book={b} onSave={review => patch({ review }, 'Thoughts saved')} />
+        <NotesCard src={`${V1}/books/${b.id}/notes`} />
         <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />

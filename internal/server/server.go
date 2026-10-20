@@ -205,6 +205,7 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/books/{id}", s.handleDeleteBook)
 			r.Post("/books/{id}/status", s.handleSetStatus)
 			r.Post("/books/{id}/progress", s.handleProgress)
+			r.Get("/books/{id}/notes", s.handleBookNotes)
 			r.Get("/books/{id}/cover", s.handleGetCover)
 			r.Get("/books/{id}/covers", s.handleCoverSuggestions)
 			r.Post("/books/{id}/cover", s.handleSetCover)
@@ -397,6 +398,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
 		Offers:    linkOffers,
+		Uses:      []core.Use{notesUse},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
