@@ -15,6 +15,8 @@ import { CoverPicker } from '../components/CoverPicker'
 import { FinishModal } from '../components/FinishModal'
 import { CharactersCard } from '../components/Characters'
 import { NotesCard } from '../components/NotesCard'
+import { Icon } from '../components/icons'
+import { useCrumb } from '../components/Layout'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
 
@@ -27,8 +29,9 @@ export default function Book() {
   const [finishing, setFinishing] = useState<'read' | 'abandoned' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [coverOpen, setCoverOpen] = useState(false)
+  useCrumb(data?.book.title)
 
-  if (error) return <div className="card pad"><p>{error}</p><Link to="/library">← Library</Link></div>
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error} · <Link to="/library">Back to the library</Link></span></div>
   if (!data) return <Loading />
   const b = data.book
   const setBook = (nb: BookT) => setData({ ...data, book: nb })
@@ -60,23 +63,22 @@ export default function Book() {
           {b.language && <><dt>Language</dt><dd>{b.language}</dd></>}
           {b.isbn13 && <><dt>ISBN</dt><dd className="mono">{b.isbn13}</dd></>}
           <dt>Added</dt><dd>{fmtDate(b.created_at.slice(0, 10))}</dd>
-          {b.source_url && <><dt>Source</dt><dd><a href={b.source_url} target="_blank" rel="noreferrer">{b.source === 'google' ? 'Google Books' : 'Open Library'} ↗</a></dd></>}
+          {b.source_url && <><dt>Source</dt><dd><a href={b.source_url} target="_blank" rel="noreferrer"><span className="icon-text">{b.source === 'google' ? 'Google Books' : 'Open Library'}<Icon name="external" size={12} /></span></a></dd></>}
         </dl>
         <div className="row wrap">
-          <button className="btn sm" onClick={() => setEditing(true)}>Edit details</button>
-          <button className="btn ghost sm danger-text" onClick={() => setDeleting(true)}>Delete</button>
+          <button type="button" className="btn sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} />Edit details</button>
+          <button type="button" className="btn ghost sm danger-text" onClick={() => setDeleting(true)}><Icon name="trash" size={14} />Delete</button>
         </div>
       </div>
 
       <div className="book-main">
-        <Link to="/library" className="muted small">← Library</Link>
         <h1 className="book-title">{b.title}</h1>
         {b.subtitle && <div className="book-subtitle">{b.subtitle}</div>}
         <div className="book-authors">{splitTags(b.authors).map((a, i) => <span key={a}>{i > 0 && ', '}<AuthorLink name={a} /></span>)}</div>
-        {b.series && <div className="book-series"><Link to={`/series/${encodeURIComponent(b.series)}`}>📚 {b.series}{b.series_no !== '' && <> · #{b.series_no}</>}</Link></div>}
+        {b.series && <div className="book-series"><Link to={`/series/${encodeURIComponent(b.series)}`} className="icon-text"><Icon name="layers" size={14} />{b.series}{b.series_no !== '' && <> · #{b.series_no}</>}</Link></div>}
         <div className="row wrap mt-sm">
           <Stars value={b.rating} onChange={v => patch({ rating: v }, v ? `Rated ${v}★` : 'Rating cleared')} size="lg" />
-          <button className={`fav-btn ${b.favorite ? 'on' : ''}`} onClick={() => patch({ favorite: !b.favorite })} title={b.favorite ? 'Favourite' : 'Mark as favourite'}>♥</button>
+          <button type="button" className={`fav-btn ${b.favorite ? 'on' : ''}`} onClick={() => patch({ favorite: !b.favorite })} title={b.favorite ? 'Favourite' : 'Mark as favourite'} aria-label={b.favorite ? 'Favourite' : 'Mark as favourite'} aria-pressed={b.favorite}><Icon name="heart" size={20} fill={b.favorite} /></button>
           {splitTags(b.tags).map(t => <Link key={t} to={`/library?tag=${encodeURIComponent(t)}`} className="badge tag">{t}</Link>)}
         </div>
 
@@ -111,7 +113,7 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
   }
   const days = book.started_on ? daysBetween(book.started_on, todayISO()) : null
   return (
-    <Card className="mt" title="Progress" actions={<button className="btn primary sm" onClick={onFinish}>✓ Finished</button>}>
+    <Card className="mt" title="Progress" actions={<button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button>}>
       {book.pages > 0 && <div className="bar lg mb-sm"><span className="fill" style={{ width: `${pct}%` }} /></div>}
       <div className="row wrap">
         <label className="page-input"><span className="muted small">Page</span>
@@ -128,7 +130,7 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
 function PlanCard({ book, onSave, onStart }: { book: BookT; onSave: (f: Partial<BookT>, msg?: string) => void; onStart: () => void }) {
   const [note, setNote] = useState(book.plan_note)
   return (
-    <Card className="mt" title="In your plan" actions={<button className="btn primary sm" onClick={onStart}>Start reading</button>}>
+    <Card className="mt" title="In your plan" actions={<button type="button" className="btn primary sm" onClick={onStart}><Icon name="play" size={13} />Start reading</button>}>
       <div className="two-col tight">
         <Field label="Planned for" help={book.planned_for ? fmtMonth(book.planned_for) : 'No month: it waits in “Up next”.'}>
           <input type="month" value={book.planned_for} onChange={e => onSave({ planned_for: e.target.value }, 'Plan updated')} />
@@ -150,12 +152,12 @@ function ReviewCard({ book, onSave }: { book: BookT; onSave: (review: string) =>
   const save = () => { if (dirty) { onSave(text); setEditing(!text) } }
   const buttons = (
     <>
-      {book.review && <button className="btn ghost sm" onClick={cancel}>Cancel</button>}
-      <button className="btn primary sm" disabled={!dirty} onClick={save} title="Save (Ctrl/Cmd+S)">Save</button>
+      {book.review && <button type="button" className="btn ghost sm" onClick={cancel}>Cancel</button>}
+      <button type="button" className="btn primary sm" disabled={!dirty} onClick={save} title="Save (Ctrl/Cmd+S)">Save</button>
     </>
   )
   return (
-    <Card className="mt" title="My thoughts" actions={editing ? buttons : <button className="btn ghost sm" onClick={() => setEditing(true)}>Edit</button>}>
+    <Card className="mt" title="My thoughts" actions={editing ? buttons : <button type="button" className="btn ghost sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} />Edit</button>}>
       {editing ? (
         <div onKeyDown={e => {
           if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save() }
@@ -211,8 +213,8 @@ function ReviewText({ text }: { text: string }) {
         {filled(b) && <Markdown text={b.body} />}
       </div>
     ))}
-    {shown < blocks.length && <button className="btn ghost sm read-more mt-sm" onClick={() => setAll(true)}>Show all · {Math.max(1, Math.round(words / 230))} min ▾</button>}
-    {all && text.length > 2600 && <button className="btn ghost sm read-more mt-sm" onClick={() => setAll(false)}>Show less ▴</button>}
+    {shown < blocks.length && <button type="button" className="btn ghost sm read-more mt-sm" onClick={() => setAll(true)}>Show all · {Math.max(1, Math.round(words / 230))} min<Icon name="chevron-down" size={14} /></button>}
+    {all && text.length > 2600 && <button type="button" className="btn ghost sm read-more mt-sm" onClick={() => setAll(false)}>Show less<Icon name="chevron-up" size={14} /></button>}
   </>
 }
 
@@ -221,14 +223,14 @@ function QuotesCard({ book, quotes, onChanged }: { book: BookT; quotes: Quote[];
   const [edit, setEdit] = useState<Partial<Quote> | null>(null)
   const [del, setDel] = useState<Quote | null>(null)
   return (
-    <Card className="mt" title={`Quotes${quotes.length ? ` (${quotes.length})` : ''}`} actions={<button className="btn ghost sm" onClick={() => setEdit({})}>+ Add quote</button>}>
+    <Card className="mt" title={`Quotes${quotes.length ? ` (${quotes.length})` : ''}`} actions={<button type="button" className="btn ghost sm" onClick={() => setEdit({})}><Icon name="plus" size={14} />Add quote</button>}>
       {quotes.length === 0 ? <p className="muted">Passages worth keeping. Add one while you read.</p> : (
         <div className="quotes">
           {quotes.map(q => (
             <figure key={q.id} className="quote">
               <blockquote>{q.text}</blockquote>
               <figcaption>{q.page && <span className="muted">{pageLabel(q.page)}</span>}{q.note && <span className="note">{q.note}</span>}
-                <span className="spacer" /><button className="btn ghost sm" onClick={() => setEdit(q)}>Edit</button><button className="btn ghost sm danger-text" onClick={() => setDel(q)}>✕</button>
+                <span className="spacer" /><button type="button" className="btn ghost sm" onClick={() => setEdit(q)}>Edit</button><button type="button" className="btn ghost sm icon-only danger-text" onClick={() => setDel(q)} aria-label="Delete quote" title="Delete"><Icon name="trash" size={14} /></button>
               </figcaption>
             </figure>
           ))}
@@ -258,7 +260,7 @@ export function QuoteModal({ bookId, quote, onClose, onSaved }: { bookId: number
           <Field label="Page / location"><input value={f.page} onChange={e => setF({ ...f, page: e.target.value })} placeholder="142" maxLength={20} /></Field>
           <Field label="Your note"><input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="Why it matters" /></Field>
         </div>
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary">Save</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary">Save</button></div>
       </form>
     </Modal>
   )
@@ -278,17 +280,17 @@ function ReadsCard({ book, reads, onChanged }: { book: BookT; reads: Read[]; onC
   const remove = async (r: Read) => { await api.del(`${V1}/reads/${r.id}`); toast('Removed'); onChanged() }
   const open = (r: Read) => !r.finished_on && !r.abandoned
   return (
-    <Card className="mt" title="Reading history" actions={<button className="btn ghost sm" onClick={() => setEdit({ started_on: '', finished_on: todayISO(), abandoned: false })}>+ Add a read</button>}>
+    <Card className="mt" title="Reading history" actions={<button type="button" className="btn ghost sm" onClick={() => setEdit({ started_on: '', finished_on: todayISO(), abandoned: false })}><Icon name="plus" size={14} />Add a read</button>}>
       {reads.length === 0 ? <p className="muted">{book.status === 'read' ? 'Marked as read without a date. Add when you read it to count it in that year’s stats.' : 'Each time you read this book shows up here.'}</p> : (
         <ul className="reads">
           {reads.map(r => (
             <li key={r.id}>
               <span className={`dot ${r.abandoned ? 'ab' : open(r) ? 'open' : ''}`} />
-              <span>{r.started_on ? fmtDate(r.started_on) : '?'} → {open(r) ? <i>reading</i> : fmtDate(r.finished_on)}{r.abandoned && <span className="muted"> · stopped</span>}
+              <span>{r.started_on ? fmtDate(r.started_on) : '?'} – {open(r) ? <i>reading</i> : fmtDate(r.finished_on)}{r.abandoned && <span className="muted"> · stopped</span>}
                 {r.started_on && r.finished_on && <span className="muted small"> · {daysBetween(r.started_on, r.finished_on) + 1} days</span>}</span>
               <span className="spacer" />
-              <button className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button>
-              {!open(r) && <button className="btn ghost sm danger-text" onClick={() => remove(r)}>✕</button>}
+              <button type="button" className="btn ghost sm" onClick={() => setEdit(r)}>Edit</button>
+              {!open(r) && <button type="button" className="btn ghost sm icon-only danger-text" onClick={() => remove(r)} aria-label="Remove this read" title="Remove"><Icon name="trash" size={14} /></button>}
             </li>
           ))}
         </ul>
@@ -301,7 +303,7 @@ function ReadsCard({ book, reads, onChanged }: { book: BookT; reads: Read[]; onC
               <Field label="Finished"><input type="date" value={edit.finished_on || ''} max={todayISO()} onChange={e => setEdit({ ...edit, finished_on: e.target.value })} required={!edit.id} /></Field>
             </div>
             <label className="row"><input type="checkbox" checked={!!edit.abandoned} onChange={e => setEdit({ ...edit, abandoned: e.target.checked })} style={{ width: 'auto' }} /> Stopped before the end</label>
-            <div className="form-actions"><button type="button" className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary">Save</button></div>
+            <div className="form-actions"><button type="button" className="btn" onClick={() => setEdit(null)}>Cancel</button><button type="submit" className="btn primary">Save</button></div>
           </form>
         </Modal>
       )}
@@ -314,7 +316,7 @@ function Description({ text }: { text: string }) {
   return (
     <div className={`description ${open ? '' : 'clamped'}`}>
       {text}
-      {!open && <button className="btn ghost sm more-btn" onClick={() => setOpen(true)}>Read more</button>}
+      {!open && <button type="button" className="btn ghost sm more-btn" onClick={() => setOpen(true)}>Read more</button>}
     </div>
   )
 }

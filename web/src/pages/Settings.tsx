@@ -1,40 +1,113 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { APIToken, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
-import { Card, Confirm, Field, Loading, Modal, PageHeader, Segmented, Tabs, useAsync, useToast } from '../components/ui'
-import { Avatar } from '../components/people'
+import { Avatar, Confirm, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
+import { Icon } from '../components/icons'
 import { KindleImport } from '../components/KindleImport'
 import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
-type Tab = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'users' | 'profile' | 'api' | 'data' | 'about'
+type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'profile' | 'users' | 'api' | 'data' | 'about'
+
+const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
+  { id: 'general', label: 'General', icon: 'settings', sub: 'Your yearly goal and start page, and the app title.' },
+  { id: 'metadata', label: 'Book search', icon: 'search', sub: 'Where book details and covers come from, and which languages come first.' },
+  { id: 'templates', label: 'Templates', icon: 'text', sub: 'Starting points for “My thoughts” on a book.' },
+  { id: 'daily', label: 'Daily highlights', icon: 'sun', sub: 'A few of your highlights every morning — and whether they are sent to your phone.' },
+  { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Your OpenAI key, for the characters of the novels on your shelf.' },
+  { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
+  { id: 'users', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
+  { id: 'api', label: 'API tokens', icon: 'key', sub: 'Personal tokens for widgets, shortcuts and scripts.' },
+  { id: 'data', label: 'Backup & data', icon: 'database', sub: 'Download the database, export and import your shelf, Kindle highlights and covers.' },
+  { id: 'about', label: 'About', icon: 'info', sub: 'Version, numbers and the server.' },
+]
+// other names the sections were or could be linked by
+const ALIAS: Record<string, TabId> = { people: 'users', tokens: 'api', search: 'metadata', backup: 'data', import: 'data' }
 
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(window.location.search).get('tab') as Tab) || 'general')
+  const { tab: raw } = useParams()
+  const navigate = useNavigate()
+  const mobile = useIsMobile()
+  const legacy = new URLSearchParams(window.location.search).get('tab') || ''
+  const want = raw || legacy
+  const tab: TabId = (TABS.find(t => t.id === (ALIAS[want] || want))?.id) || 'general'
+  const current = TABS.find(t => t.id === tab)!
+  const go = (id: TabId) => navigate(`/settings/${id}`, { replace: true })
+  // old links (/settings?tab=daily) land on /settings/daily
+  useEffect(() => { if (legacy && !raw) go(tab) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { document.querySelector('.set-content')?.scrollTo({ top: 0 }) }, [tab])
+  // phones: the section tabs scroll sideways — keep the open one in view
+  useEffect(() => { document.querySelector('.set-tabs-mobile .tabs button.active')?.scrollIntoView({ block: 'nearest', inline: 'center' }) }, [tab, mobile])
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      if (e.key === 'Escape' && !t.closest?.('input, textarea') && !document.querySelector('.modal-backdrop, .menu, .sel-pop, .slash-menu')) navigate('/')
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [navigate])
+
   return (
-    <>
-      <PageHeader title="Settings" />
-      <Tabs tabs={[{ id: 'general', label: 'General' }, { id: 'metadata', label: 'Metadata' }, { id: 'templates', label: 'Templates' }, { id: 'daily', label: 'Daily highlights' }, { id: 'ai', label: 'AI' }, { id: 'users', label: 'Users' }, { id: 'profile', label: 'Profile' }, { id: 'api', label: 'API tokens' }, { id: 'data', label: 'Backup & data' }, { id: 'about', label: 'About' }]} value={tab} onChange={setTab} />
-      <div className="mt">
-        {tab === 'general' && <General />}
-        {tab === 'metadata' && <Metadata />}
-        {tab === 'templates' && <Templates />}
-        {tab === 'daily' && <DailyTab />}
-        {tab === 'ai' && <AITab />}
-        {tab === 'users' && <Users />}
-        {tab === 'profile' && <Profile />}
-        {tab === 'api' && <Tokens />}
-        {tab === 'data' && <Data />}
-        {tab === 'about' && <About />}
+    <div className="set-page">
+      <header className="set-header">
+        <button type="button" className="btn ghost icon-only" aria-label="Back to the bookshelf" title="Back to the bookshelf (esc)" onClick={() => navigate('/')}><Icon name="chevron-left" size={18} /></button>
+        <img src="/favicon.svg" alt="" width={24} height={24} className="set-logo" />
+        <h1>Settings</h1>
+      </header>
+      {mobile && <div className="set-tabs-mobile"><Tabs tabs={TABS.map(t => ({ id: t.id, label: t.label, icon: t.icon }))} value={tab} onChange={go} /></div>}
+      <div className="set-body">
+        {!mobile && (
+          <nav className="set-nav" aria-label="Settings sections">
+            {TABS.map(t => (
+              <button key={t.id} type="button" className={`set-nav-item ${t.id === tab ? 'active' : ''}`} aria-current={t.id === tab ? 'page' : undefined} onClick={() => go(t.id)}>
+                <Icon name={t.icon} size={16} />{t.label}
+              </button>
+            ))}
+          </nav>
+        )}
+        <main className="set-content">
+          <div className="set-inner" key={tab}>
+            <div className="set-title">
+              <h2>{current.label}</h2>
+              <p>{current.sub}</p>
+            </div>
+            {tab === 'general' && <General />}
+            {tab === 'metadata' && <Metadata />}
+            {tab === 'templates' && <Templates />}
+            {tab === 'daily' && <DailyTab />}
+            {tab === 'ai' && <AITab />}
+            {tab === 'profile' && <Profile />}
+            {tab === 'users' && <Users />}
+            {tab === 'api' && <Tokens />}
+            {tab === 'data' && <Data />}
+            {tab === 'about' && <About />}
+          </div>
+        </main>
       </div>
-    </>
+    </div>
+  )
+}
+
+/** A settings card: title, explanation, actions on the right — Pocket Calendar's section. */
+function Section({ title, sub, icon, actions, children }: { title: React.ReactNode; sub?: React.ReactNode; icon?: string; actions?: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <section className="set-section">
+      <div className="set-section-head">
+        {icon && <span className="set-app-ico"><Icon name={icon} size={17} /></span>}
+        <div className="grow"><h3>{title}</h3>{sub && <p>{sub}</p>}</div>
+        {actions && <div className="row">{actions}</div>}
+      </div>
+      {children && <div className="set-section-body">{children}</div>}
+    </section>
   )
 }
 
 function useSettingsForm() {
-  const { settings, setSettings } = useApp()
+  const { settings, setSettings, user } = useApp()
   const { toast } = useToast()
   const [f, setF] = useState<SettingsT | null>(settings)
   const [busy, setBusy] = useState(false)
@@ -45,23 +118,29 @@ function useSettingsForm() {
     setBusy(true)
     try { const s = await api.put<SettingsT>(`${V1}/settings`, f); setSettings(s); setF(s); toast('Saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
-  return { f, setF, save, busy }
+  return { f, setF, save, busy, isAdmin: user?.role === 'admin' }
 }
 
 function General() {
-  const { f, setF, save, busy } = useSettingsForm()
-  const { user } = useApp()
+  const { f, setF, save, busy, isAdmin } = useSettingsForm()
   if (!f) return <Loading />
   return (
-    <Card title="Preferences">
-      <div className="grid" style={{ gap: 14, maxWidth: 560 }}>
-        <p className="muted">These are yours: everyone in the household has their own goal, start page, languages, templates and keys.</p>
-        {user?.role === 'admin' && <Field label="App title" help="Shown in the sidebar and browser tab, for everyone."><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} /></Field>}
-        <Field label="Yearly reading goal" help="Books per year. 0 = no goal. Shown on Now, Plan and Stats."><input type="number" min={0} max={1000} value={f.yearly_goal} onChange={e => setF({ ...f, yearly_goal: Math.max(0, Number(e.target.value) || 0) })} style={{ maxWidth: 120 }} /></Field>
-        <Field group label="Open on"><Segmented value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'now', label: 'Now' }, { value: 'library', label: 'Library' }, { value: 'planner', label: 'Plan' }]} /></Field>
-        <div><button className="btn primary" onClick={save} disabled={busy}>Save</button></div>
-      </div>
-    </Card>
+    <div className="stack loose">
+      <Section title="Reading" sub="These are yours: everyone in the household has their own goal, start page, languages, templates and keys.">
+        <SettingRow title="Yearly reading goal" help="Books per year. 0 = no goal. Shown on Now, Plan and Stats.">
+          <input type="number" min={0} max={1000} value={f.yearly_goal} onChange={e => setF({ ...f, yearly_goal: Math.max(0, Number(e.target.value) || 0) })} style={{ width: 100 }} aria-label="Yearly reading goal" />
+        </SettingRow>
+        <SettingRow title="Open on" help="The page the app starts on.">
+          <Segmented size="sm" value={f.landing} onChange={v => setF({ ...f, landing: v })} options={[{ value: 'now', label: 'Now' }, { value: 'library', label: 'Library' }, { value: 'planner', label: 'Plan' }]} label="Open on" />
+        </SettingRow>
+      </Section>
+      <Section title="This box" sub={isAdmin ? 'This applies to everyone on this box.' : 'Set by an admin for everyone.'}>
+        <SettingRow title="App title" help="Shown in the sidebar and the browser tab.">
+          <input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} maxLength={40} disabled={!isAdmin} style={{ width: 220 }} aria-label="App title" />
+        </SettingRow>
+      </Section>
+      <div className="row"><button type="button" className="btn primary" onClick={save} disabled={busy}>Save changes</button></div>
+    </div>
   )
 }
 
@@ -84,31 +163,25 @@ function Metadata() {
     } finally { setTesting(false) }
   }
   return (
-    <div className="two-col">
-      <Card title="Book search">
-        <div className="grid" style={{ gap: 14 }}>
-          <p className="muted">When you add a book, its details and cover come from free public catalogues. Covers are downloaded and kept with your data, so nothing is loaded from outside when you browse.</p>
-          <Field group label="Search in" help="The default for the add-book search; you can switch per search.">
-            <Segmented value={f.search_source} onChange={v => setF({ ...f, search_source: v })} options={[{ value: 'all', label: 'All' }, { value: 'openlibrary', label: 'Open Library' }, { value: 'google', label: 'Google Books' }]} />
-          </Field>
-          <Field group label="Preferred languages" help="Search results and authors' bibliographies show books available in these languages first, as that edition (title and cover). The first one wins when a book exists in several.">
-            <LanguagePicker value={f.languages} onChange={v => setF({ ...f, languages: v })} />
-          </Field>
-          <Field label="Google Books API key" help={<>Free: Google Cloud console → enable “Books API” → Credentials → API key. Without a key Google refuses anonymous searches. {f.google_books_env && !f.google_books_key && 'A key is set through GOOGLE_BOOKS_API_KEY.'}</>}>
-            <input value={f.google_books_key} onChange={e => setF({ ...f, google_books_key: e.target.value.trim() })} placeholder={f.google_books_env ? 'using GOOGLE_BOOKS_API_KEY' : 'AIza…'} autoComplete="off" spellCheck={false} />
-          </Field>
-          <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={testing || !(f.google_books_key || f.google_books_env)}>{testing ? 'Testing…' : 'Test Google Books'}</button></div>
-        </div>
-      </Card>
-      <Card title="Sources">
-        <table className="table compact">
-          <tbody>
-            <tr><th>Open Library</th><td><span className="badge cat">always on</span></td><td className="muted small">openlibrary.org — no key, community catalogue, good for older and non-English books.</td></tr>
-            <tr><th>Google Books</th><td>{f.sources.includes('google') ? <span className="badge cat">on</span> : <span className="badge">needs key</span>}</td><td className="muted small">Broad coverage of recent editions, page counts and descriptions.</td></tr>
-          </tbody>
-        </table>
-        <p className="muted small mt">With “All”, both are searched at once and the same book (same ISBN) is shown once. ISBN searches pick that exact edition.</p>
-      </Card>
+    <div className="stack loose">
+      <Section title="Book search" sub="When you add a book, its details and cover come from free public catalogues. Covers are downloaded and kept with your data, so nothing is loaded from outside when you browse.">
+        <SettingRow title="Search in" help="The default for the add-book search; you can switch per search.">
+          <Segmented size="sm" value={f.search_source} onChange={v => setF({ ...f, search_source: v })} options={[{ value: 'all', label: 'All' }, { value: 'openlibrary', label: 'Open Library' }, { value: 'google', label: 'Google Books' }]} label="Search in" />
+        </SettingRow>
+        <SettingRow stack title="Preferred languages" help="Search results and authors' bibliographies show books available in these languages first, as that edition (title and cover). The first one wins when a book exists in several.">
+          <LanguagePicker value={f.languages} onChange={v => setF({ ...f, languages: v })} />
+        </SettingRow>
+        <SettingRow stack title="Google Books API key" help={<>Free: Google Cloud console → enable “Books API” → Credentials → API key. Without a key Google refuses anonymous searches. {f.google_books_env && !f.google_books_key && 'A key is set through GOOGLE_BOOKS_API_KEY.'}</>}>
+          <input value={f.google_books_key} onChange={e => setF({ ...f, google_books_key: e.target.value.trim() })} placeholder={f.google_books_env ? 'using GOOGLE_BOOKS_API_KEY' : 'AIza…'} autoComplete="off" spellCheck={false} aria-label="Google Books API key" />
+        </SettingRow>
+      </Section>
+      <div className="row"><button type="button" className="btn primary" onClick={save} disabled={busy}>Save changes</button><button type="button" className="btn" onClick={test} disabled={testing || !(f.google_books_key || f.google_books_env)}>{testing ? 'Testing…' : 'Test Google Books'}</button></div>
+      <Section title="Sources" sub="With “All”, both are searched at once and the same book (same ISBN) is shown once. ISBN searches pick that exact edition.">
+        <dl className="set-dl">
+          <div><dt>Open Library <span className="badge cat">always on</span></dt><dd className="muted">openlibrary.org — no key, community catalogue, good for older and non-English books.</dd></div>
+          <div><dt>Google Books {f.sources.includes('google') ? <span className="badge cat">on</span> : <span className="badge">needs key</span>}</dt><dd className="muted">Broad coverage of recent editions, page counts and descriptions.</dd></div>
+        </dl>
+      </Section>
     </div>
   )
 }
@@ -121,26 +194,24 @@ function Users() {
   const isAdmin = user?.role === 'admin'
   const run = async (fn: () => Promise<unknown>, msg: string) => { try { await fn(); await reloadMeta(); toast(msg) } catch (e) { toast((e as Error).message, 'err') } }
   return (
-    <Card title="Users" actions={isAdmin && <button className="btn primary sm" onClick={() => setEdit({ role: 'member' })}>+ Add user</button>}>
-      <p className="muted">Everyone signs in with their own account and keeps their own shelf: books, ratings, thoughts, quotes, plan, goal, settings and keys are private to each person — admins included. Admins manage the accounts and the app title.</p>
-      <table className="table compact">
-        <thead><tr><th /><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
-        <tbody>
-          {users.map(u => (
-            <tr key={u.id}>
-              <td style={{ width: 32 }}><Avatar user={u} /></td>
-              <td>{u.name || <span className="muted">—</span>}{u.id === user?.id && <span className="badge" style={{ marginLeft: 6 }}>you</span>}</td>
-              <td className="muted">{u.email}</td>
-              <td><span className={`badge ${u.role === 'admin' ? 'cat' : ''}`}>{u.role}</span></td>
-              <td className="right">{isAdmin && <span className="row" style={{ justifyContent: 'flex-end' }}><button className="btn ghost sm" onClick={() => setEdit(u)}>Edit</button>{u.id !== user?.id && <button className="btn ghost sm danger-text" onClick={() => setDel(u)}>Remove</button>}</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <Section title="People on this box" actions={isAdmin && <button type="button" className="btn primary sm" onClick={() => setEdit({ role: 'member' })}><Icon name="plus" size={14} />Add person</button>}
+      sub="Everyone signs in with their own account and keeps their own shelf: books, ratings, thoughts, quotes, plan, goal, settings and keys are private to each person — admins included. Admins manage the accounts and the app title.">
+      <div className="set-people">
+        {users.map(u => (
+          <div key={u.id} className="set-person">
+            <Avatar name={u.name} email={u.email} size={34} />
+            <div className="grow">
+              <div className="set-person-name">{u.name || <span className="muted">—</span>}{u.id === user?.id && <span className="badge">you</span>}{u.role === 'admin' && <span className="badge cat">admin</span>}</div>
+              <div className="muted small ellipsis">{u.email}</div>
+            </div>
+            {isAdmin && <span className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn ghost sm" onClick={() => setEdit(u)}>Edit</button>{u.id !== user?.id && <button type="button" className="btn ghost sm danger-text" onClick={() => setDel(u)}>Remove</button>}</span>}
+          </div>
+        ))}
+      </div>
       {status?.auth_mode !== 'local' && <p className="muted small mt">Auth mode is <code>{status?.auth_mode}</code>: users are created automatically on first visit; passwords are not used here.</p>}
       {edit && <UserModal user={edit} local={status?.auth_mode === 'local'} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reloadMeta() }} />}
-      {del && <Confirm title={`Remove ${del.name || del.email}?`} message="Their account is deleted together with their whole shelf: books, thoughts, quotes and reading history." onCancel={() => setDel(null)} onConfirm={() => { const d = del; setDel(null); run(() => api.del(`${V1}/users/${d.id}`), 'User removed') }} />}
-    </Card>
+      {del && <Confirm confirmLabel="Remove" title={`Remove ${del.name || del.email}?`} message="Their account is deleted together with their whole shelf: books, thoughts, quotes and reading history." onCancel={() => setDel(null)} onConfirm={() => { const d = del; setDel(null); run(() => api.del(`${V1}/users/${d.id}`), 'User removed') }} />}
+    </Section>
   )
 }
 
@@ -156,13 +227,13 @@ function UserModal({ user, local, onClose, onSaved }: { user: Partial<User>; loc
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
-    <Modal title={user.id ? 'Edit user' : 'Add user'} onClose={onClose}>
+    <Modal title={user.id ? 'Edit person' : 'Add a person'} onClose={onClose} size="sm">
       <form onSubmit={save} className="grid" style={{ gap: 14 }}>
         <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} autoFocus required maxLength={60} /></Field>
         <Field label="Email" help="Used to sign in."><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} required /></Field>
         {local && <Field label={user.id ? 'New password (leave empty to keep)' : 'Password'} help="At least 8 characters. Tell them to change it under Settings → Profile."><input type="password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} minLength={user.id ? 0 : 8} required={!user.id} autoComplete="new-password" /></Field>}
         <Field group label="Role"><Segmented value={f.role} onChange={v => setF({ ...f, role: v })} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }]} /></Field>
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{user.id ? 'Save' : 'Add user'}</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy}>{user.id ? 'Save' : 'Add person'}</button></div>
       </form>
     </Modal>
   )
@@ -178,18 +249,25 @@ function Profile() {
     try { setUser(await api.put(`${V1}/auth/me`, f)); setF(x => ({ ...x, current_password: '', new_password: '' })); toast('Profile saved') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   return (
-    <Card title="Profile">
-      <form onSubmit={save} className="grid" style={{ gap: 14, maxWidth: 480 }}>
-        <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="Email"><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
-        {status?.auth_mode === 'local' && <>
-          <hr />
+    <form onSubmit={save} className="stack loose">
+      <div className="set-profile">
+        <Avatar name={user?.name} email={user?.email} size={56} />
+        <div className="grow"><h3>{user?.name || user?.email}</h3><p className="muted small">{user?.email} · {user?.role}</p></div>
+      </div>
+      <Section title="You">
+        <div className="stack">
+          <Field label="Name"><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></Field>
+          <Field label="Email"><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
+        </div>
+      </Section>
+      {status?.auth_mode === 'local' && <Section title="Password" sub="Leave empty to keep the current one.">
+        <div className="stack">
           <Field label="Current password"><input type="password" value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} autoComplete="current-password" /></Field>
-          <Field label="New password" help="At least 8 characters. Leave empty to keep the current one."><input type="password" value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} autoComplete="new-password" /></Field>
-        </>}
-        <div><button className="btn primary" disabled={busy}>Save</button></div>
-      </form>
-    </Card>
+          <Field label="New password" help="At least 8 characters."><input type="password" value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} autoComplete="new-password" /></Field>
+        </div>
+      </Section>}
+      <div className="row"><button type="submit" className="btn primary" disabled={busy}>Save changes</button></div>
+    </form>
   )
 }
 
@@ -204,18 +282,17 @@ function Tokens() {
     try { const r = await api.post<{ token: string }>(`${V1}/tokens`, { name: name || 'token' }); setFresh(r.token); setName(''); reload() } catch (e) { toast((e as Error).message, 'err') }
   }
   return (
-    <Card title="API tokens">
-      <p className="muted">Use as <code>Authorization: Bearer &lt;token&gt;</code>. A token acts as you and sees your shelf. Good for Homepage widgets (<code>GET /api/v1/dashboard</code>), logging pages from an iOS Shortcut (<code>POST /api/v1/books/{'{id}'}/progress</code>) or a random quote somewhere (<code>GET /api/v1/quotes?random=1</code>). See <code>docs/api.md</code>.</p>
-      <form onSubmit={create} className="row mb"><input value={name} onChange={e => setName(e.target.value)} placeholder="Token name (e.g. Homepage)" /><button className="btn primary">Create</button></form>
-      {fresh && <div className="callout success mb"><b>Copy it now — it is shown once.</b><pre className="mono" style={{ margin: '8px 0 0' }}>{fresh}</pre></div>}
+    <Section title="Personal tokens" icon="key" sub={<>Use as <code>Authorization: Bearer &lt;token&gt;</code>. A token acts as you and sees your shelf. Good for Homepage widgets (<code>GET /api/v1/dashboard</code>), logging pages from an iOS Shortcut (<code>POST /api/v1/books/{'{id}'}/progress</code>) or a random quote somewhere (<code>GET /api/v1/quotes?random=1</code>). See <code>docs/api.md</code>.</>}>
+      <form onSubmit={create} className="row mb"><input value={name} onChange={e => setName(e.target.value)} placeholder="Token name (e.g. Homepage)" aria-label="Token name" /><button type="submit" className="btn primary"><Icon name="plus" size={15} />Create</button></form>
+      {fresh && <div className="set-fresh mb"><div className="row"><Icon name="check-circle" size={16} /><b>Copy it now — it is shown once.</b></div><pre className="mono">{fresh}</pre></div>}
       {data && data.length > 0 ? (
         <table className="table compact">
           <thead><tr><th>Name</th><th>Prefix</th><th>Last used</th><th>Created</th><th /></tr></thead>
-          <tbody>{data.map(t => <tr key={t.id}><td>{t.name}</td><td className="mono">{t.prefix}…</td><td className="muted">{t.last_used_at ? t.last_used_at.slice(0, 16).replace('T', ' ') : 'never'}</td><td className="muted">{t.created_at.slice(0, 10)}</td><td className="right"><button className="btn ghost sm danger-text" onClick={() => setDel(t)}>Revoke</button></td></tr>)}</tbody>
+          <tbody>{data.map(t => <tr key={t.id}><td>{t.name}</td><td className="mono">{t.prefix}…</td><td className="muted">{t.last_used_at ? t.last_used_at.slice(0, 16).replace('T', ' ') : 'never'}</td><td className="muted">{t.created_at.slice(0, 10)}</td><td className="right"><button type="button" className="btn ghost sm danger-text" onClick={() => setDel(t)}>Revoke</button></td></tr>)}</tbody>
         </table>
       ) : <p className="muted">No tokens yet.</p>}
-      {del && <Confirm title={`Revoke “${del.name}”?`} message="Anything using this token stops working immediately." onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/tokens/${del.id}`); setDel(null); reload() }} />}
-    </Card>
+      {del && <Confirm confirmLabel="Revoke" title={`Revoke “${del.name}”?`} message="Anything using this token stops working immediately." onCancel={() => setDel(null)} onConfirm={async () => { await api.del(`${V1}/tokens/${del.id}`); setDel(null); reload() }} />}
+    </Section>
   )
 }
 
@@ -239,52 +316,69 @@ function Data() {
     if (st?.running) setTimeout(() => pollCovers(), 3000)
   }
   return (
-    <div className="two-col">
-      {user?.role === 'admin' && <Card title="Backup">
-        <p className="muted">A consistent copy of the SQLite database (<code>VACUUM INTO</code>) — every account's shelf, so only admins can take it. Covers live next to it in <code>covers/</code>. Restore by stopping the app and replacing <code>pocket-bookshelf.db</code> in the data directory.</p>
-        <a className="btn primary" href={`${V1}/backup`}>Download database</a>
-      </Card>}
-      <Card title="Export & import">
-        <p className="muted">JSON is complete (books, thoughts, reading history, quotes) and can be imported again. CSV is one row per book for spreadsheets.</p>
-        <div className="row mb wrap"><a className="btn" href={`${V1}/export.json`}>Export JSON</a><a className="btn" href={`${V1}/export.csv`}>Export CSV</a></div>
+    <div className="stack loose">
+      {user?.role === 'admin' && <Section title="Backup" icon="database" sub={<>A consistent copy of the SQLite database (<code>VACUUM INTO</code>) — every account's shelf, so only admins can take it. Covers live next to it in <code>covers/</code>. Restore by stopping the app and replacing <code>pocket-bookshelf.db</code> in the data directory.</>}
+        actions={<a className="btn primary sm" href={`${V1}/backup`}><Icon name="download" size={14} />Download database</a>} />}
+      <Section title="Export" icon="download" sub="JSON is complete (books, thoughts, reading history, quotes) and can be imported again. CSV is one row per book for spreadsheets.">
+        <div className="row wrap"><a className="btn" href={`${V1}/export.json`}><Icon name="download" size={15} />Export JSON</a><a className="btn" href={`${V1}/export.csv`}><Icon name="download" size={15} />Export CSV</a></div>
+      </Section>
+      <Section title="Import" icon="upload" sub="Goodreads: My Books → Import and export → Export library. StoryGraph: Manage account → Export. Ratings, reviews, read dates and shelves come along; books already on your shelf are skipped. Covers are looked up afterwards by ISBN.">
         <div className="row wrap">
-          <label className="btn ghost">{busy ? 'Importing…' : 'Import JSON…'}<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importJSON(e.target.files[0])} /></label>
-          <label className="btn ghost">{busy ? 'Importing…' : 'Import Goodreads / StoryGraph CSV…'}<input type="file" accept=".csv,text/csv" hidden onChange={e => e.target.files?.[0] && importCSV(e.target.files[0])} /></label>
+          <label className="btn">{busy ? 'Importing…' : <><Icon name="upload" size={15} />Import JSON…</>}<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importJSON(e.target.files[0])} /></label>
+          <label className="btn">{busy ? 'Importing…' : <><Icon name="upload" size={15} />Goodreads / StoryGraph CSV…</>}<input type="file" accept=".csv,text/csv" hidden onChange={e => e.target.files?.[0] && importCSV(e.target.files[0])} /></label>
         </div>
-        <div className="row wrap mt"><button className="btn ghost" onClick={() => setKindle(true)}>Import Kindle highlights (My Clippings.txt)…</button></div>
+      </Section>
+      <Section title="Kindle highlights" icon="quote" sub="Every highlight from a Kindle's My Clippings.txt, matched to the books on your shelf." actions={<button type="button" className="btn sm" onClick={() => setKindle(true)}><Icon name="upload" size={14} />Import My Clippings.txt…</button>}>
         {kindle && <KindleImport onClose={() => setKindle(false)} />}
-        <p className="muted small mt">Goodreads: My Books → Import and export → Export library. StoryGraph: Manage account → Export. Ratings, reviews, read dates and shelves come along; books already on your shelf are skipped. Covers are looked up afterwards by ISBN.</p>
-        <hr className="mt mb" />
-        <div className="row wrap"><button className="btn" onClick={() => pollCovers(true)} disabled={covers?.running}>Find missing covers</button>
-          {covers && <span className="muted small">{covers.running ? `Looking up… ${covers.done}/${covers.total}` : covers.busy ? 'Another cover lookup is running; try again in a few minutes' : `Done: ${covers.found} of ${covers.total} found`}</span>}</div>
-        <p className="muted small mt">Checks Open Library by ISBN for books without a cover, one every few seconds.</p>
-      </Card>
+      </Section>
+      <Section title="Missing covers" icon="image" sub="Checks Open Library by ISBN for books without a cover, one every few seconds."
+        actions={<button type="button" className="btn sm" onClick={() => pollCovers(true)} disabled={covers?.running}><Icon name="refresh" size={14} />Find missing covers</button>}>
+        {covers && <p className="muted small" style={{ margin: 0 }}>{covers.running ? `Looking up… ${covers.done}/${covers.total}` : covers.busy ? 'Another cover lookup is running; try again in a few minutes' : `Done: ${covers.found} of ${covers.total} found`}</p>}
+      </Section>
     </div>
   )
 }
 
 function About() {
-  const { data } = useAsync(() => api.get<Record<string, unknown>>(`${V1}/settings/system`), [])
-  const counts = (data?.counts || {}) as Record<string, number>
+  const { data, error } = useAsync(() => api.get<Record<string, unknown>>(`${V1}/settings/system`), [])
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>
+  if (!data) return <Loading />
+  const counts = (data.counts || {}) as Record<string, number>
+  const tiles: [string, number | undefined, string][] = [['Books', counts.books, 'book'], ['Reads', counts.reads, 'check-circle'], ['Quotes', counts.quotes, 'quote'], ['Accounts', counts.users, 'users']]
+  const rows: [string, React.ReactNode][] = [
+    ['Version', <code key="v">{String(data.version)}</code>],
+    ['Uptime', String(data.uptime)],
+    ['Runtime', `${String(data.go)} · ${String(data.os)}/${String(data.arch)}`],
+    ['Time zone', String(data.timezone)],
+    ['Sign-in', String(data.auth_mode)],
+    ['Database', <span key="db"><code>{String(data.db_path)}</code> · {(Number(data.db_bytes) / 1024).toFixed(0)} KB</span>],
+    ['Covers', `${String(data.covers)} files · ${(Number(data.cover_bytes) / 1024 / 1024).toFixed(1)} MB`],
+  ]
   return (
-    <Card title="About">
-      <p><b>Pocket Bookshelf</b> is a small reading log: what you read, what you thought of it, the passages worth keeping, and a plan for what to read next. Book details and covers come from Open Library and Google Books. One binary, one SQLite file, one volume.</p>
-      <p className="muted small">Open source (MIT) — <a href="https://github.com/abjelosevic88/pocket-homelab-bookshelf" target="_blank" rel="noreferrer">github.com/abjelosevic88/pocket-homelab-bookshelf</a>. Sibling projects: Pocket Habits, Pocket Inventory and Pocket Invoicing.</p>
-      {data && (
-        <table className="table compact mt">
-          <tbody>
-            <tr><th>Version</th><td className="mono">{String(data.version)}</td></tr>
-            <tr><th>Runtime</th><td className="mono">{String(data.go)} · {String(data.os)}/{String(data.arch)}</td></tr>
-            <tr><th>Auth mode</th><td className="mono">{String(data.auth_mode)}</td></tr>
-            <tr><th>Database</th><td className="mono">{String(data.db_path)} · {(Number(data.db_bytes) / 1024).toFixed(0)} KB</td></tr>
-            <tr><th>Covers</th><td className="mono">{String(data.covers)} files · {(Number(data.cover_bytes) / 1024 / 1024).toFixed(1)} MB</td></tr>
-            <tr><th>Timezone</th><td className="mono">{String(data.timezone)}</td></tr>
-            <tr><th>Uptime</th><td className="mono">{String(data.uptime)}</td></tr>
-            <tr><th>Your shelf</th><td className="mono">{counts.books} books · {counts.reads} reads · {counts.quotes} quotes{counts.users !== undefined && <> · {counts.users} accounts on this box</>}</td></tr>
-          </tbody>
-        </table>
-      )}
-    </Card>
+    <div className="stack loose">
+      <div className="set-about-hero">
+        <img src="/favicon.svg" alt="" width={48} height={48} />
+        <div>
+          <h3>Pocket Bookshelf</h3>
+          <p className="muted small">A small reading log: what you read, what you thought of it, the passages worth keeping, and a plan for what to read next. Book details and covers come from Open Library and Google Books. One binary, one SQLite file, one volume — part of the Pocket apps.</p>
+        </div>
+      </div>
+      <div className="set-stats">
+        {tiles.filter(([, n]) => n !== undefined).map(([label, n, icon]) => (
+          <div key={label} className="set-stat"><Icon name={icon} size={16} /><span className="set-stat-n tnum">{n ?? 0}</span><span className="set-stat-l">{label === 'Accounts' ? 'Accounts on this box' : `On your shelf · ${label.toLowerCase()}`}</span></div>
+        ))}
+      </div>
+      <Section title="This server">
+        <dl className="set-dl">
+          {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+        </dl>
+      </Section>
+      <div className="row wrap">
+        <button type="button" className="btn" onClick={() => window.dispatchEvent(new CustomEvent('pb:shortcuts'))}><Icon name="keyboard" size={15} />Keyboard shortcuts</button>
+        <a className="btn" href="https://github.com/abjelosevic88/pocket-homelab-bookshelf" target="_blank" rel="noreferrer"><Icon name="external" size={15} />Project on GitHub</a>
+        <a className="btn" href="https://github.com/abjelosevic88/pocket-homelab-bookshelf/releases" target="_blank" rel="noreferrer"><Icon name="file" size={15} />Release notes</a>
+      </div>
+    </div>
   )
 }
 
@@ -299,8 +393,8 @@ function LanguagePicker({ value, onChange }: { value: string; onChange: (v: stri
       {list.map((c, i) => (
         <span key={c} className="chip active lang-chip">
           <b>{i + 1}.</b> {langName(c)}
-          {i > 0 && <button type="button" onClick={() => up(i)} title="Prefer this one more" aria-label={`Move ${langName(c)} up`}>↑</button>}
-          <button type="button" onClick={() => set(list.filter(x => x !== c))} title="Remove" aria-label={`Remove ${langName(c)}`}>✕</button>
+          {i > 0 && <button type="button" onClick={() => up(i)} title="Prefer this one more" aria-label={`Move ${langName(c)} up`}><Icon name="arrow-up" size={13} /></button>}
+          <button type="button" onClick={() => set(list.filter(x => x !== c))} title="Remove" aria-label={`Remove ${langName(c)}`}><Icon name="x" size={13} /></button>
         </span>
       ))}
       {list.length < 3 && (
@@ -319,9 +413,9 @@ function Templates() {
   const set = (l: ThoughtTemplate[]) => setF({ ...f, thought_templates: l })
   const upd = (i: number, t: Partial<ThoughtTemplate>) => set(list.map((x, j) => j === i ? { ...x, ...t } : x))
   return (
-    <div className="grid" style={{ gap: 16 }}>
-      <Card title="Thoughts templates" actions={<button className="btn sm" onClick={() => set([...list, { name: 'New template', body: '## 🧠 My thoughts\n\n## 🥰 Who would enjoy it?\n' }])}>+ Add template</button>}>
-        <p className="muted">When a book has no thoughts yet, its page offers these as a starting point. Write one heading per line: <code>## Heading</code> for a section, <code>### Sub-heading</code> under it; anything under a heading (like <code>1.</code> <code>2.</code> <code>3.</code>) is kept as a prompt. Sections you leave empty are hidden when the thoughts are shown.</p>
+    <div className="stack loose">
+      <Section title="Thoughts templates" actions={<button type="button" className="btn sm" onClick={() => set([...list, { name: 'New template', body: '## 🧠 My thoughts\n\n## 🥰 Who would enjoy it?\n' }])}><Icon name="plus" size={14} />Add template</button>}
+        sub={<>When a book has no thoughts yet, its page offers these as a starting point. Write one heading per line: <code>## Heading</code> for a section, <code>### Sub-heading</code> under it; anything under a heading (like <code>1.</code> <code>2.</code> <code>3.</code>) is kept as a prompt. Sections you leave empty are hidden when the thoughts are shown.</>}>
         {list.length === 0 && <p className="muted">No templates. Add one above.</p>}
         <div className="grid" style={{ gap: 14 }}>
           {list.map((t, i) => (
@@ -329,15 +423,15 @@ function Templates() {
               <div className="row">
                 <input value={t.name} onChange={e => upd(i, { name: e.target.value })} placeholder="Name (e.g. Fiction)" style={{ maxWidth: 280 }} aria-label="Template name" />
                 <span className="spacer" />
-                {i > 0 && <button className="btn ghost sm" onClick={() => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }} title="Move up">↑</button>}
-                <button className="btn ghost sm danger-text" onClick={() => set(list.filter((_, j) => j !== i))}>Delete</button>
+                {i > 0 && <button type="button" className="btn ghost sm icon-only" onClick={() => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }} title="Move up" aria-label="Move up"><Icon name="arrow-up" size={15} /></button>}
+                <button type="button" className="btn ghost sm danger-text" onClick={() => set(list.filter((_, j) => j !== i))}><Icon name="trash" size={14} />Delete</button>
               </div>
               <MarkdownEditor rows={Math.min(16, Math.max(6, t.body.split('\n').length + 1))} value={t.body} onChange={v => upd(i, { body: v })} />
             </div>
           ))}
         </div>
-        <div className="mt"><button className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
-      </Card>
+      </Section>
+      <div className="row"><button type="button" className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
     </div>
   )
 }
@@ -385,42 +479,36 @@ function AITab() {
   const run = async () => { try { await api.post(`${V1}/characters/run`, {}); toast('Writing what is missing…'); setTimeout(status.reload, 1500) } catch (e) { toast((e as Error).message, 'err') } }
   const st = status.data
   return (
-    <div className="two-col">
-      <Card title="OpenAI">
-        <div className="grid" style={{ gap: 14 }}>
-          <p className="muted">With your own OpenAI API key the app writes the characters of the novels on your shelf itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account. Other people's keys are never used for your books.</p>
-          <Field label="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
-            <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} />
-          </Field>
-          <Field label="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
-            {models.length > 0
-              ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} clearLabel="Default" />
-              : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} />}
-          </Field>
-          <div>
-            <label className="row"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} style={{ width: 'auto' }} /> Let it look books up on the web</label>
-            <p className="muted small" style={{ margin: '4px 0 0 26px' }}>More accurate for translations and lesser-known books. OpenAI charges a small fee per search.</p>
-          </div>
-          <div className="row wrap">
-            <button className="btn primary" onClick={() => save()} disabled={busy}>Save</button>
-            <button className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
-            {data.key_set && <button className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
-          </div>
-        </div>
-      </Card>
-      <Card title="Characters" actions={st?.writer === 'app' ? <button className="btn ghost sm" onClick={run} disabled={st.running}>{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
+    <div className="stack loose">
+      <Section title="OpenAI" icon="sparkles" sub="With your own OpenAI API key the app writes the characters of the novels on your shelf itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account. Other people's keys are never used for your books.">
+        <SettingRow stack title="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
+          <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} aria-label="OpenAI API key" />
+        </SettingRow>
+        <SettingRow title="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
+          {models.length > 0
+            ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} clearLabel="Default" ariaLabel="Model" />
+            : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} style={{ width: 200 }} aria-label="Model" />}
+        </SettingRow>
+        <SettingRow title="Let it look books up on the web" help="More accurate for translations and lesser-known books. OpenAI charges a small fee per search.">
+          <Switch checked={web} onChange={setWeb} label="Let it look books up on the web" />
+        </SettingRow>
+      </Section>
+      <div className="row wrap">
+        <button type="button" className="btn primary" onClick={() => save()} disabled={busy}>Save changes</button>
+        <button type="button" className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
+        {data.key_set && <button type="button" className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
+      </div>
+      <Section title="Characters" icon="users" sub={<>The <Icon name="refresh" size={12} className="inline-icon" /> button on a book page writes that book's characters again.</>}
+        actions={st?.writer === 'app' ? <button type="button" className="btn sm" onClick={run} disabled={st.running}><Icon name="sparkles" size={14} />{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
         {st ? (
-          <table className="table compact">
-            <tbody>
-              <tr><th>Written by</th><td>{st.writer === 'app' ? <>OpenAI · {data.model || data.default_model}</> : <span className="muted">the external writer (scripts/characters.py), if you run one</span>}</td></tr>
-              <tr><th>Waiting</th><td>{st.waiting === 0 ? 'nothing — every book has them' : `${st.waiting} book${st.waiting === 1 ? '' : 's'}`}{st.running && <span className="badge cat" style={{ marginLeft: 8 }}>writing…</span>}</td></tr>
-              {st.writer === 'app' && <tr><th>Written</th><td>{st.written} since the app started{st.failed > 0 && <span className="muted"> · {st.failed} failed, retried in 2 hours</span>}</td></tr>}
-              {st.last_error && <tr><th>Last error</th><td className="danger-text small">{st.last_error}{st.paused && <div className="muted">Paused until the key or model changes, or you press “Write missing now”.</div>}</td></tr>}
-            </tbody>
-          </table>
+          <dl className="set-dl">
+            <div><dt>Written by</dt><dd>{st.writer === 'app' ? <>OpenAI · {data.model || data.default_model}</> : <span className="muted">the external writer (scripts/characters.py), if you run one</span>}</dd></div>
+            <div><dt>Waiting</dt><dd>{st.waiting === 0 ? 'nothing — every book has them' : `${st.waiting} book${st.waiting === 1 ? '' : 's'}`}{st.running && <span className="badge cat" style={{ marginLeft: 8 }}>writing…</span>}</dd></div>
+            {st.writer === 'app' && <div><dt>Written</dt><dd>{st.written} since the app started{st.failed > 0 && <span className="muted"> · {st.failed} failed, retried in 2 hours</span>}</dd></div>}
+            {st.last_error && <div><dt>Last error</dt><dd className="danger-text small">{st.last_error}{st.paused && <div className="muted">Paused until the key or model changes, or you press “Write missing now”.</div>}</dd></div>}
+          </dl>
         ) : <Loading />}
-        <p className="muted small mt">↻ on a book page writes that book's characters again.</p>
-      </Card>
+      </Section>
     </div>
   )
 }
@@ -447,29 +535,24 @@ function DailyTab() {
     webhook: 'Any URL that accepts a JSON POST {title, body, url, date, quotes}',
   }
   return (
-    <div className="two-col">
-      <Card title="Daily highlights">
-        <div className="grid" style={{ gap: 14 }}>
-          <p className="muted">Every morning a few of your highlights come back: the ones you have not seen for longest, favourites more often, never two from the same book. They are on the <b>Daily</b> page anyway; here you choose whether they are also sent to your phone.</p>
-          <label className="row"><input type="checkbox" checked={f.enabled} onChange={e => set({ enabled: e.target.checked })} style={{ width: 'auto' }} /> Send them to my phone every day</label>
-          <div className="two-col tight">
-            <Field group label="How many"><Segmented size="sm" value={f.count} onChange={v => set({ count: v })} options={[3, 4, 5, 6, 7].map(n => ({ value: n, label: String(n) }))} /></Field>
-            <Field label="At"><input type="time" value={f.time} onChange={e => set({ time: e.target.value })} style={{ maxWidth: 140 }} /></Field>
-          </div>
-          <Field group label="Send through"><Segmented size="sm" value={f.channel} onChange={v => set({ channel: v })} options={[{ value: 'apprise', label: 'Apprise' }, { value: 'ntfy', label: 'ntfy' }, { value: 'webhook', label: 'Webhook' }]} /></Field>
-          <Field label="Address" help={hints[f.channel]}><input value={f.url} onChange={e => set({ url: e.target.value.trim() })} placeholder="http://…" spellCheck={false} /></Field>
-          <div className="row"><button className="btn primary" onClick={save} disabled={busy}>Save</button><button className="btn" onClick={test} disabled={busy || !f.url}>Send today’s now</button></div>
-        </div>
-      </Card>
-      <Card title="How it picks">
-        <ul className="muted small" style={{ paddingLeft: 18, margin: 0 }}>
+    <div className="stack loose">
+      <Section title="To your phone" icon="bell" sub={<>Every morning a few of your highlights come back: the ones you have not seen for longest, favourites more often, never two from the same book. They are on the <b>Daily</b> page anyway; here you choose whether they are also sent to your phone.</>}>
+        <SettingRow title="Send them to my phone every day"><Switch checked={f.enabled} onChange={v => set({ enabled: v })} label="Send them to my phone every day" /></SettingRow>
+        <SettingRow title="How many"><Segmented size="sm" value={f.count} onChange={v => set({ count: v })} options={[3, 4, 5, 6, 7].map(n => ({ value: n, label: String(n) }))} label="How many" /></SettingRow>
+        <SettingRow title="At"><input type="time" value={f.time} onChange={e => set({ time: e.target.value })} className="set-time" aria-label="Time" /></SettingRow>
+        <SettingRow title="Send through"><Segmented size="sm" value={f.channel} onChange={v => set({ channel: v })} options={[{ value: 'apprise', label: 'Apprise' }, { value: 'ntfy', label: 'ntfy' }, { value: 'webhook', label: 'Webhook' }]} label="Send through" /></SettingRow>
+        <SettingRow stack title="Address" help={hints[f.channel]}><input value={f.url} onChange={e => set({ url: e.target.value.trim() })} placeholder="http://…" spellCheck={false} aria-label="Address" /></SettingRow>
+      </Section>
+      <div className="row"><button type="button" className="btn primary" onClick={save} disabled={busy}>Save changes</button><button type="button" className="btn" onClick={test} disabled={busy || !f.url}><Icon name="mail" size={15} />Send today’s now</button></div>
+      <Section title="How it picks">
+        <ul className="muted small" style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 4 }}>
           <li>Highlights never shown come first, then the longest unseen; one shown in the last week rests.</li>
-          <li>♡ favourites count double.</li>
+          <li>Favourites count double.</li>
           <li>At most one highlight per book each day.</li>
           <li>Hidden highlights never come back (they stay in Quotes).</li>
-          <li>Today’s set stays the same all day; <b>↻ Shuffle</b> on the Daily page picks a new one.</li>
+          <li>Today’s set stays the same all day; <b>Shuffle</b> on the Daily page picks a new one.</li>
         </ul>
-      </Card>
+      </Section>
     </div>
   )
 }

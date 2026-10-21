@@ -32,11 +32,11 @@ export function AuthorPhotoPicker({ author, onClose, onChanged }: { author: Auth
         <div className="grid" style={{ gap: 10, flex: 1 }}>
           <div className="row wrap">
             <label className="btn primary">{busy === 'file' ? 'Uploading…' : 'Upload a picture…'}<input type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && fromFile(e.target.files[0])} /></label>
-            {author.photo && <button className="btn ghost danger-text" onClick={remove}>Remove photo</button>}
+            {author.photo && <button type="button" className="btn ghost danger-text" onClick={remove}>Remove photo</button>}
           </div>
           <form className="row" onSubmit={e => { e.preventDefault(); if (url) use(url) }}>
             <input value={url} onChange={e => setUrl(e.target.value.trim())} placeholder="…or paste an image address (https://…)" />
-            <button className="btn" disabled={!url || busy !== ''}>Use</button>
+            <button type="submit" className="btn" disabled={!url || busy !== ''}>Use</button>
           </form>
         </div>
       </div>

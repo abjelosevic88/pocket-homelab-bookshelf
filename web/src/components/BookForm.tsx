@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import type { Book, Candidate } from '../lib/types'
 import { Field, Modal, Segmented, useToast } from './ui'
+import { Icon } from './icons'
 import { BookSearch, fromCandidate, withDetails } from './BookSearch'
 import { Cover, RemoteCover } from './Cover'
 import { Select } from './Select'
@@ -81,7 +82,7 @@ export function EditBook({ book, onClose, onSaved }: { book: Book; onClose: () =
   if (finding) return (
     <Modal title="Find details & cover" onClose={() => setFinding(false)} size="lg">
       <BookSearch initial={[book.title, book.authors.split(',')[0]].filter(Boolean).join(' ')} onPick={apply} />
-      <div className="form-actions"><button className="btn" onClick={() => setFinding(false)}>Cancel</button></div>
+      <div className="form-actions"><button type="button" className="btn" onClick={() => setFinding(false)}>Cancel</button></div>
     </Modal>
   )
 
@@ -92,7 +93,7 @@ export function EditBook({ book, onClose, onSaved }: { book: Book; onClose: () =
           {coverUrl ? <RemoteCover url={coverUrl} title={draft.title} size="sm" /> : <Cover book={book} size="sm" />}
           <div className="grid" style={{ gap: 8 }}>
             <div className="row wrap">
-              <button type="button" className="btn" onClick={() => setFinding(true)}>⌕ Find details & cover</button>
+              <button type="button" className="btn" onClick={() => setFinding(true)}><Icon name="search" size={15} />Find details & cover</button>
               <label className="btn ghost">Upload cover…<input type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && uploadCover(e.target.files[0])} /></label>
               {book.cover && !coverUrl && <button type="button" className="btn ghost danger-text" onClick={removeCover}>Remove cover</button>}
             </div>
@@ -101,7 +102,7 @@ export function EditBook({ book, onClose, onSaved }: { book: Book; onClose: () =
         </div>
         <BookFields draft={draft} onChange={setDraft} full />
         {draft.source_url && <p className="muted small">Source: <a href={draft.source_url} target="_blank" rel="noreferrer">{draft.source === 'google' ? 'Google Books' : draft.source === 'openlibrary' ? 'Open Library' : draft.source_url}</a></p>}
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !draft.title.trim()}>Save</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy || !draft.title.trim()}>Save</button></div>
       </form>
     </Modal>
   )
