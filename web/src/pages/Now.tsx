@@ -10,6 +10,8 @@ import { Stars } from '../components/Stars'
 import { AddBook } from '../components/AddBook'
 import { FinishModal } from '../components/FinishModal'
 import { QuoteCard } from '../components/QuoteCard'
+import { Icon } from '../components/icons'
+import { useOnChange } from '../components/Layout'
 
 export default function Now() {
   const { settings } = useApp()
@@ -22,6 +24,7 @@ export default function Now() {
   const [adding, setAdding] = useState(false)
   const [finishing, setFinishing] = useState<Book | null>(null)
   const reloadAll = () => { reading.reload(); next.reload(); recent.reload(); dash.reload() }
+  useOnChange(reloadAll)
 
   const start = async (b: Book) => {
     try { await api.post(`${V1}/books/${b.id}/status`, { status: 'reading' }); toast(`Started “${b.title}”`); reloadAll() } catch (e) { toast((e as Error).message, 'err') }
@@ -34,11 +37,11 @@ export default function Now() {
   return (
     <>
       <PageHeader title="Reading now" sub={d && <>{d.read_this_year} {d.read_this_year === 1 ? 'book' : 'books'} read in {year}{d.pages_this_year > 0 && <> · {d.pages_this_year.toLocaleString()} pages</>}</>}
-        actions={<button className="btn primary" onClick={() => setAdding(true)}>+ Add book</button>} />
+        actions={<button type="button" className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={15} />Add book</button>} />
 
       {goal > 0 && d && (
         <Link to="/stats" className="goal card">
-          <div className="goal-text"><b>{d.read_this_year}</b> of {goal} books this year<span className="muted"> · {goalPace(d.read_this_year, goal)}</span></div>
+          <div className="goal-text"><Icon name="target" size={15} className="inline-icon goal-ico" /> <b>{d.read_this_year}</b> of {goal} books this year<span className="muted"> · {goalPace(d.read_this_year, goal)}</span></div>
           <div className="bar lg"><span className="fill" style={{ width: `${Math.min(100, (d.read_this_year * 100) / goal)}%` }} /></div>
         </Link>
       )}
@@ -48,23 +51,23 @@ export default function Now() {
           {reading.data.map(b => <ReadingCard key={b.id} book={b} onChanged={reloadAll} onFinish={() => setFinishing(b)} />)}
         </div>
       ) : (
-        <Card><Empty title="Not reading anything right now">Pick something from your plan below, or add a book.</Empty></Card>
+        <Card><Empty icon="book-open" title="Not reading anything right now">Pick something from your plan below, or add a book.</Empty></Card>
       )}
 
       <div className="two-col mt">
-        <Card title="Up next" actions={<Link to="/planner" className="btn ghost sm">Plan →</Link>}>
+        <Card title="Up next" actions={<Link to="/planner" className="btn ghost sm">Plan<Icon name="arrow-right" size={14} /></Link>}>
           {next.data && next.data.length > 0 ? (
             <ul className="mini-list">
               {next.data.map(b => (
                 <li key={b.id}>
                   <Link to={`/books/${b.id}`} className="row grow"><Cover book={b} size="xs" /><span><b>{b.title}</b><span className="muted small block">{b.authors}</span>{b.plan_note && <span className="muted small block note">“{b.plan_note}”</span>}</span></Link>
-                  <button className="btn sm" onClick={() => start(b)}>Start</button>
+                  <button type="button" className="btn sm" onClick={() => start(b)}><Icon name="play" size={13} />Start</button>
                 </li>
               ))}
             </ul>
           ) : <p className="muted">Your plan is empty. Add books you want to read and they line up here.</p>}
         </Card>
-        <Card title="Recently finished" actions={<Link to="/library?status=read&sort=finished" className="btn ghost sm">All →</Link>}>
+        <Card title="Recently finished" actions={<Link to="/library?status=read&sort=finished" className="btn ghost sm">All<Icon name="arrow-right" size={14} /></Link>}>
           {recent.data && recent.data.length > 0 ? (
             <ul className="mini-list">
               {recent.data.map(b => (
@@ -80,7 +83,7 @@ export default function Now() {
 
       {today.length > 0 && (
         <section className="mt">
-          <div className="row mb-sm"><h2 className="grow">Today’s highlights</h2><Link to="/daily" className="btn ghost sm">All {today.length} →</Link></div>
+          <div className="row mb-sm"><h2 className="grow">Today’s highlights</h2><Link to="/daily" className="btn ghost sm">All {today.length}<Icon name="arrow-right" size={14} /></Link></div>
           <figure className="quote-hero">
             <blockquote>{today[0].text}</blockquote>
             <figcaption>— <Link to={`/books/${today[0].book_id}`}>{today[0].book_title}</Link>{today[0].book_authors && <>, {today[0].book_authors.split(',')[0]}</>}{today[0].page && <span className="muted"> · {pageLabel(today[0].page)}</span>}</figcaption>
@@ -100,7 +103,7 @@ function goalPace(done: number, goal: number): string {
   const start = new Date(now.getFullYear(), 0, 1).getTime()
   const end = new Date(now.getFullYear() + 1, 0, 1).getTime()
   const expected = Math.round((goal * (now.getTime() - start)) / (end - start))
-  if (done >= goal) return 'goal reached 🎉'
+  if (done >= goal) return 'goal reached'
   if (done > expected) return `${done - expected} ahead of schedule`
   if (done === expected) return 'right on schedule'
   return `${expected - done} behind schedule`
@@ -131,7 +134,7 @@ function ReadingCard({ book, onChanged, onFinish }: { book: Book; onChanged: () 
             {book.pages > 0 && <span className="muted small">of {book.pages} · {pct}%</span>}
           </label>
         </div>
-        <div className="row mt-sm"><button className="btn primary sm" onClick={onFinish}>✓ Finished</button><Link to={`/books/${book.id}`} className="btn ghost sm">Notes & quotes</Link></div>
+        <div className="row mt-sm"><button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button><Link to={`/books/${book.id}`} className="btn ghost sm">Notes & quotes</Link></div>
       </div>
     </div>
   )

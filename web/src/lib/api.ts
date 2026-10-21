@@ -28,6 +28,8 @@ async function request<T>(method: string, url: string, body?: unknown, raw = fal
     } catch {}
     throw new ApiError(res.status, msg, data)
   }
+  // a change anywhere: the sidebar's counts and books in progress follow
+  if (method !== 'GET') window.dispatchEvent(new CustomEvent('pb:mutated'))
   if (raw) return (await res.text()) as unknown as T
   if (res.status === 204) return undefined as T
   return res.json()
@@ -50,5 +52,6 @@ export async function upload<T>(url: string, field: string, file: File): Promise
   const res = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
   const j = await res.json().catch(() => ({}))
   if (!res.ok) throw new ApiError(res.status, j.error || res.statusText, j)
+  window.dispatchEvent(new CustomEvent('pb:mutated'))
   return j as T
 }

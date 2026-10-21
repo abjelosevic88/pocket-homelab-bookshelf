@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import type { Book, Candidate, Status } from '../lib/types'
 import { Modal, useAsync, useToast } from './ui'
+import { Icon } from './icons'
 import { Select } from './Select'
 
 interface Entry { text: string; note: string; page: string; loc_start: number; loc_end: number; added: string; note_only: boolean }
@@ -66,7 +67,7 @@ export function KindleImport({ onClose, onDone }: { onClose: () => void; onDone?
       <p><b>{result.added}</b> new highlights{result.updated > 0 && <>, <b>{result.updated}</b> updated (longer version or note added)</>}{result.skipped > 0 && <>, {result.skipped} already there</>}.</p>
       {result.books_created > 0 && <p>{result.books_created} {result.books_created === 1 ? 'book was' : 'books were'} added to your shelf.</p>}
       <p className="muted small">Importing the same file again later only adds what is new.</p>
-      <div className="form-actions"><button className="btn primary" onClick={onClose}>Done</button></div>
+      <div className="form-actions"><button type="button" className="btn primary" onClick={onClose}>Done</button></div>
     </Modal>
   )
 
@@ -113,8 +114,8 @@ export function KindleImport({ onClose, onDone }: { onClose: () => void; onDone?
           </div>
           <div className="form-actions">
             <span className="muted small spacer">{fresh} new of {total} highlights{newBooks > 0 && ` · ${newBooks} new ${newBooks === 1 ? 'book' : 'books'}`}</span>
-            <button className="btn ghost" onClick={() => setPreview(null)} disabled={busy}>← Other file</button>
-            <button className="btn primary" onClick={run} disabled={busy || total === 0}>{busy ? 'Importing…' : `Import ${total} highlights`}</button>
+            <button type="button" className="btn ghost" onClick={() => setPreview(null)} disabled={busy}><Icon name="arrow-left" size={15} />Other file</button>
+            <button type="button" className="btn primary" onClick={run} disabled={busy || total === 0}>{busy ? 'Importing…' : `Import ${total} highlights`}</button>
           </div>
         </>
       )}

@@ -1,12 +1,12 @@
 import { coverColor, coverSrc } from '../lib/format'
 
 /** The book's cover, or a coloured placeholder with title and author. */
-export function Cover({ book, size = 'md' }: { book: { id: number; title: string; authors?: string; cover: string }; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
+export function Cover({ book, size = 'md' }: { book: { id: number; title: string; authors?: string; cover: string }; size?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg' }) {
   if (book.cover) return <img className={`cover ${size}`} src={coverSrc(book)} alt="" loading="lazy" />
   return (
     <div className={`cover ph ${size}`} style={{ background: coverColor(book.title) }} aria-hidden>
       <span className="t">{book.title}</span>
-      {book.authors && size !== 'xs' && <span className="a">{book.authors.split(',')[0]}</span>}
+      {book.authors && size !== 'xs' && size !== 'xxs' && <span className="a">{book.authors.split(',')[0]}</span>}
     </div>
   )
 }

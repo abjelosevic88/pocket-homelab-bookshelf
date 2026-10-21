@@ -5,6 +5,8 @@ import { useApp } from '../lib/app-context'
 import type { Book, Dashboard, SeriesNext } from '../lib/types'
 import { fmtMonth } from '../lib/format'
 import { Card, Confirm, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
+import { Icon } from '../components/icons'
+import { useOnChange } from '../components/Layout'
 import { Cover, RemoteCover } from '../components/Cover'
 import { AddBook, workCandidate } from '../components/AddBook'
 
@@ -21,6 +23,7 @@ export default function Planner() {
   const [removing, setRemoving] = useState<Book | null>(null)
   const next = useAsync(() => api.get<SeriesNext[]>(`${V1}/series/next`), [])
   const [addNext, setAddNext] = useState<SeriesNext | null>(null)
+  useOnChange(() => { reload(); dash.reload(); next.reload() })
 
   const groups: { key: string; books: Book[] }[] = []
   for (const b of data || []) {
@@ -54,11 +57,11 @@ export default function Planner() {
 
   return (
     <>
-      <PageHeader title="Reading plan" sub={data && `${data.length} ${data.length === 1 ? 'book' : 'books'} waiting`} actions={<button className="btn primary" onClick={() => setAdding(true)}>+ Add to plan</button>} />
+      <PageHeader title="Reading plan" sub={data && `${data.length} ${data.length === 1 ? 'book' : 'books'} waiting`} actions={<button type="button" className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={15} />Add to plan</button>} />
       {goal > 0 && d && (
-        <div className="callout mb">
-          {toGo === 0 ? <>Yearly goal of {goal} reached 🎉 — everything from here is a bonus.</> : <><b>{toGo}</b> more {toGo === 1 ? 'book' : 'books'} to reach {goal} this year — about <b>{(toGo / monthsLeft).toFixed(1)}</b> a month. {data && data.length < toGo && <span className="muted">Your plan has {data.length}.</span>}</>}
-        </div>
+        <div className="callout info mb"><Icon name="target" size={15} /><span>
+          {toGo === 0 ? <>Yearly goal of {goal} reached — everything from here is a bonus.</> : <><b>{toGo}</b> more {toGo === 1 ? 'book' : 'books'} to reach {goal} this year — about <b>{(toGo / monthsLeft).toFixed(1)}</b> a month. {data && data.length < toGo && <span className="muted">Your plan has {data.length}.</span>}</>}
+        </span></div>
       )}
       {next.data && next.data.length > 0 && (
         <Card className="mb" title="Next in your series">
@@ -68,14 +71,14 @@ export default function Planner() {
                 {n.book ? <Link to={`/books/${n.book.id}`}><Cover book={n.book} size="xs" /></Link> : <button type="button" className="series-open" onClick={() => setAddNext(n)} title="See the book"><RemoteCover url={n.thumb_url || ''} title={n.title} size="xs" /></button>}
                 <span className="grow">{n.book ? <b>{n.book.title}</b> : <button type="button" className="series-open" onClick={() => setAddNext(n)}><b>{n.title}</b></button>}
                   <span className="muted small block"><Link to={`/series/${encodeURIComponent(n.series)}`}>{n.series}</Link> · #{n.no}{n.total ? ` of ${n.total}` : ''} · you read {n.read}{n.book ? ' · already in your plan' : ''}</span></span>
-                {n.book ? <button className="btn sm" onClick={() => start(n.book!)}>Start</button> : <button className="btn sm" onClick={() => setAddNext(n)}>+ Add to plan</button>}
+                {n.book ? <button type="button" className="btn sm" onClick={() => start(n.book!)}><Icon name="play" size={13} />Start</button> : <button type="button" className="btn sm" onClick={() => setAddNext(n)}><Icon name="plus" size={14} />Add to plan</button>}
               </li>
             ))}
           </ul>
         </Card>
       )}
       {loading && !data ? <Loading /> : !data || data.length === 0 ? (
-        <Card><Empty title="Nothing planned yet">Add books you want to read. Put them in order, pencil some in for a month, and start the next one from here.</Empty></Card>
+        <Card><Empty icon="bookmark" title="Nothing planned yet">Add books you want to read. Put them in order, pencil some in for a month, and start the next one from here.</Empty></Card>
       ) : groups.map(g => (
         <section key={g.key || 'next'} className="plan-group">
           <h3>{g.key ? fmtMonth(g.key) : 'Up next'}{g.key && g.key < thisMonth() && <span className="badge warn">overdue</span>}<span className="muted small">{g.books.length}</span></h3>
@@ -91,11 +94,11 @@ export default function Planner() {
               <div className="actions">
                 <input type="month" value={b.planned_for} onChange={e => setMonth(b, e.target.value)} title="Plan for a month (empty = up next)" aria-label="Planned month" />
                 <span className="order">
-                  <button className="btn ghost sm" onClick={() => move(b, -1)} disabled={i === 0} aria-label="Move up">▲</button>
-                  <button className="btn ghost sm" onClick={() => move(b, 1)} disabled={i === g.books.length - 1} aria-label="Move down">▼</button>
+                  <button type="button" className="btn ghost sm" onClick={() => move(b, -1)} disabled={i === 0} aria-label="Move up" title="Move up"><Icon name="chevron-up" size={14} /></button>
+                  <button type="button" className="btn ghost sm" onClick={() => move(b, 1)} disabled={i === g.books.length - 1} aria-label="Move down" title="Move down"><Icon name="chevron-down" size={14} /></button>
                 </span>
-                <button className="btn sm" onClick={() => start(b)}>Start</button>
-                <button className="btn ghost sm danger-text" onClick={() => setRemoving(b)} aria-label="Remove">✕</button>
+                <button type="button" className="btn sm" onClick={() => start(b)}><Icon name="play" size={13} />Start</button>
+                <button type="button" className="btn ghost sm icon-only danger-text" onClick={() => setRemoving(b)} aria-label="Remove from the plan" title="Remove from the plan"><Icon name="x" size={15} /></button>
               </div>
             </div>
           ))}

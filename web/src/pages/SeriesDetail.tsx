@@ -7,6 +7,8 @@ import { Card, Loading, Modal, useAsync, useToast } from '../components/ui'
 import { Cover, RemoteCover } from '../components/Cover'
 import { Stars } from '../components/Stars'
 import { AddBook, workCandidate } from '../components/AddBook'
+import { Icon } from '../components/icons'
+import { useCrumb } from '../components/Layout'
 
 interface Detail { name: string; author: string; qid: string; total: number; read: number; books: number; entries: SeriesEntry[] }
 
@@ -18,6 +20,7 @@ export default function SeriesDetail() {
   const [adding, setAdding] = useState<SeriesEntry | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [newName, setNewName] = useState(name)
+  useCrumb(data?.name || name)
   if (loading && !data) return <Loading />
   if (!data) return null
   const author = data.author || data.entries.find(e => e.book)?.book?.authors.split(',')[0] || ''
@@ -27,11 +30,10 @@ export default function SeriesDetail() {
   }
   return (
     <div className="series-page">
-      <Link to="/series" className="muted small">← Series</Link>
-      <div className="row wrap mt-sm" style={{ alignItems: 'baseline' }}>
+      <div className="row wrap" style={{ alignItems: 'baseline' }}>
         <h1 className="grow">{data.name}</h1>
-        <button className="btn ghost sm" onClick={() => { setNewName(name); setRenaming(true) }}>Rename</button>
-        {data.qid && <a className="btn ghost sm" href={`https://www.wikidata.org/wiki/${data.qid}`} target="_blank" rel="noreferrer">Wikidata ↗</a>}
+        <button type="button" className="btn ghost sm" onClick={() => { setNewName(name); setRenaming(true) }}><Icon name="edit" size={14} />Rename</button>
+        {data.qid && <a className="btn ghost sm" href={`https://www.wikidata.org/wiki/${data.qid}`} target="_blank" rel="noreferrer">Wikidata<Icon name="external" size={13} /></a>}
       </div>
       <div className="muted">{author}</div>
       <div className="series-progress mt">
@@ -55,7 +57,7 @@ export default function SeriesDetail() {
                     <RemoteCover url={e.thumb_url || ''} title={e.title} size="xs" />
                     <span className="grow"><b>{e.title || 'Untitled'}</b>{e.year && <span className="muted small"> · {e.year}</span>}<span className="muted small block">Not on your shelf</span></span>
                   </button>
-                  <button className="btn sm" onClick={() => setAdding(e)}>+ Want</button>
+                  <button type="button" className="btn sm" onClick={() => setAdding(e)}><Icon name="plus" size={14} />Want</button>
                 </>
               )}
             </li>
@@ -70,7 +72,7 @@ export default function SeriesDetail() {
           <form onSubmit={e => { e.preventDefault(); rename() }} className="grid" style={{ gap: 12 }}>
             <input value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
             <p className="muted small">Renames it on all {data.books} books. Renaming to the name of another series merges them.</p>
-            <div className="form-actions"><button type="button" className="btn" onClick={() => setRenaming(false)}>Cancel</button><button className="btn primary" disabled={!newName.trim()}>Rename</button></div>
+            <div className="form-actions"><button type="button" className="btn" onClick={() => setRenaming(false)}>Cancel</button><button type="submit" className="btn primary" disabled={!newName.trim()}>Rename</button></div>
           </form>
         </Modal>
       )}

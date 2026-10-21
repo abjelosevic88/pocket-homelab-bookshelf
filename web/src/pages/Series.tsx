@@ -3,6 +3,7 @@ import { api, V1 } from '../lib/api'
 import type { SeriesSummary } from '../lib/types'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
+import { Icon } from '../components/icons'
 
 export default function Series() {
   const { toast } = useToast()
@@ -14,9 +15,9 @@ export default function Series() {
   }
   return (
     <>
-      <PageHeader title="Series" sub={data && `${data.length} series on your shelf`} actions={<button className="btn ghost" onClick={detect} title="Look up all books without a series again">↻ Look for series</button>} />
+      <PageHeader title="Series" sub={data && `${data.length} series on your shelf`} actions={<button type="button" className="btn" onClick={detect} title="Look up all books without a series again"><Icon name="refresh" size={15} />Look for series</button>} />
       {loading && !data ? <Loading /> : !data || data.length === 0 ? (
-        <Card><Empty title="No series yet">Series are found automatically (from Wikidata) for books linked to Open Library. You can also set one on a book under Edit details.</Empty></Card>
+        <Card><Empty icon="layers" title="No series yet">Series are found automatically (from Wikidata) for books linked to Open Library. You can also set one on a book under Edit details.</Empty></Card>
       ) : (
         <div className="series-grid">
           {data.map(s => {

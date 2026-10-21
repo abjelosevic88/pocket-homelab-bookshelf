@@ -17,7 +17,7 @@ export function FinishModal({ book, abandon = false, onClose, onDone }: { book: 
     e.preventDefault(); setBusy(true)
     try {
       const b = await api.post<Book>(`${V1}/books/${book.id}/status`, { status: abandon ? 'abandoned' : 'read', date, rating, review })
-      toast(abandon ? 'Moved to abandoned' : `Finished “${book.title}” 🎉`)
+      toast(abandon ? 'Moved to abandoned' : `Finished “${book.title}”`)
       onDone(b)
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
@@ -35,7 +35,7 @@ export function FinishModal({ book, abandon = false, onClose, onDone }: { book: 
         <Field label={abandon ? 'Why did you stop?' : 'Your thoughts'} help="Optional — you can always come back to it on the book's page.">
           <textarea rows={6} value={review} onChange={e => setReview(e.target.value)} placeholder={abandon ? 'Not for me because…' : 'What stayed with you? Would you recommend it?'} autoFocus />
         </Field>
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>{abandon ? 'Abandon' : 'Save'}</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy}>{abandon ? 'Abandon' : 'Save'}</button></div>
       </form>
     </Modal>
   )

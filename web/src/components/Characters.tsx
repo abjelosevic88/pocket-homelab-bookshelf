@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, V1 } from '../lib/api'
 import { langName } from '../lib/languages'
 import { Card, Segmented, useAsync, useToast } from './ui'
+import { Icon } from './icons'
 
 interface Character { name: string; role: 'main' | 'supporting'; description: string }
 interface CharacterSet { status: 'ok' | 'none' | 'unknown'; characters: Character[]; source: string; updated_at: string }
@@ -45,7 +46,7 @@ export function CharactersCard({ bookId }: { bookId: number }) {
   if (set.status === 'none') return null // non-fiction: nothing to show
   if (set.status !== 'ok' || !current) {
     return (
-      <Card className="mt" title="Characters" actions={<button className="btn ghost sm" onClick={again}>Try again</button>}>
+      <Card className="mt" title="Characters" actions={<button type="button" className="btn ghost sm" onClick={again}>Try again</button>}>
         <p className="muted small">This book is not known well enough to list its characters reliably.</p>
       </Card>
     )
@@ -56,7 +57,7 @@ export function CharactersCard({ bookId }: { bookId: number }) {
   return (
     <Card className="mt" title={`Characters (${chars.length})`} actions={<>
       {langs.length > 1 && <Segmented size="sm" value={current} onChange={pick} options={langs.map(l => ({ value: l, label: l.toUpperCase(), title: langName(l) }))} />}
-      <button className="btn ghost sm" onClick={again} title="Write the characters again">↻</button>
+      <button type="button" className="btn ghost sm icon-only" onClick={again} title="Write the characters again" aria-label="Write the characters again"><Icon name="refresh" size={14} /></button>
     </>}>
       <ul className="characters">
         {shown.map(c => (
@@ -66,7 +67,7 @@ export function CharactersCard({ bookId }: { bookId: number }) {
           </li>
         ))}
       </ul>
-      {chars.length > SHOWN && <button className="btn ghost sm mt-sm" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${chars.length}`}</button>}
+      {chars.length > SHOWN && <button type="button" className="btn ghost sm mt-sm" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${chars.length}`}</button>}
       <p className="muted small mt-sm">Spoiler-free · written by AI{set.source ? ` (${set.source})` : ''} — may contain mistakes.</p>
     </Card>
   )

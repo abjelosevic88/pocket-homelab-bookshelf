@@ -3,6 +3,7 @@ import type { Book } from '../lib/types'
 import { fmtDate, progress, splitTags, STATUS_SHORT } from '../lib/format'
 import { Cover } from './Cover'
 import { Stars } from './Stars'
+import { Icon } from './icons'
 
 export function BookCard({ book }: { book: Book }) {
   const pct = progress(book)
@@ -10,7 +11,7 @@ export function BookCard({ book }: { book: Book }) {
     <Link to={`/books/${book.id}`} className="book-card">
       <div className="cover-wrap">
         <Cover book={book} size="md" />
-        {book.favorite && <span className="fav" title="Favourite">♥</span>}
+        {book.favorite && <span className="fav" title="Favourite"><Icon name="heart" size={12} fill /></span>}
         {book.status !== 'read' && <span className={`status-pill ${book.status}`}>{STATUS_SHORT[book.status]}</span>}
       </div>
       <div className="nm">{book.title}</div>
@@ -27,7 +28,7 @@ export function BookRow({ book }: { book: Book }) {
     <Link to={`/books/${book.id}`} className="book-row">
       <Cover book={book} size="xs" />
       <div className="info">
-        <div className="nm">{book.title}{book.favorite && <span className="fav-inline">♥</span>}</div>
+        <div className="nm">{book.title}{book.favorite && <span className="fav-inline" title="Favourite"><Icon name="heart" size={12} fill className="inline-icon" /></span>}</div>
         <div className="meta">
           <span>{book.authors || 'Unknown author'}</span>
           {book.series && <span className="hide-sm">· {book.series}{book.series_no !== '' ? ` #${book.series_no}` : ''}</span>}

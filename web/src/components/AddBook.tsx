@@ -4,6 +4,7 @@ import { api, ApiError, V1 } from '../lib/api'
 import type { Book, Candidate, Format, Status } from '../lib/types'
 import { todayISO } from '../lib/format'
 import { Field, Modal, Segmented, useToast } from './ui'
+import { Icon } from './icons'
 import { BookSearch, fromCandidate, withDetails } from './BookSearch'
 import { RemoteCover } from './Cover'
 import { Stars } from './Stars'
@@ -92,7 +93,7 @@ export function AddBook({ status: initialStatus = 'want', initial, query, extra,
       {step.kind === 'search' && (
         <>
           <BookSearch onPick={pick} initial={query} />
-          <div className="form-actions"><button className="btn ghost" onClick={() => setStep({ kind: 'manual' })}>Not found? Add it by hand</button></div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setStep({ kind: 'manual' })}>Not found? Add it by hand</button></div>
         </>
       )}
       {step.kind === 'pick' && (
@@ -106,16 +107,16 @@ export function AddBook({ status: initialStatus = 'want', initial, query, extra,
               <div className="authors">{draft.authors || 'Unknown author'}</div>
               <div className="meta muted small">{[draft.published, draft.pages ? `${draft.pages} pages` : '', draft.publisher, draft.isbn13, step.c.editions ? `${step.c.editions} editions` : ''].filter(Boolean).join(' · ')}</div>
               {step.c.languages && step.c.languages.length > 1 && <div className="meta muted small">Available in {step.c.languages.slice(0, 8).map(langName).join(', ')}{step.c.languages.length > 8 ? ` and ${step.c.languages.length - 8} more` : ''}</div>}
-              {step.c.source_url && <a className="small" href={step.c.source_url} target="_blank" rel="noreferrer">{step.c.source === 'google' ? 'Google Books' : 'Open Library'} ↗</a>}
+              {step.c.source_url && <a className="small" href={step.c.source_url} target="_blank" rel="noreferrer"><span className="icon-text">{step.c.source === 'google' ? 'Google Books' : 'Open Library'}<Icon name="external" size={12} /></span></a>}
               {step.loading ? <p className="muted small mt-sm"><span className="spinner sm" /> Fetching description…</p> : draft.description && <p className="desc small">{draft.description}</p>}
-              {dup && <div className="callout mt-sm small">Already on your shelf. <a href={`/books/${dup}`} onClick={e => { e.preventDefault(); onClose(); navigate(`/books/${dup}`) }}>Open it</a> — or add another copy.</div>}
+              {dup && <div className="callout warn mt-sm small"><Icon name="info" size={15} /><span>Already on your shelf. <a href={`/books/${dup}`} onClick={e => { e.preventDefault(); onClose(); navigate(`/books/${dup}`) }}>Open it</a> — or add another copy.</span></div>}
             </div>
           </div>
           <hr className="mt mb" />
           {verdict}
           <div className="form-actions">
-            {initial ? <button className="btn ghost" onClick={onClose}>Cancel</button> : <button className="btn ghost" onClick={() => setStep({ kind: 'search' })}>← Back to results</button>}
-            <button className="btn primary" onClick={save} disabled={busy || step.loading}>{busy ? 'Adding…' : 'Add to shelf'}</button>
+            {initial ? <button type="button" className="btn ghost" onClick={onClose}>Cancel</button> : <button type="button" className="btn ghost" onClick={() => setStep({ kind: 'search' })}><Icon name="arrow-left" size={15} />Back to results</button>}
+            <button type="button" className="btn primary" onClick={save} disabled={busy || step.loading}>{busy ? 'Adding…' : 'Add to shelf'}</button>
           </div>
         </div>
       )}
@@ -125,8 +126,8 @@ export function AddBook({ status: initialStatus = 'want', initial, query, extra,
           <hr />
           {verdict}
           <div className="form-actions">
-            <button className="btn ghost" onClick={() => setStep({ kind: 'search' })}>← Search instead</button>
-            <button className="btn primary" onClick={save} disabled={busy || !draft.title.trim()}>{busy ? 'Adding…' : 'Add to shelf'}</button>
+            <button type="button" className="btn ghost" onClick={() => setStep({ kind: 'search' })}><Icon name="arrow-left" size={15} />Search instead</button>
+            <button type="button" className="btn primary" onClick={save} disabled={busy || !draft.title.trim()}>{busy ? 'Adding…' : 'Add to shelf'}</button>
           </div>
         </div>
       )}

@@ -4,6 +4,8 @@ import { api, upload, V1 } from '../lib/api'
 import type { Author as AuthorT, AuthorCandidate, Book, Candidate, Status } from '../lib/types'
 import { fmtDate, lifespan } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, useAsync, useToast } from '../components/ui'
+import { Icon } from '../components/icons'
+import { useCrumb } from '../components/Layout'
 import { AuthorPhoto } from '../components/AuthorBits'
 import { BookRow } from '../components/BookCard'
 import { RemoteCover } from '../components/Cover'
@@ -32,7 +34,9 @@ export default function Author() {
   // Still being looked up in the background: check back shortly.
   useEffect(() => { if (data && !data.author.enriched_at) { const t = setTimeout(reload, 3000); return () => clearTimeout(t) } }, [data, reload])
 
-  if (error) return <div className="card pad"><p>{error}</p><Link to="/authors">← Authors</Link></div>
+  useCrumb(data?.author.name)
+
+  if (error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{error} · <Link to="/authors">All authors</Link></span></div>
   if (!data) return <Loading />
   const a = data.author
 
@@ -61,7 +65,6 @@ export default function Author() {
 
   return (
     <div className="author-page">
-      <Link to="/authors" className="muted small">← Authors</Link>
       <div className="author-head">
         <button type="button" className="photo-change" onClick={() => setPhotoOpen(true)} title="Change photo">
           <AuthorPhoto author={a} size="lg" />
@@ -71,12 +74,12 @@ export default function Author() {
           <h1>{a.name}</h1>
           <div className="muted">{fmtYearRange(a.birth_date, a.death_date) || span}</div>
           <div className="row wrap mt-sm">
-            {a.wikipedia && <a className="btn ghost sm" href={a.wikipedia} target="_blank" rel="noreferrer">Wikipedia ↗</a>}
-            {a.ol_key && <a className="btn ghost sm" href={`https://openlibrary.org/authors/${a.ol_key}`} target="_blank" rel="noreferrer">Open Library ↗</a>}
-            <button className="btn sm" onClick={() => setEditing(true)}>Edit</button>
-            <button className="btn ghost sm" onClick={() => refresh()} disabled={busy}>{busy ? 'Updating…' : '↻ Refresh'}</button>
-            <button className="btn ghost sm" onClick={() => setRelinking(true)} title="Pick the right Open Library author">Wrong person?</button>
-            {a.books === 0 && <button className="btn ghost sm danger-text" onClick={() => setDeleting(true)}>Remove</button>}
+            {a.wikipedia && <a className="btn ghost sm" href={a.wikipedia} target="_blank" rel="noreferrer">Wikipedia<Icon name="external" size={13} /></a>}
+            {a.ol_key && <a className="btn ghost sm" href={`https://openlibrary.org/authors/${a.ol_key}`} target="_blank" rel="noreferrer">Open Library<Icon name="external" size={13} /></a>}
+            <button type="button" className="btn sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} />Edit</button>
+            <button type="button" className="btn ghost sm" onClick={() => refresh()} disabled={busy}><Icon name="refresh" size={14} />{busy ? 'Updating…' : 'Refresh'}</button>
+            <button type="button" className="btn ghost sm" onClick={() => setRelinking(true)} title="Pick the right Open Library author">Wrong person?</button>
+            {a.books === 0 && <button type="button" className="btn ghost sm danger-text" onClick={() => setDeleting(true)}>Remove</button>}
           </div>
         </div>
       </div>
@@ -85,7 +88,7 @@ export default function Author() {
         <div className="stat"><div className="n">{a.read}</div><div className="l">read</div></div>
         <div className="stat"><div className="n">{a.reading}</div><div className="l">reading</div></div>
         <div className="stat"><div className="n">{a.want}</div><div className="l">planned</div></div>
-        <div className="stat"><div className="n">{a.avg_rating ? a.avg_rating.toFixed(1) : '–'}</div><div className="l">your average ★</div></div>
+        <div className="stat"><div className="n">{a.avg_rating ? a.avg_rating.toFixed(1) : '–'}</div><div className="l">your average rating</div></div>
         <div className="stat"><div className="n">{a.pages ? a.pages.toLocaleString() : '–'}</div><div className="l">pages read</div></div>
       </div>
 
@@ -107,7 +110,7 @@ export default function Author() {
         {works.loading && !works.data ? <Loading /> : !works.data?.linked ? (
           <p className="muted">Not linked to Open Library, so the bibliography is unknown. Use “Wrong person?” to pick the right author.</p>
         ) : works.data.unavailable ? <p className="muted">Open Library did not answer. Try again in a moment.</p>
-          : other.length === 0 ? <p className="muted">You have everything Open Library lists. 🎉</p> : (
+          : other.length === 0 ? <p className="muted">You have everything Open Library lists.</p> : (
             <>
               <div className="work-grid">
                 {shownOther.map(w => (
@@ -118,15 +121,15 @@ export default function Author() {
                       {w.original_title && <div className="muted small orig" title={w.original_title}>{w.original_title}</div>}
                       <div className="muted small">{[w.published, w.pages ? `${w.pages} p.` : '', w.language ? langName(w.language) : ''].filter(Boolean).join(' · ')}</div>
                       <div className="row mt-sm">
-                        <button className="btn sm" onClick={() => addWork(w, 'want')} title="Add to your reading plan">+ Want</button>
-                        <button className="btn ghost sm" onClick={() => addWork(w, 'read')} title="You have read it">Read it</button>
+                        <button type="button" className="btn sm" onClick={() => addWork(w, 'want')} title="Add to your reading plan"><Icon name="plus" size={14} />Want</button>
+                        <button type="button" className="btn ghost sm" onClick={() => addWork(w, 'read')} title="You have read it">Read it</button>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              {other.length > shownOther.length && <div className="mt"><button className="btn ghost" onClick={() => setShowAll(true)}>Show all {other.length}</button></div>}
-              <p className="muted small mt">From Open Library. Books available in your preferred languages (Settings → Metadata) come first, shown as that edition; the original title below. Click a book for details.</p>
+              {other.length > shownOther.length && <div className="mt"><button type="button" className="btn ghost" onClick={() => setShowAll(true)}>Show all {other.length}</button></div>}
+              <p className="muted small mt">From Open Library. Books available in your preferred languages (Settings → Book search) come first, shown as that edition; the original title below. Click a book for details.</p>
             </>
           )}
       </Card>
@@ -148,7 +151,7 @@ function Biography({ short, full, more }: { short: string; full: string; more: s
   if (!open) return (
     <>
       <div className={`bio ${full ? '' : 'clamped'}`}>{short}</div>
-      <button className="btn ghost sm mt-sm read-more" onClick={() => setOpen(true)}>Read more{full ? ` · ${Math.max(1, Math.round(full.split(/\s+/).length / 230))} min` : ''} ▾</button>
+      <button type="button" className="btn ghost sm mt-sm read-more" onClick={() => setOpen(true)}>Read more{full ? ` · ${Math.max(1, Math.round(full.split(/\s+/).length / 230))} min` : ''}<Icon name="chevron-down" size={14} /></button>
     </>
   )
   return (
@@ -158,8 +161,8 @@ function Biography({ short, full, more }: { short: string; full: string; more: s
           : l.startsWith('## ') ? <h3 key={i}>{l.slice(3)}</h3>
             : l.trim() ? <p key={i}>{l}</p> : null)}</div>
       <div className="row wrap">
-        <button className="btn ghost sm read-more" onClick={() => setOpen(false)}>Show less ▴</button>
-        {full && more && <a className="btn ghost sm" href={more} target="_blank" rel="noreferrer">Continue on Wikipedia ↗</a>}
+        <button type="button" className="btn ghost sm read-more" onClick={() => setOpen(false)}>Show less<Icon name="chevron-up" size={14} /></button>
+        {full && more && <a className="btn ghost sm" href={more} target="_blank" rel="noreferrer">Continue on Wikipedia<Icon name="external" size={13} /></a>}
       </div>
     </>
   )
@@ -204,7 +207,7 @@ function EditAuthor({ author, onClose, onSaved }: { author: AuthorT; onClose: ()
           <Field label="Died"><input value={f.death_date} onChange={e => setF({ ...f, death_date: e.target.value })} /></Field>
         </div>
         <Field label="Biography" help="Edited text is kept when you refresh from Open Library."><textarea rows={8} value={f.bio} onChange={e => setF({ ...f, bio: e.target.value })} /></Field>
-        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary" disabled={busy}>Save</button></div>
       </form>
     </Modal>
   )

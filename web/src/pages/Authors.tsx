@@ -4,6 +4,7 @@ import { api, V1 } from '../lib/api'
 import type { Author, AuthorCandidate } from '../lib/types'
 import { lifespan } from '../lib/format'
 import { Empty, Loading, Modal, PageHeader, useAsync, useDebounce, useToast } from '../components/ui'
+import { Icon } from '../components/icons'
 import { AuthorPhoto } from '../components/AuthorBits'
 import { Stars } from '../components/Stars'
 import { Select } from '../components/Select'
@@ -22,13 +23,13 @@ export default function Authors() {
   const changeSort = (v: string) => { setSort(v); localStorage.setItem('pb-author-sort', v) }
   return (
     <>
-      <PageHeader title="Authors" sub={data && <>{data.length} authors{pending && <span className="muted"> · looking up bios and photos…</span>}</>} actions={<button className="btn primary" onClick={() => setFinding(true)}>+ Find author</button>} />
+      <PageHeader title="Authors" sub={data && <>{data.length} authors{pending && <span className="muted"> · looking up bios and photos…</span>}</>} actions={<button type="button" className="btn primary" onClick={() => setFinding(true)}><Icon name="search" size={15} />Find author</button>} />
       <div className="toolbar">
-        <div className="search"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter authors…" /></div>
+        <div className="search"><Icon name="search" size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Filter authors…" /></div>
         <Select value={sort} onChange={changeSort} ariaLabel="Sort" options={SORTS.map(s => ({ value: s.value, label: `Sort: ${s.label.toLowerCase()}` }))} />
       </div>
       {loading && !data ? <Loading /> : data && data.length === 0 ? (
-        <div className="card"><Empty title={dq ? 'No authors match' : 'No authors yet'}>Authors appear here as you add books, or find one with “+ Find author”.</Empty></div>
+        <div className="card"><Empty icon="feather" title={dq ? 'No authors match' : 'No authors yet'}>Authors appear here as you add books, or find one with “Find author”.</Empty></div>
       ) : (
         <div className="author-grid">
           {data?.map(a => (
@@ -82,7 +83,7 @@ export function FindAuthor({ onClose, initial = '', onPick }: { onClose: () => v
   return (
     <Modal title={onPick ? 'Which Open Library author is it?' : 'Find an author'} onClose={onClose} size="lg">
       <div className="book-search">
-        <div className="search-bar"><span className="ico">⌕</span><input value={q} onChange={e => setQ(e.target.value)} placeholder="Author name" autoFocus />{busy && <span className="spinner sm" />}</div>
+        <div className="search-bar"><Icon name="search" size={16} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Author name" autoFocus />{busy && <span className="spinner sm" />}</div>
         {results && results.length === 0 && !busy && <p className="muted mt">No results. Try the name in another spelling.</p>}
         {!results && <p className="muted small mt">{q.trim().length > 0 && q.trim().length < 3 ? 'Keep typing…' : 'Searches Open Library. Adding an author fetches a short biography and photo, and lists their books so you can plan what to read.'}</p>}
         {results && results.length > 0 && (

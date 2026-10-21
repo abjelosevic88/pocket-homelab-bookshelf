@@ -3,6 +3,7 @@ import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Candidate } from '../lib/types'
 import { Segmented, useDebounce } from './ui'
+import { Icon } from './icons'
 import { RemoteCover } from './Cover'
 import { langName } from '../lib/languages'
 
@@ -33,7 +34,7 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
   return (
     <div className="book-search">
       <div className="search-bar">
-        <span className="ico">⌕</span>
+        <Icon name="search" size={16} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Title, author or ISBN" autoFocus />
         {busy && <span className="spinner sm" />}
       </div>
@@ -64,7 +65,7 @@ export function BookSearch({ initial = '', onPick }: { initial?: string; onPick:
         </ul>
       )}
       {!results && q.trim().length > 0 && q.trim().length < 3 && <p className="muted small mt">Keep typing…</p>}
-      {!results && q.trim().length === 0 && <p className="muted small mt">Searches {sources.map(s => SOURCE_LABEL[s]).join(' and ')}.{!sources.includes('google') && ' Add a free Google Books API key under Settings → Metadata for a second catalogue.'}</p>}
+      {!results && q.trim().length === 0 && <p className="muted small mt">Searches {sources.map(s => SOURCE_LABEL[s]).join(' and ')}.{!sources.includes('google') && ' Add a free Google Books API key under Settings → Book search for a second catalogue.'}</p>}
     </div>
   )
 }
