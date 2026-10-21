@@ -62,7 +62,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 <p align="center">
   <img src="docs/screenshots/mobile-now.png" width="260" alt="Reading now on a phone">&nbsp;&nbsp;
   <img src="docs/screenshots/quotes-dark.png" width="520" alt="Quotes in dark mode"><br>
-  <sub>Installable PWA with a bottom tab bar, plus dark mode.</sub>
+  <sub>Installable PWA: a drawer and an add button on phones, light and dark themes that follow the system.</sub>
 </p>
 
 ## Features
@@ -116,7 +116,7 @@ Everything is an environment variable with a sensible default. The important one
 | `AUTH_MODE` | `local` | `local` (built-in login, multi-user), `proxy` (trust `Remote-User` from your SSO proxy; users auto-created), `none` (single implicit user with no login, for a trusted LAN only). |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | – | Create the first admin without the setup screen. |
 | `SECURE_COOKIES` | `false` | Set `true` behind HTTPS. |
-| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books for the owner (everyone can also set their own in Settings → Metadata). |
+| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books for the owner (everyone can also set their own in Settings → Book search). |
 | `DEMO_DATA` | `false` | Seed a sample shelf into an empty database. |
 
 The full list is in [docs/configuration.md](docs/configuration.md), and reverse-proxy snippets are in [docs/reverse-proxy.md](docs/reverse-proxy.md).
@@ -147,11 +147,11 @@ Everything else, including a Homepage `customapi` widget, is in [docs/api.md](do
 ## Characters
 
 The book page lists each novel's characters with a one- or two-sentence note on each — only what you learn
-in the first chapters, so nothing is spoiled — in every preferred language (Settings → Metadata). Non-fiction
+in the first chapters, so nothing is spoiled — in every preferred language (Settings → Book search). Non-fiction
 gets none.
 
 **With an OpenAI key** (Settings → AI — each person their own; `OPENAI_API_KEY` counts for the owner) the app writes the characters of that person's books itself, in the background:
-right after a book is added, whenever *↻* on a book page asks for a rewrite, and every 30 minutes for anything
+right after a book is added, whenever the refresh button on a book page asks for a rewrite, and every 30 minutes for anything
 still missing. Pick the model there (the list comes from your account; default `gpt-5-mini`) and whether it
 may search the web — more accurate for translations and lesser-known books. Answers come back as strict,
 schema-checked JSON. A bad key or an empty quota pauses writing until the settings change; a book that fails

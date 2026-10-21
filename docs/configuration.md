@@ -26,7 +26,7 @@ All settings are environment variables. Nothing is required.
 
 | Variable | Default | Description |
 |---|---|---|
-| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue for the owner (first account). A key saved under Settings → Metadata takes precedence; other people save their own. |
+| `GOOGLE_BOOKS_API_KEY` | – | Enables Google Books as a second catalogue for the owner (first account). A key saved under Settings → Book search takes precedence; other people save their own. |
 | `OPENAI_API_KEY` | – | Lets the app write the characters of the owner's books itself. A key saved under Settings → AI takes precedence; other people save their own. |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Another server speaking the OpenAI Responses API. |
 | `GOOGLE_BOOKS_COUNTRY` | `US` | Country sent to Google Books with every request (ISO code, e.g. `BA`). Google needs one and fails with *503 backendFailed* when it cannot place the server's IP address. |
@@ -38,7 +38,7 @@ See [metadata.md](metadata.md) for what each catalogue gives you and how covers 
 
 | Variable | Default | Description |
 |---|---|---|
-| `AUTH_MODE` | `local` | `local`: built-in email + password, first-run setup screen, users managed under Settings → Users. `proxy`: trust the user name from a header set by your SSO proxy; users are auto-created on first visit (first one becomes admin). `none`: no login at all, one implicit user — only for trusted networks. |
+| `AUTH_MODE` | `local` | `local`: built-in email + password, first-run setup screen, users managed under Settings → People. `proxy`: trust the user name from a header set by your SSO proxy; users are auto-created on first visit (first one becomes admin). `none`: no login at all, one implicit user — only for trusted networks. |
 | `AUTH_PROXY_HEADER` | `Remote-User` | Header carrying the user name in `proxy` mode. |
 | `AUTH_PROXY_EMAIL_HEADER` | `Remote-Email` | Header carrying the email in `proxy` mode. |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | – | In `local` mode, create this admin on first start instead of showing the setup screen. Password must be 8+ characters. |
@@ -58,7 +58,7 @@ In `local` mode a configured provider adds a "Sign in with …" button above the
 ## In-app settings
 
 - **Settings → General:** app title, yearly reading goal (books), which page opens first.
-- **Settings → Metadata:** default search source (All / Open Library / Google Books) and the Google Books API key.
+- **Settings → Book search:** default search source (All / Open Library / Google Books) and the Google Books API key.
 
 ## Forgot your password?
 
