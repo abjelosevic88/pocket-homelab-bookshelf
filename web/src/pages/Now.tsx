@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Book, DailySet, Dashboard } from '../lib/types'
-import { daysBetween, fmtDate, progress, todayISO, pageLabel } from '../lib/format'
+import { daysBetween, fmtDate, hasProgress, progress, todayISO, pageLabel } from '../lib/format'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
@@ -127,11 +127,11 @@ function ReadingCard({ book, onChanged, onFinish }: { book: Book; onChanged: () 
         <div className="muted">{book.authors}</div>
         {days !== null && <div className="muted small">{days === 0 ? 'Started today' : `Day ${days + 1}`} · since {fmtDate(book.started_on)}</div>}
         <div className="progress-row">
-          {book.pages > 0 && <div className="bar lg"><span className="fill" style={{ width: `${pct}%` }} /></div>}
+          {hasProgress(book) && <div className="bar lg"><span className="fill" style={{ width: `${pct}%` }} /></div>}
           <label className="page-input">
             <span className="muted small">Page</span>
             <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-            {book.pages > 0 && <span className="muted small">of {book.pages} · {pct}%</span>}
+            {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null && <span className="muted small">{pct}% on your e-reader</span>}
           </label>
         </div>
         <div className="row mt-sm"><button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button><Link to={`/books/${book.id}`} className="btn ghost sm">Notes & quotes</Link></div>

@@ -1,18 +1,18 @@
 import { PocketModelSelect } from '../components/PocketModelSelect'
 import { AskButton } from '../components/AskButton'
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
-import { Avatar, Confirm, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
+import type { APIToken, Book, KosyncDocument, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
+import { Avatar, Confirm, CopyField, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
 import { KindleImport } from '../components/KindleImport'
 import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 
-type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'profile' | 'users' | 'api' | 'data' | 'about'
+type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'profile' | 'users' | 'api' | 'data' | 'about'
 
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', sub: 'Your yearly goal and start page, and the app title.' },
@@ -20,6 +20,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'templates', label: 'Templates', icon: 'text', sub: 'Starting points for “My thoughts” on a book.' },
   { id: 'daily', label: 'Daily highlights', icon: 'sun', sub: 'A few of your highlights every morning — and whether they are sent to your phone.' },
   { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Pocket AI or OpenAI, for the characters of the novels on your shelf.' },
+  { id: 'reader', label: 'Reader sync', icon: 'refresh', sub: 'Reading progress from KOReader, CrossPoint and other e-readers that speak KOSync.' },
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
   { id: 'users', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
   { id: 'api', label: 'API tokens', icon: 'key', sub: 'Personal tokens for widgets, shortcuts and scripts.' },
@@ -27,7 +28,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'about', label: 'About', icon: 'info', sub: 'Version, numbers and the server.' },
 ]
 // other names the sections were or could be linked by
-const ALIAS: Record<string, TabId> = { people: 'users', tokens: 'api', search: 'metadata', backup: 'data', import: 'data' }
+const ALIAS: Record<string, TabId> = { people: 'users', tokens: 'api', search: 'metadata', backup: 'data', import: 'data', kosync: 'reader', koreader: 'reader', crosspoint: 'reader' }
 
 export default function Settings() {
   const { tab: raw } = useParams()
@@ -84,6 +85,7 @@ export default function Settings() {
             {tab === 'templates' && <Templates />}
             {tab === 'daily' && <DailyTab />}
             {tab === 'ai' && <AITab />}
+            {tab === 'reader' && <ReaderSync />}
             {tab === 'profile' && <Profile />}
             {tab === 'users' && <Users />}
             {tab === 'api' && <Tokens />}
@@ -272,6 +274,78 @@ function Profile() {
       </Section>}
       <div className="row"><button type="submit" className="btn primary" disabled={busy}>Save changes</button></div>
     </form>
+  )
+}
+
+function ReaderSync() {
+  const { toast } = useToast()
+  const { user } = useApp()
+  const { data, setData, reload } = useAsync(() => api.get<KosyncState>(`${V1}/kosync`), [])
+  const books = useAsync(() => api.get<Book[]>(`${V1}/books?sort=title`), [])
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [off, setOff] = useState(false)
+  const [linking, setLinking] = useState<string | null>(null)
+  useEffect(() => { if (data) setUsername(data.account?.username || (user?.email || '').split('@')[0].replace(/[^A-Za-z0-9._@+-]/g, '')) }, [data?.account?.username]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data) return <Loading />
+  const acc = data.account
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true)
+    try { setData(await api.put<KosyncState>(`${V1}/kosync/account`, { username, password })); setPassword(''); toast(acc ? 'Saved — log in again on your devices if you changed anything' : 'Reader sync is on') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const link = async (d: KosyncDocument, book_id: number | null, ignored = false) => {
+    try { await api.put(`${V1}/kosync/documents/${d.document}`, { book_id, ignored }); setLinking(null); reload() } catch (e) { toast((e as Error).message, 'err') }
+  }
+  const forget = async (d: KosyncDocument) => { try { await api.del(`${V1}/kosync/documents/${d.document}`); reload() } catch (e) { toast((e as Error).message, 'err') } }
+  const name = (d: KosyncDocument) => d.title ? `${d.title}${d.authors ? ` — ${d.authors}` : ''}` : d.filename ? d.filename.split('/').pop() : `Document ${d.document.slice(0, 8)}…`
+  const when = (ts: number) => new Date(ts * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  const options = (books.data || []).map(b => ({ value: String(b.id), label: b.authors ? `${b.title} — ${b.authors}` : b.title }))
+  return (
+    <>
+      <Section title="Your sync account" icon="key" sub="E-readers log in with a username and password of their own, not your Bookshelf login. Pick them here, then enter the same on each device."
+        actions={acc && <button type="button" className="btn ghost sm danger-text" onClick={() => setOff(true)}>Turn off</button>}>
+        {acc && <>
+          <SettingRow stack title="Server" help="Use this exact address as the custom sync server."><CopyField value={data.url} label="Sync server" /></SettingRow>
+          <SettingRow title="Last sync" help="When a device last logged in or sent progress.">{acc.last_seen ? <span className="muted">{when(Date.parse(acc.last_seen) / 1000)}</span> : <span className="muted">never</span>}</SettingRow>
+        </>}
+        <form onSubmit={save} className="stack mt">
+          <Field label="Username"><input value={username} onChange={e => setUsername(e.target.value.trim())} autoComplete="off" spellCheck={false} required /></Field>
+          <Field label={acc ? 'New password' : 'Password'} help={acc ? 'Leave empty to keep the current one.' : 'At least 8 characters. Devices only ever send a hash of it.'}><input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" minLength={acc ? undefined : 8} required={!acc} /></Field>
+          <div><button type="submit" className="btn primary" disabled={busy}>{acc ? 'Save' : 'Turn on reader sync'}</button></div>
+        </form>
+      </Section>
+      {acc && <Section title="Connect a device" icon="link">
+        <ul className="plain-list">
+          <li><b>KOReader</b>: open a book → Tools → Progress sync → Custom sync server → <code>{data.url}</code>. Then Register / login → <b>Login</b> with the username and password above (registering new accounts is closed).</li>
+          <li><b>CrossPoint</b>: Settings → KOReader Sync → server <code>{data.url}</code>, same username and password. Turn on “send metadata” so books match by title on their own.</li>
+          <li><b>CrossPoint Sync</b>: Connections → <b>Another KOSync server</b> → <code>{data.url}</code>, username, password → Connect. It mirrors progress only, without titles: link each book once below.</li>
+        </ul>
+      </Section>}
+      <Section title="Books from your e-readers" icon="book" sub="Each file a device reads. Progress on a linked book moves its page (books with a page count) and moves it from Want to read to Reading. Books it cannot match by title wait here to be linked once.">
+        {data.documents.length === 0 ? <p className="muted">Nothing synced yet.</p> : (
+          <ul className="plain-list kosync-docs">
+            {data.documents.map(d => (
+              <li key={d.document} className="row wrap">
+                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                  <div className="ellipsis">{name(d)}</div>
+                  <div className="muted small">{Math.round(d.percentage * 100)}% · {d.device || 'device'} · {when(d.timestamp)}</div>
+                  <div className="small">{d.ignored ? <span className="muted">Ignored</span> : d.book_id ? <>→ <Link to={`/books/${d.book_id}`}>{d.book_title}</Link></> : <span className="danger-text">Not linked to a book</span>}</div>
+                </div>
+                {linking === d.document
+                  ? <div style={{ flex: '1 1 260px' }}><Select value={d.book_id ? String(d.book_id) : ''} onChange={v => v && link(d, Number(v))} options={options} placeholder="Find the book…" ariaLabel="Book" /></div>
+                  : <div className="row">
+                      <button type="button" className="btn sm" onClick={() => setLinking(d.document)}>{d.book_id ? 'Change' : 'Link'}</button>
+                      {(d.book_id || !d.ignored) && <button type="button" className="btn ghost sm" onClick={() => link(d, null, !d.book_id)}>{d.book_id ? 'Unlink' : 'Ignore'}</button>}
+                      <button type="button" className="btn ghost sm danger-text" onClick={() => forget(d)} title="Forget it; the device sends it again on its next sync">Forget</button>
+                    </div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+      {off && <Confirm confirmLabel="Turn off" title="Turn reader sync off?" message="Devices can no longer log in or send progress. The books listed here and their links stay." onCancel={() => setOff(false)} onConfirm={async () => { setOff(false); try { await api.del(`${V1}/kosync/account`); setPassword(''); reload() } catch (e) { toast((e as Error).message, 'err') } }} />}
+    </>
   )
 }
 

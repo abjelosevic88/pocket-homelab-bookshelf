@@ -1,4 +1,11 @@
 export interface User { id: number; email: string; name: string; role: 'admin' | 'member'; created_at: string }
+export interface KosyncAccount { username: string; created_at: string; last_seen: string }
+export interface KosyncDocument {
+  document: string; progress: string; percentage: number; device: string; device_id: string; timestamp: number
+  title: string; authors: string; filename: string; book_id: number | null; ignored: boolean
+  book_title: string; book_authors: string
+}
+export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[] }
 export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }
 
 export type Status = 'want' | 'reading' | 'read' | 'abandoned'
@@ -39,6 +46,7 @@ export interface Book {
   finished_on: string
   read_count: number
   quote_count: number
+  reader_percent: number | null // latest position from an e-reader (0..1)
 }
 
 export interface Read { id: number; book_id: number; started_on: string; finished_on: string; abandoned: boolean }

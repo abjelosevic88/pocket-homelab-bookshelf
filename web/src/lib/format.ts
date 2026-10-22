@@ -59,9 +59,15 @@ export const FORMAT_LABEL: Record<string, string> = { paper: 'Paper', ebook: 'E-
 
 export function coverSrc(b: { id: number; cover: string }): string { return `/api/v1/books/${b.id}/cover?v=${encodeURIComponent(b.cover)}` }
 
-export function progress(b: Pick<Book, 'current_page' | 'pages'>): number {
-  if (!b.pages || !b.current_page) return 0
+export function progress(b: Pick<Book, 'current_page' | 'pages'> & { reader_percent?: number | null }): number {
+  if (!b.pages) return b.reader_percent != null ? Math.round(b.reader_percent * 100) : 0
+  if (!b.current_page) return 0
   return Math.min(100, Math.round((b.current_page * 100) / b.pages))
+}
+
+/** Whether there is a percentage to show: a page count, or an e-reader that syncs the book. */
+export function hasProgress(b: Pick<Book, 'pages'> & { reader_percent?: number | null }): boolean {
+  return b.pages > 0 || b.reader_percent != null
 }
 
 export function ratingText(r: number): string { return r ? `${r % 1 ? r.toFixed(1) : r}★` : '' }

@@ -20,6 +20,8 @@ All settings are environment variables. Nothing is required.
 | `METRICS_ENABLED` | `true` | Serve Prometheus metrics on `/metrics` (unauthenticated — restrict at the proxy if exposed). |
 | `CORE_URL` / `CORE_REGISTRATION_KEY` | – | [Pocket Core](https://git.bjelke.org/abjelosevic88/pocket-homelab-core): register on start (the key is needed once; the minted app token lives in `$DATA_DIR/core.token`), publish `bookshelf.started` / `bookshelf.finished` / `bookshelf.abandoned` / `bookshelf.rated`, and accept the tokens Core hands to paired phones. |
 | `CORE_APP_URL` | `BASE_URL` | How Core reaches this app for health checks (e.g. `http://host.docker.internal:8171`). |
+| `KOSYNC_PORT` | `0` (off) | A second listener that serves only the KOReader sync protocol (KOSync), so it can be published to the internet without the rest of the app. The protocol is always available on the main port under `/kosync`. See Settings → Reader sync. |
+| `KOSYNC_PUBLIC_URL` | `BASE_URL/kosync` | The sync server address shown in Settings → Reader sync (e.g. `https://kosync.example.com`). |
 | `DEMO_DATA` | `false` | Seed a sample shelf into an *empty* database. |
 
 ## Book metadata

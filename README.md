@@ -144,6 +144,21 @@ Everything else, including a Homepage `customapi` widget, is in [docs/api.md](do
 
 **App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Bookshelf offers `books:read` ("See your books": `GET /books`, `GET /books/{id}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their shelf; every other route answers 403. Pocket Day uses it for the day's reading. The link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
 
+## Reader sync (KOReader, CrossPoint)
+
+Bookshelf is a KOSync server, the protocol behind KOReader's "Progress sync" (sync.koreader.rocks).
+Pick a sync username and password under **Settings → Reader sync**, then point a device at
+`BASE_URL/kosync` (or at a dedicated port, `KOSYNC_PORT`, that serves nothing else and can be
+published on its own):
+
+- **KOReader**: Tools → Progress sync → Custom sync server, then *Login* (registration is closed).
+- **CrossPoint**: KOReader Sync settings; with "send metadata" on, books match by title.
+- **CrossPoint Sync**: Connections → *Another KOSync server* mirrors progress here.
+
+Devices know a book by its file hash. A file is matched to a book on the shelf by the title and
+authors the device sends (else its file name); the rest are linked once in Settings. Progress on a
+linked book moves its current page and starts it when it was on the want-to-read list.
+
 ## Characters
 
 The book page lists each novel's characters with a one- or two-sentence note on each — only what you learn

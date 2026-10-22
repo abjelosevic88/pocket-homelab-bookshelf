@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import type { Book as BookT, Quote, Read, Status } from '../lib/types'
-import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
+import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
@@ -114,15 +114,16 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
   const days = book.started_on ? daysBetween(book.started_on, todayISO()) : null
   return (
     <Card className="mt" title="Progress" actions={<button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button>}>
-      {book.pages > 0 && <div className="bar lg mb-sm"><span className="fill" style={{ width: `${pct}%` }} /></div>}
+      {hasProgress(book) && <div className="bar lg mb-sm"><span className="fill" style={{ width: `${pct}%` }} /></div>}
       <div className="row wrap">
         <label className="page-input"><span className="muted small">Page</span>
           <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-          {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : <span className="muted small">(add the page count under Edit details for a percentage)</span>}
+          {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null ? <span className="muted small">{pct}% on your e-reader</span> : <span className="muted small">(add the page count under Edit details for a percentage)</span>}
         </label>
         <span className="spacer" />
         {days !== null && book.started_on && <span className="muted small">Started {fmtDate(book.started_on)} · day {days + 1}</span>}
       </div>
+      {book.reader_percent != null && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from your e-reader · <Link to="/settings/reader">Reader sync</Link></p>}
     </Card>
   )
 }

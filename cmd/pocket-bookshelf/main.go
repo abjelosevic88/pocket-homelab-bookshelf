@@ -127,11 +127,30 @@ func serve() {
 			os.Exit(1)
 		}
 	}()
+	var kosyncSrv *http.Server
+	if cfg.KosyncPort > 0 {
+		kosyncSrv = &http.Server{
+			Addr:              fmt.Sprintf("%s:%d", cfg.Host, cfg.KosyncPort),
+			Handler:           srv.KosyncRouter(),
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+		go func() {
+			log.Info("reader sync (KOSync) listening", "addr", kosyncSrv.Addr)
+			if err := kosyncSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("kosync server", "err", err)
+				os.Exit(1)
+			}
+		}()
+	}
 	<-ctx.Done()
 	log.Info("shutting down")
 	shutdownCtx, c2 := context.WithTimeout(context.Background(), 15*time.Second)
 	defer c2()
 	_ = httpSrv.Shutdown(shutdownCtx)
+	if kosyncSrv != nil {
+		_ = kosyncSrv.Shutdown(shutdownCtx)
+	}
 }
 
 func runBackup(args []string) {
