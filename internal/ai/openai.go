@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"io"
 	"net/http"
 	"sort"
@@ -15,6 +16,7 @@ import (
 
 // OpenAI calls the OpenAI Responses API.
 type OpenAI struct {
+	Pocket    *core.InferenceClient
 	Key       string
 	Model     string
 	WebSearch bool   // let the model look books up on the web
@@ -126,6 +128,19 @@ func (o *OpenAI) Models(ctx context.Context) ([]string, error) {
 
 // Characters asks the model for a book's characters in langs.
 func (o *OpenAI) Characters(ctx context.Context, b Book, langs []string) (*Result, error) {
+	if o.Pocket != nil {
+		schema, _ := json.Marshal(Schema(langs))
+		out, err := o.Pocket.Complete(ctx, "Return book characters matching this JSON schema: "+string(schema)+". Use only facts you know; do not invent characters. No web search is available.", Prompt(b, langs), true)
+		if err != nil {
+			return nil, err
+		}
+		var result Result
+		if err := json.Unmarshal([]byte(out.Text), &result); err != nil {
+			return nil, err
+		}
+		return &result, nil
+	}
+
 	model := o.Model
 	if model == "" {
 		model = DefaultModel
