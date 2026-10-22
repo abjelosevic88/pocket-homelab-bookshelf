@@ -58,6 +58,11 @@ type Config struct {
 	CoreRegistrationKey string
 	CoreAppURL          string // how Core reaches this app; defaults to BASE_URL
 
+	// Reader sync (KOSync): a second port that serves only the sync protocol,
+	// to publish on its own; and the address devices are told to use.
+	KosyncPort      int
+	KosyncPublicURL string
+
 	DemoData bool
 }
 
@@ -136,6 +141,9 @@ func Load() (*Config, error) {
 		CoreURL:             strings.TrimRight(env("CORE_URL", ""), "/"),
 		CoreRegistrationKey: env("CORE_REGISTRATION_KEY", ""),
 		CoreAppURL:          strings.TrimRight(env("CORE_APP_URL", ""), "/"),
+
+		KosyncPort:      envInt("KOSYNC_PORT", 0),
+		KosyncPublicURL: strings.TrimRight(env("KOSYNC_PUBLIC_URL", ""), "/"),
 
 		DemoData: envBool("DEMO_DATA", false),
 	}

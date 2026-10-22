@@ -73,6 +73,8 @@ type Book struct {
 	FinishedOn string `json:"finished_on"` // latest finished (not abandoned) read
 	ReadCount  int    `json:"read_count"`  // finished, not abandoned
 	QuoteCount int    `json:"quote_count"`
+	// Latest position from an e-reader (0..1), when one syncs this book.
+	ReaderPercent *float64 `json:"reader_percent"`
 }
 
 // Read is one time through a book.

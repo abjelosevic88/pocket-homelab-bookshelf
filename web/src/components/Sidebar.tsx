@@ -4,7 +4,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Book, Dashboard } from '../lib/types'
-import { progress } from '../lib/format'
+import { hasProgress, progress } from '../lib/format'
 import { Icon } from './icons'
 import { Cover } from './Cover'
 import { useOnChange, type ShellAction } from './Layout'
@@ -124,7 +124,7 @@ function BookRow({ b, onAction, onNavigate }: { b: Book; onAction: (a: ShellActi
       <NavLink to={`/books/${b.id}`} onClick={onNavigate} className={({ isActive }) => `cal-check ${isActive ? 'is-active' : ''}`} title={[b.title, b.authors].filter(Boolean).join(' · ')}>
         <Cover book={b} size="xxs" />
         <span className="cal-name ellipsis">{b.title}</span>
-        {b.pages > 0 && <span className="sb-pct">{pct}%</span>}
+        {hasProgress(b) && <span className="sb-pct">{pct}%</span>}
       </NavLink>
       <button type="button" className="btn ghost icon-only xs cal-more" aria-label={`Options for ${b.title}`} aria-haspopup="menu" aria-expanded={!!menu} onClick={e => setMenu(rectOf(e.currentTarget))}><Icon name="more" size={15} /></button>
       {menu && <Menu anchor={menu} items={items} onClose={() => setMenu(null)} width={200} />}
