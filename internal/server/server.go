@@ -221,6 +221,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/books/{id}/notes", s.handleBookNotes)
 			r.Get("/books/{id}/cover", s.handleGetCover)
 			r.Get("/books/{id}/covers", s.handleCoverSuggestions)
+			r.Get("/books/{id}/covers/ai", s.handleAICovers)
 			r.Post("/books/{id}/cover", s.handleSetCover)
 			r.Delete("/books/{id}/cover", s.handleDeleteCover)
 			r.Post("/covers/fetch-missing", s.handleFetchCovers)

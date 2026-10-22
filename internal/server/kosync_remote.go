@@ -270,7 +270,12 @@ func (s *Server) enrichKosyncBook(ctx context.Context, u *store.User, d *store.K
 			s.log.Warn("kosync cover", "book", b.ID, "url", cover, "err", err)
 		} else if err := s.writeCover(ctx, b, data, ct); err != nil {
 			s.log.Warn("kosync cover", "book", b.ID, "err", err)
+		} else {
+			return
 		}
+	}
+	if b.Cover == "" {
+		s.fetchMissingCovers(u.ID, []int64{b.ID}) // ISBN, then the person's AI, in the background
 	}
 }
 

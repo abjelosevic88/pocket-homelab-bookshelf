@@ -503,7 +503,7 @@ function Data() {
       <Section title="Kindle highlights" icon="quote" sub="Every highlight from a Kindle's My Clippings.txt, matched to the books on your shelf." actions={<button type="button" className="btn sm" onClick={() => setKindle(true)}><Icon name="upload" size={14} />Import My Clippings.txt…</button>}>
         {kindle && <KindleImport onClose={() => setKindle(false)} />}
       </Section>
-      <Section title="Missing covers" icon="image" sub="Checks Open Library by ISBN for books without a cover, one every few seconds."
+      <Section title="Missing covers" icon="image" sub="Checks Open Library by ISBN for books without a cover, one every few seconds. What it does not find is asked of Pocket AI (Settings → AI): it names the edition's ISBNs or the original title, and only covers that really download are saved."
         actions={<button type="button" className="btn sm" onClick={() => pollCovers(true)} disabled={covers?.running}><Icon name="refresh" size={14} />Find missing covers</button>}>
         {covers && <p className="muted small" style={{ margin: 0 }}>{covers.running ? `Looking up… ${covers.done}/${covers.total}` : covers.busy ? 'Another cover lookup is running; try again in a few minutes' : `Done: ${covers.found} of ${covers.total} found`}</p>}
       </Section>

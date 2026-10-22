@@ -4,6 +4,7 @@ import type { Book } from '../lib/types'
 import { langName } from '../lib/languages'
 import { Field, Loading, Modal, useAsync, useToast } from './ui'
 import { Cover } from './Cover'
+import { Icon } from './icons'
 
 interface CoverOption { url: string; thumb: string; source: string; label: string; language?: string }
 
@@ -14,6 +15,20 @@ export function CoverPicker({ book, onClose, onChanged }: { book: Book; onClose:
   const [busy, setBusy] = useState('')
   const [url, setUrl] = useState('')
   const [broken, setBroken] = useState<Set<string>>(new Set())
+  const [aiState, setAiState] = useState<'' | 'busy' | 'done'>('')
+  const [aiCovers, setAiCovers] = useState<CoverOption[]>([])
+  const [aiNote, setAiNote] = useState('')
+
+  const askAI = async () => {
+    setAiState('busy'); setAiNote('')
+    try {
+      const r = await api.get<{ covers: CoverOption[]; hints: { original_title: string; isbns: string[] } }>(`${V1}/books/${book.id}/covers/ai`)
+      setAiCovers(r.covers)
+      const facts = [r.hints.original_title && r.hints.original_title !== book.title && `original: “${r.hints.original_title}”`, r.hints.isbns.length > 0 && `${r.hints.isbns.length} ISBN${r.hints.isbns.length > 1 ? 's' : ''}`].filter(Boolean).join(' · ')
+      setAiNote(r.covers.length ? `${r.covers.length} covers checked and ready${facts ? ` — ${facts}` : ''}.` : `Pocket AI found nothing that downloads${facts ? ` (${facts})` : ''}. Upload one or paste an address above.`)
+      setAiState('done')
+    } catch (e) { setAiNote((e as Error).message); setAiState('done') }
+  }
 
   const use = async (u: string) => {
     setBusy(u)
@@ -40,6 +55,28 @@ export function CoverPicker({ book, onClose, onChanged }: { book: Book; onClose:
             <button type="submit" className="btn" disabled={!url || busy !== ''}>Use</button>
           </form>
         </div>
+      </div>
+      <div className="ai-covers mt">
+        <div className="row wrap">
+          <div className="grow">
+            <h3>Find with Pocket AI</h3>
+            <p className="muted small">For translations and local editions the catalogues miss. Pocket AI names the edition, then each cover is downloaded to check it before it is shown. Takes up to a minute.</p>
+          </div>
+          <button type="button" className="btn" onClick={askAI} disabled={aiState === 'busy' || busy !== ''}><Icon name="sparkles" size={14} />{aiState === 'busy' ? 'Searching…' : aiState === 'done' ? 'Search again' : 'Find covers'}</button>
+        </div>
+        {aiState === 'busy' && <Loading label="Asking Pocket AI and checking covers…" />}
+        {aiNote && aiState === 'done' && <p className={`small ${aiCovers.length ? 'muted' : 'danger-text'}`}>{aiNote}</p>}
+        {aiCovers.length > 0 && (
+          <div className="cover-grid mt-sm">
+            {aiCovers.map(c => (
+              <button key={c.url} type="button" className={`cover-option ${busy === c.url ? 'busy' : ''}`} onClick={() => use(c.url)} disabled={busy !== ''} title={c.label}>
+                <img src={c.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                <span className="cap">{c.language ? <b>{langName(c.language)}</b> : null}{c.language && c.label ? ' · ' : ''}{c.label}</span>
+                {busy === c.url && <span className="spinner sm" />}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <h3 className="mt mb-sm">Covers of other editions</h3>
       {loading ? <Loading /> : covers.length === 0 ? <p className="muted">No other covers found. Upload one or paste an address above.</p> : (

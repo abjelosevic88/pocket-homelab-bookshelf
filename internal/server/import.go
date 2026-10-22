@@ -192,7 +192,9 @@ type coverJob struct {
 
 // fetchMissingCovers looks up covers by ISBN on Open Library for the given
 // books (all cover-less books of the user when ids is nil), one request every
-// few seconds to stay inside Open Library's rate limit for ISBN lookups.
+// few seconds to stay inside Open Library's rate limit for ISBN lookups. What
+// that does not find is asked of the person's AI (Pocket AI or OpenAI) when
+// one is connected: see aiCovers.
 func (s *Server) fetchMissingCovers(userID int64, ids []int64) bool {
 	if ids != nil && len(ids) == 0 {
 		return false
@@ -215,9 +217,10 @@ func (s *Server) fetchMissingCovers(userID int64, ids []int64) bool {
 		for _, id := range ids {
 			want[id] = true
 		}
+		useAI := s.openAI(ctx, userID) != nil
 		var todo []store.Book
 		for _, b := range books {
-			if b.Cover == "" && b.ISBN13 != "" && (ids == nil || want[b.ID]) {
+			if b.Cover == "" && (b.ISBN13 != "" || useAI) && (ids == nil || want[b.ID]) {
 				todo = append(todo, b)
 			}
 		}
@@ -225,12 +228,24 @@ func (s *Server) fetchMissingCovers(userID int64, ids []int64) bool {
 		s.covers.total = len(todo)
 		s.covers.mu.Unlock()
 		for i, b := range todo {
-			if i > 0 {
-				time.Sleep(3 * time.Second)
+			ok := false
+			if b.ISBN13 != "" {
+				if i > 0 {
+					time.Sleep(3 * time.Second)
+				}
+				url := "https://covers.openlibrary.org/b/isbn/" + b.ISBN13 + "-L.jpg?default=false"
+				data, ct, err := s.meta.FetchCover(ctx, url, s.cfg.MaxCoverBytes)
+				ok = err == nil && s.writeCover(ctx, &b, data, ct) == nil
 			}
-			url := "https://covers.openlibrary.org/b/isbn/" + b.ISBN13 + "-L.jpg?default=false"
-			data, ct, err := s.meta.FetchCover(ctx, url, s.cfg.MaxCoverBytes)
-			ok := err == nil && s.writeCover(ctx, &b, data, ct) == nil
+			if !ok && useAI {
+				found, err := s.aiCoverFor(ctx, userID, &b)
+				if err != nil {
+					// The AI is unreachable or refuses: the rest would fail the same way.
+					s.log.Warn("AI cover lookup", "user", userID, "book", b.ID, "err", err)
+					useAI = false
+				}
+				ok = found
+			}
 			s.covers.mu.Lock()
 			s.covers.done++
 			if ok {
