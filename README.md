@@ -156,8 +156,15 @@ published on its own):
 - **CrossPoint Sync**: Connections → *Another KOSync server* mirrors progress here.
 
 Devices know a book by its file hash. A file is matched to a book on the shelf by the title and
-authors the device sends (else its file name); the rest are linked once in Settings. Progress on a
-linked book moves its current page and starts it when it was on the want-to-read list.
+authors the device sends (else its file name). A book that is not on the shelf is looked up in the
+catalogues and added as *Reading* (switch off under Settings → Reader sync); ambiguous ones are
+linked by hand. Progress on a linked book moves its current page and starts it when it was on the
+want-to-read list.
+
+CrossPoint Sync's mirror forwards only the hash. Connect your CrossPoint Sync account in the same
+place and Bookshelf reads titles, authors, covers, page counts and finished / did-not-finish
+statuses from it (right after an unknown book shows up, and every 15 minutes). Every update is kept
+raw in `kosync_events`, viewable per book under *History*.
 
 ## Characters
 

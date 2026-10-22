@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -9,7 +10,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
@@ -160,5 +163,94 @@ func TestKosyncFilenameMatch(t *testing.T) {
 	titles, authors := kosyncNames(d)
 	if len(titles) != 2 || titles[0] != "moc sadasnjeg trenutka" || len(authors) != 2 {
 		t.Fatalf("names: %v %v", titles, authors)
+	}
+}
+
+type failingTransport struct{}
+
+func (failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("no network in tests")
+}
+
+// A CrossPoint Sync mirror sends bare hashes; Bookshelf reads titles from the
+// CrossPoint Sync account, links the book it has and adds the one it lacks.
+func TestKosyncCrossPointPull(t *testing.T) {
+	h := newShelfHarness(t)
+	h.s.meta.HTTP = &http.Client{Timeout: time.Second, Transport: failingTransport{}}
+	var dune struct{ Book store.Book }
+	h.json(h.anaTok, "POST", "/books", map[string]any{"title": "Dune", "authors": "Frank Herbert", "status": "want", "pages": 400}, &dune)
+
+	known, missing := "11111111111111111111111111111111", "01a01cdb62f88f29ecbdbe3808822849"
+	var calls int
+	cps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Auth-User") != "ana" || r.Header.Get("X-Auth-Key") != md5hex("cps-password") {
+			w.WriteHeader(401)
+			return
+		}
+		switch r.URL.Path {
+		case "/users/auth":
+			w.Write([]byte(`{"authorized":"OK"}`))
+		case "/api/v1/progress":
+			calls++
+			fmt.Fprintf(w, `{"items":[
+				{"document":%q,"title":"Dune","author":"Frank Herbert","filename":null,"percentage":0.5,"progress":"/body/p[1]","device":"CrossPoint","device_id":"x4","timestamp":%d,"status":"reading","cover_url":null,"page_count":412},
+				{"document":%q,"title":"Nebeski oganj","author":"Robert Jordan","filename":"Nebeski oganj - Robert Jordan.epub","percentage":0.011707,"progress":"/body/DocFragment[7]","device":"CrossPoint","device_id":"x4","timestamp":%d,"status":"reading","cover_url":null,"page_count":900}
+			]}`, known, time.Now().Unix()+60, missing, time.Now().Unix()-60)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(cps.Close)
+
+	if code, out := h.do(h.anaTok, "PUT", "/kosync/prefs", map[string]any{"remote_url": cps.URL, "remote_user": "ana", "remote_password": "wrong"}); code != 400 {
+		t.Fatalf("wrong password accepted: %d %s", code, out)
+	}
+	var st struct {
+		Prefs     store.KosyncPrefs      `json:"prefs"`
+		Documents []store.KosyncDocument `json:"documents"`
+	}
+	if code := h.json(h.anaTok, "PUT", "/kosync/prefs", map[string]any{"remote_url": cps.URL, "remote_user": "ana", "remote_password": "cps-password"}, &st); code != 200 {
+		t.Fatalf("connect: %d", code)
+	}
+	if calls != 1 || st.Prefs.RemoteUser != "ana" || st.Prefs.LastError != "" || len(st.Documents) != 2 {
+		t.Fatalf("after connect: calls %d %+v", calls, st)
+	}
+	byDoc := map[string]store.KosyncDocument{}
+	for _, d := range st.Documents {
+		byDoc[d.Document] = d
+	}
+	if d := byDoc[known]; d.BookID == nil || *d.BookID != dune.Book.ID {
+		t.Fatalf("dune not linked: %+v", d)
+	}
+	nd := byDoc[missing]
+	if nd.BookID == nil || nd.Title != "Nebeski oganj" || nd.PageCount != 900 {
+		t.Fatalf("missing book not added: %+v", nd)
+	}
+	var got struct{ Book store.Book }
+	h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d", *nd.BookID), nil, &got)
+	if got.Book.Title != "Nebeski oganj" || got.Book.Authors != "Robert Jordan" || got.Book.Status != store.StatusReading || got.Book.Pages != 900 || got.Book.CurrentPage != 11 {
+		t.Fatalf("added book: %+v", got.Book)
+	}
+	h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d", dune.Book.ID), nil, &got)
+	if got.Book.Status != store.StatusReading || got.Book.CurrentPage != 200 {
+		t.Fatalf("dune: %+v", got.Book)
+	}
+
+	// Raw updates are kept as they arrived; a second pull with nothing new adds none.
+	var ev []store.KosyncEvent
+	h.json(h.anaTok, "GET", "/kosync/documents/"+missing+"/events", nil, &ev)
+	if len(ev) != 1 || ev[0].Source != "crosspoint" || !strings.Contains(string(ev[0].Body), "Nebeski oganj") {
+		t.Fatalf("events: %+v", ev)
+	}
+	if code := h.json(h.anaTok, "POST", "/kosync/pull", nil, nil); code != 200 {
+		t.Fatalf("pull: %d", code)
+	}
+	h.json(h.anaTok, "GET", "/kosync/documents/"+missing+"/events", nil, &ev)
+	if len(ev) != 1 {
+		t.Fatalf("duplicate events: %d", len(ev))
+	}
+	books, _ := h.st.ListBooks(context.Background(), store.BookFilter{UserID: h.ana.ID})
+	if len(books) != 2 {
+		t.Fatalf("books after second pull: %d", len(books))
 	}
 }
