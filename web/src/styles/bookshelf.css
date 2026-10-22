@@ -474,6 +474,30 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 
 /* Settings → Reader sync */
 .plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; line-height: 1.5; }
-.kosync-docs { gap: 0; }
-.kosync-docs > li { align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
-.kosync-docs > li:first-child { border-top: 0; }
+.kosync-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 16px; padding-top: 14px; margin-top: 4px; border-top: 1px solid var(--hairline); }
+.kosync-form:first-child { border-top: 0; padding-top: 4px; margin-top: 0; }
+.kosync-form .wide, .kosync-form-actions { grid-column: 1 / -1; }
+.kosync-form-actions { display: flex; gap: 8px; }
+.kosync-foot { padding-top: 14px; border-top: 1px solid var(--hairline); }
+.kosync-devices { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; padding-top: 4px; }
+.kosync-device { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: var(--radius); padding: 14px 16px; }
+.kosync-device h4 { margin: 0 0 10px; font-size: 13.5px; }
+.kosync-device ol { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.kosync-docs { list-style: none; margin: 0; padding: 0; }
+.kosync-doc { display: flex; align-items: flex-start; gap: 14px; padding: 16px 0; border-top: 1px solid var(--hairline); }
+.kosync-doc .cover { flex-shrink: 0; }
+.kosync-doc .info { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.kosync-doc .nm { font-weight: 600; }
+.kosync-doc .nm a { color: inherit; }
+.kosync-doc .nm a:hover { color: var(--accent); }
+.kosync-progress { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.kosync-progress .bar { flex: 0 1 160px; min-width: 80px; margin: 0; }
+.kosync-link { margin-top: 10px; max-width: 420px; }
+.kosync-doc .actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.kosync-empty { padding: 14px 0 2px; border-top: 1px solid var(--hairline); margin: 0; }
+@media (max-width: 560px) {
+  .kosync-doc { flex-wrap: wrap; }
+  .kosync-doc .actions { width: 100%; justify-content: flex-end; padding-left: 54px; }
+}
+.setting-row.stack .setting-control > .copy-field { flex: 1; min-width: 0; }
+.setting-row.stack .copy-field input { flex: 1; min-width: 0; }
