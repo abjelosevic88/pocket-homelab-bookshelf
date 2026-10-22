@@ -2,10 +2,12 @@ export interface User { id: number; email: string; name: string; role: 'admin' |
 export interface KosyncAccount { username: string; created_at: string; last_seen: string }
 export interface KosyncDocument {
   document: string; progress: string; percentage: number; device: string; device_id: string; timestamp: number
-  title: string; authors: string; filename: string; book_id: number | null; ignored: boolean
+  title: string; authors: string; filename: string; cover_url: string; page_count: number; book_id: number | null; ignored: boolean
   book_title: string; book_authors: string
 }
-export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[] }
+export interface KosyncPrefs { add_missing: boolean; remote_url: string; remote_user: string; last_pull: string; last_error: string }
+export interface KosyncEvent { id: number; document: string; source: 'device' | 'crosspoint'; device: string; device_id: string; percentage: number; timestamp: number; body: unknown; received_at: string }
+export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[]; prefs: KosyncPrefs }
 export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }
 
 export type Status = 'want' | 'reading' | 'read' | 'abandoned'
