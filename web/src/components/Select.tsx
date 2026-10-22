@@ -27,7 +27,7 @@ export function Select({ value, onChange, options, placeholder = 'Choose…', on
   const [q, setQ] = useState('')
   const [hl, setHl] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; minWidth: number; maxH: number } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; minWidth: number; maxWidth: number; maxH: number } | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const pop = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLDivElement>(null)
@@ -65,8 +65,9 @@ export function Select({ value, onChange, options, placeholder = 'Choose…', on
       const below = vh - r.bottom - 12, above = r.top - 12
       const minWidth = Math.min(r.width, vw - 16)
       const left = Math.max(8, Math.min(vw - Math.max(minWidth, 220) - 8, r.left))
-      if (below < 300 && above > below) setPos({ left, bottom: vh - r.top + 4, minWidth, maxH: Math.min(330, above) })
-      else setPos({ left, top: r.bottom + 4, minWidth, maxH: Math.min(330, below) })
+      const maxWidth = Math.max(minWidth, Math.min(380, vw - left - 8))
+      if (below < 300 && above > below) setPos({ left, bottom: vh - r.top + 4, minWidth, maxWidth, maxH: Math.min(330, above) })
+      else setPos({ left, top: r.bottom + 4, minWidth, maxWidth, maxH: Math.min(330, below) })
     }
     place()
     // follow the field when the page or a dialog scrolls under it
@@ -106,7 +107,7 @@ export function Select({ value, onChange, options, placeholder = 'Choose…', on
         <Chevron />
       </button>
       {open && createPortal(
-        <div ref={pop} className="sel-pop" data-keep-open style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? 'auto', bottom: pos?.bottom ?? 'auto', minWidth: pos?.minWidth }}>
+        <div ref={pop} className="sel-pop" data-keep-open style={{ position: 'fixed', left: pos?.left ?? -9999, top: pos?.top ?? 'auto', bottom: pos?.bottom ?? 'auto', minWidth: pos?.minWidth, maxWidth: pos?.maxWidth }}>
           <div className="sel-search"><Icon name="search" size={14} /><input ref={search} value={q} onChange={e => setQ(e.target.value)} placeholder="Type to filter…" aria-label="Filter options" autoComplete="off" /></div>
           <div className="sel-list" role="listbox" id={id} ref={list} style={{ maxHeight: pos ? Math.max(120, pos.maxH - 44) : undefined }}>
             {rows.length === 0 && <div className="sel-empty muted">No matches</div>}
