@@ -51,7 +51,10 @@ type Server struct {
 	coreErr  string
 	resolved map[string]resolvedURL
 
-	kosync kosyncAuth
+	kosync     kosyncAuth
+	kosyncMu   sync.Mutex // one document is matched (or its book created) at a time
+	kosyncKick chan int64
+	kosyncLast sync.Map // user id → time of the last CrossPoint Sync pull
 
 	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
 	oidcMu sync.Mutex
@@ -64,7 +67,7 @@ type resolvedURL struct {
 
 // New creates a server.
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, webFS fs.FS) *Server {
-	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1), charKick: make(chan struct{}, 1)}
+	s := &Server{cfg: cfg, store: st, log: log, webFS: webFS, started: time.Now(), authorKick: make(chan struct{}, 1), charKick: make(chan struct{}, 1), kosyncKick: make(chan int64, 16)}
 	st.OnAuthorsChanged = s.kickAuthors
 	ua := "PocketBookshelf/" + Version + " (+https://github.com/abjelosevic88/pocket-homelab-bookshelf)"
 	s.meta = metadata.New(ua, cfg.MetadataTimeout, nil) // no key, no languages: see metaFor
@@ -158,6 +161,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	go s.authorWorker(ctx)
 	go s.dailyScheduler(ctx)
 	go s.characterWorker(ctx)
+	go s.kosyncWorker(ctx)
 	s.kickCharacters()
 	s.kickAuthors()
 	if s.core.Configured() {
@@ -279,6 +283,9 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/kosync/account", s.handleDeleteKosyncAccount)
 			r.Put("/kosync/documents/{document}", s.handleLinkKosyncDocument)
 			r.Delete("/kosync/documents/{document}", s.handleDeleteKosyncDocument)
+			r.Get("/kosync/documents/{document}/events", s.handleKosyncEvents)
+			r.Put("/kosync/prefs", s.handleSaveKosyncPrefs)
+			r.Post("/kosync/pull", s.handleKosyncPull)
 
 			r.Get("/tokens", s.handleListTokens)
 			r.Post("/tokens", s.handleCreateToken)

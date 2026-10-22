@@ -17,7 +17,9 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -228,7 +230,8 @@ func (s *Server) handleKosyncPut(w http.ResponseWriter, r *http.Request) {
 			Filename string `json:"filename"`
 		} `json:"metadata"`
 	}
-	if err := decode(r, &in); err != nil {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
+	if err != nil || json.Unmarshal(raw, &in) != nil {
 		kosyncErr(w, http.StatusForbidden, 2003, "Invalid request")
 		return
 	}
@@ -257,8 +260,16 @@ func (s *Server) handleKosyncPut(w http.ResponseWriter, r *http.Request) {
 		kosyncErr(w, http.StatusInternalServerError, 2000, "Unknown server error")
 		return
 	}
-	if err := s.applyKosync(r.Context(), u, d.Document); err != nil {
+	if err := s.store.AddKosyncEvent(r.Context(), u.ID, &store.KosyncEvent{Document: d.Document, Source: "device", Device: d.Device,
+		DeviceID: d.DeviceID, Percentage: d.Percentage, Timestamp: d.Timestamp, Body: raw}); err != nil {
+		s.log.Warn("kosync event", "err", err)
+	}
+	if err := s.applyKosync(r.Context(), u, d.Document, ""); err != nil {
 		s.log.Warn("kosync apply", "user", u.ID, "document", d.Document, "err", err)
+	}
+	// A mirror sends the file hash only: ask CrossPoint Sync what the book is.
+	if saved, err := s.store.GetKosyncDocument(r.Context(), u.ID, d.Document); err == nil && saved.BookID == nil && saved.Title == "" && !saved.Ignored {
+		s.kickKosyncPull(u.ID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"document": d.Document, "timestamp": d.Timestamp})
 }
@@ -285,14 +296,24 @@ func (s *Server) handleKosyncGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // applyKosync carries a document's latest position over to its book, matching
-// the book first when the document is new.
-func (s *Server) applyKosync(ctx context.Context, u *store.User, document string) error {
+// the book first when the document is new, or adding it to the shelf when it
+// is not there. status is what CrossPoint Sync says ("finished", "dnf"), if anything.
+func (s *Server) applyKosync(ctx context.Context, u *store.User, document, status string) error {
+	s.kosyncMu.Lock()
+	defer s.kosyncMu.Unlock()
 	d, err := s.store.GetKosyncDocument(ctx, u.ID, document)
 	if err != nil || d.Ignored {
 		return err
 	}
 	if d.BookID == nil {
-		id := s.matchKosync(ctx, u.ID, d)
+		id, ambiguous := s.matchKosync(ctx, u.ID, d)
+		if id == 0 && !ambiguous && d.Title != "" {
+			if prefs, err := s.store.GetKosyncPrefs(ctx, u.ID); err == nil && prefs.AddMissing {
+				if id, err = s.createKosyncBook(ctx, u, d); err != nil {
+					return err
+				}
+			}
+		}
 		if id == 0 {
 			return nil
 		}
@@ -300,12 +321,12 @@ func (s *Server) applyKosync(ctx context.Context, u *store.User, document string
 			return err
 		}
 		d.BookID = &id
-		s.log.Info("kosync matched", "user", u.ID, "document", d.Document, "book", id)
+		s.log.Info("kosync linked", "user", u.ID, "document", d.Document, "book", id)
 	}
-	return s.kosyncToBook(ctx, u, *d.BookID, d.Percentage)
+	return s.kosyncToBook(ctx, u, *d.BookID, d, status)
 }
 
-func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, pct float64) error {
+func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, d *store.KosyncDocument, status string) error {
 	b, err := s.store.GetBook(ctx, u.ID, bookID)
 	if err != nil {
 		return err
@@ -313,15 +334,31 @@ func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, 
 	if b.Status != store.StatusWant && b.Status != store.StatusReading {
 		return nil // finished or abandoned: a device reopening it changes nothing
 	}
+	pct := d.Percentage
+	changed := false
+	if b.Pages == 0 && d.PageCount > 0 {
+		b.Pages, changed = d.PageCount, true
+	}
 	if b.Pages > 0 {
-		if page := int(math.Round(pct * float64(b.Pages))); page != b.CurrentPage {
-			b.CurrentPage = page
-			if err := s.store.UpdateBook(ctx, b); err != nil {
-				return err
-			}
+		if page := int(math.Round(pct * float64(b.Pages))); page != b.CurrentPage && page <= b.Pages {
+			b.CurrentPage, changed = page, true
 		}
 	}
-	if b.Status == store.StatusWant && pct > 0 {
+	if changed {
+		if err := s.store.UpdateBook(ctx, b); err != nil {
+			return err
+		}
+	}
+	day := ""
+	if d.Timestamp > 0 {
+		day = time.Unix(d.Timestamp, 0).Format("2006-01-02")
+	}
+	switch {
+	case status == "finished":
+		_, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusRead, day, s.bookStatusEvent(ctx, u, day))
+	case status == "dnf":
+		_, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusAbandoned, day, s.bookStatusEvent(ctx, u, day))
+	case b.Status == store.StatusWant && pct > 0:
 		_, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusReading, "", s.bookStatusEvent(ctx, u, ""))
 	}
 	return err
@@ -329,15 +366,16 @@ func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, 
 
 // matchKosync finds the one book on the shelf the document is: same title
 // (and authors, when several books share it), books being read first. 0 when
-// the device said nothing usable or it is not clear which book it is.
-func (s *Server) matchKosync(ctx context.Context, userID int64, d *store.KosyncDocument) int64 {
+// the device said nothing usable or no book has that title; ambiguous when
+// several do and it is not clear which.
+func (s *Server) matchKosync(ctx context.Context, userID int64, d *store.KosyncDocument) (id int64, ambiguous bool) {
 	titles, authors := kosyncNames(d)
 	if len(titles) == 0 {
-		return 0
+		return 0, false
 	}
 	books, err := s.store.ListBooks(ctx, store.BookFilter{UserID: userID})
 	if err != nil {
-		return 0
+		return 0, true
 	}
 	var hits []store.Book
 	for _, b := range books {
@@ -370,9 +408,9 @@ func (s *Server) matchKosync(ctx context.Context, userID int64, d *store.KosyncD
 		hits = open
 	}
 	if len(hits) != 1 {
-		return 0
+		return 0, len(hits) > 1
 	}
-	return hits[0].ID
+	return hits[0].ID, false
 }
 
 // kosyncNames are the folded titles and author names a document may be: from
@@ -439,6 +477,12 @@ func (s *Server) handleGetKosync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out["documents"] = docs
+	prefs, err := s.store.GetKosyncPrefs(r.Context(), me(r))
+	if err != nil {
+		s.fail(w, err, "get kosync prefs")
+		return
+	}
+	out["prefs"] = prefs
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -515,7 +559,7 @@ func (s *Server) handleLinkKosyncDocument(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if d.BookID != nil && !d.Ignored {
-		if err := s.kosyncToBook(r.Context(), userFrom(r.Context()), *d.BookID, d.Percentage); err != nil {
+		if err := s.kosyncToBook(r.Context(), userFrom(r.Context()), *d.BookID, d, ""); err != nil {
 			s.fail(w, err, "apply progress")
 			return
 		}
