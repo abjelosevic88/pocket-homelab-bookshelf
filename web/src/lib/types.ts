@@ -7,6 +7,8 @@ export interface KosyncDocument {
 }
 export interface KosyncPrefs { add_missing: boolean; remote_url: string; remote_user: string; last_pull: string; last_error: string }
 export interface KosyncEvent { id: number; document: string; source: 'device' | 'crosspoint'; device: string; device_id: string; percentage: number; timestamp: number; body: unknown; received_at: string }
+export interface Pace { days: { day: string; pages: number }[]; reading_days: number; pages_per_day: number; pages_today: number; pages_left: number; days_left: number; finish_on: string }
+export interface ReaderActivity { days: { day: string; pages: number; books: number }[]; streak: number; longest_streak: number; reading_days_year: number; pages_7: number; pages_30: number; pages_year: number; connected: boolean }
 export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[]; prefs: KosyncPrefs }
 export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }
 
@@ -49,6 +51,7 @@ export interface Book {
   read_count: number
   quote_count: number
   reader_percent: number | null // latest position from an e-reader (0..1)
+  original_title: string
 }
 
 export interface Read { id: number; book_id: number; started_on: string; finished_on: string; abandoned: boolean }

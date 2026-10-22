@@ -212,7 +212,9 @@ func (s *Server) writeMissingFor(ctx context.Context, uid int64, oa *ai.OpenAI) 
 func (s *Server) aiBook(ctx context.Context, b store.Book) ai.Book {
 	in := ai.Book{Title: b.Title, Subtitle: b.Subtitle, Authors: b.Authors, Published: b.Published, Series: b.Series,
 		SeriesNo: b.SeriesNo, SourceURL: b.SourceURL, Description: clip(b.Description, 1500)}
-	if b.Source == "openlibrary" && strings.HasPrefix(b.SourceID, "/works/") {
+	if b.OriginalTitle != "" {
+		in.WorkTitle = b.OriginalTitle
+	} else if b.Source == "openlibrary" && strings.HasPrefix(b.SourceID, "/works/") {
 		if t := s.meta.OpenLibraryWorkTitle(ctx, b.SourceID); t != "" && t != b.Title {
 			in.WorkTitle = t
 		}

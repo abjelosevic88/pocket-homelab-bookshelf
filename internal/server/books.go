@@ -226,6 +226,9 @@ func (s *Server) handleUpdateBook(w http.ResponseWriter, r *http.Request) {
 	}
 	if newStatus != cur.Status && store.ValidStatus(newStatus) {
 		_, err := s.store.SetStatus(r.Context(), b.UserID, b.ID, newStatus, "", s.bookStatusEvent(r.Context(), userFrom(r.Context()), ""))
+		if err == nil {
+			s.pushReaderStatus(b.UserID, b.ID, newStatus)
+		}
 		if err != nil {
 			s.fail(w, err, "set status")
 			return
@@ -286,6 +289,7 @@ func (s *Server) handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "set status")
 		return
 	}
+	s.pushReaderStatus(b.UserID, b.ID, in.Status)
 	if in.Rating != nil || in.Review != nil {
 		if in.Rating != nil {
 			b.Rating = *in.Rating

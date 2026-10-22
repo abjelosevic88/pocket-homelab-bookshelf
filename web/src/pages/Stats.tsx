@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Stats as StatsT } from '../lib/types'
+import type { ReaderActivity, Stats as StatsT } from '../lib/types'
 import { fmtDate, FORMAT_LABEL } from '../lib/format'
 import { Card, Loading, PageHeader, Segmented, useAsync } from '../components/ui'
 import { Stars } from '../components/Stars'
@@ -31,6 +31,7 @@ export default function Stats() {
           <div className="bar lg"><span className="fill" style={{ width: `${goalPct}%` }} /></div>
         </Card>
       )}
+      <ReaderCard />
       <div className="two-col">
         <Card title="Books per month">
           <div className="month-bars">
@@ -72,5 +73,38 @@ export default function Stats() {
       </Card>
       <p className="muted small mt">All time: {s.all_time.books} books · {s.all_time.pages.toLocaleString()} pages{s.all_time.avg_rating > 0 && <> · average {s.all_time.avg_rating.toFixed(1)}★</>} · {s.quotes} quotes</p>
     </>
+  )
+}
+
+const SHORT = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+
+/** Reading on e-readers (from CrossPoint Sync): streaks, pages and the last 30 days. */
+function ReaderCard() {
+  const { data: a } = useAsync(() => api.get<ReaderActivity>(`${V1}/reading/activity`), [])
+  if (!a || (!a.connected && a.days.length === 0)) return null
+  const byDay = new Map(a.days.map(d => [d.day, d]))
+  const last30 = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - 29 + i)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return { key, date: d, pages: byDay.get(key)?.pages || 0, read: byDay.has(key) }
+  })
+  const max = Math.max(1, ...last30.map(d => d.pages))
+  return (
+    <Card className="mb" title="On your e-reader" actions={<Link to="/settings/reader" className="btn ghost sm">Reader sync</Link>}>
+      <div className="stats reader-stats">
+        <div className="stat"><div className="n">{a.streak}</div><div className="l">{a.streak === 1 ? 'day' : 'days'} in a row</div></div>
+        <div className="stat"><div className="n">{a.pages_7.toLocaleString()}</div><div className="l">pages this week</div></div>
+        <div className="stat"><div className="n">{a.pages_30.toLocaleString()}</div><div className="l">pages in 30 days</div></div>
+        <div className="stat"><div className="n">{a.reading_days_year}</div><div className="l">reading days this year · longest run {a.longest_streak}</div></div>
+      </div>
+      <div className="day-bars" role="img" aria-label={`Pages read per day, last 30 days: ${a.pages_30} pages on ${last30.filter(d => d.read).length} days`}>
+        {last30.map(d => (
+          <div key={d.key} className={`db-col ${d.read ? 'on' : ''}`} title={`${SHORT.format(d.date)} · ${d.read ? `${d.pages} pages` : 'no reading'}`}>
+            <span className="b" style={{ height: d.pages ? `${Math.max(6, (d.pages / max) * 100)}%` : d.read ? '4px' : '2px' }} />
+          </div>
+        ))}
+      </div>
+      <div className="day-bars-axis muted small"><span>{SHORT.format(last30[0].date)}</span><span>today</span></div>
+    </Card>
   )
 }

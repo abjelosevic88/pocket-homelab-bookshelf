@@ -9,7 +9,7 @@ import { Select } from './Select'
 import { useAsync } from './ui'
 import type { SeriesSummary } from '../lib/types'
 
-export type BookDraft = Pick<Book, 'title' | 'subtitle' | 'authors' | 'isbn13' | 'isbn10' | 'pages' | 'published' | 'publisher' | 'language' | 'description' | 'source' | 'source_id' | 'source_url' | 'tags' | 'format'> & { series?: string; series_no?: string }
+export type BookDraft = Pick<Book, 'title' | 'subtitle' | 'authors' | 'isbn13' | 'isbn10' | 'pages' | 'published' | 'publisher' | 'language' | 'description' | 'source' | 'source_id' | 'source_url' | 'tags' | 'format'> & { series?: string; series_no?: string; original_title?: string }
 
 export function emptyBook(): BookDraft {
   return { title: '', subtitle: '', authors: '', isbn13: '', isbn10: '', pages: 0, published: '', publisher: '', language: '', description: '', source: '', source_id: '', source_url: '', tags: '', format: '' }
@@ -43,6 +43,7 @@ export function BookFields({ draft, onChange, full = false }: { draft: BookDraft
           <Field group label="Series" help="Pick one of yours or type a new name."><SeriesPicker value={draft.series || ''} onChange={v => onChange({ ...draft, series: v })} /></Field>
           <Field label="Number in series" help="1, 2 … — 0 for a prequel, 2.5 for an in-between."><input value={draft.series_no || ''} onChange={e => onChange({ ...draft, series_no: e.target.value.trim() })} placeholder="e.g. 4" style={{ maxWidth: 120 }} /></Field>
         </div>
+        <Field label="Original title" help="When this is a translation: the title of the original work."><input value={draft.original_title || ''} onChange={e => onChange({ ...draft, original_title: e.target.value })} placeholder="e.g. The Fires of Heaven" /></Field>
         <Field label="Description"><textarea rows={5} value={draft.description} onChange={set('description')} /></Field>
       </>}
     </div>

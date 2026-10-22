@@ -65,8 +65,10 @@ type Book struct {
 	Series      string  `json:"series"`
 	SeriesNo    string  `json:"series_no"` // "1", "0" (prequel), "2.5"; "" unknown
 	SeriesQID   string  `json:"series_qid"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	// OriginalTitle is the original work's title when this is a translation.
+	OriginalTitle string `json:"original_title"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 
 	// Derived from reads, read-only.
 	StartedOn  string `json:"started_on"`  // start of the open read, else of the latest one
