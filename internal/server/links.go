@@ -29,6 +29,8 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/auth/me$`), ""},
 	{"GET", regexp.MustCompile(`^/api/v1/books$`), "books:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/books/\d+$`), "books:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/books/\d+/sessions$`), "books:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/reading/sessions$`), "books:read"},
 }
 
 var errLinkScope = errors.New("outside the link's scope")

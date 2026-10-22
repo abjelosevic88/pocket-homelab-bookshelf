@@ -289,6 +289,10 @@ func (s *Server) handleKosyncGet(w http.ResponseWriter, r *http.Request) {
 		kosyncErr(w, http.StatusInternalServerError, 2000, "Unknown server error")
 		return
 	}
+	// A device asks for the position when it opens the book or wakes up: the
+	// start of a reading session (see sessions.go).
+	_ = s.store.AddKosyncEvent(r.Context(), me(r), &store.KosyncEvent{Document: doc, Source: "open", Device: clip(r.Header.Get("User-Agent"), 100),
+		Percentage: d.Percentage, Timestamp: time.Now().Unix(), Body: json.RawMessage(`{}`)})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"document": d.Document, "progress": d.Progress, "percentage": d.Percentage,
 		"device": d.Device, "device_id": d.DeviceID, "timestamp": d.Timestamp,
