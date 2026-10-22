@@ -230,6 +230,8 @@ func (s *Server) Router() http.Handler {
 			r.Get("/books/{id}/characters", s.handleGetCharacters)
 			r.Get("/books/{id}/summary", s.handleGetSummary)
 			r.Get("/books/{id}/pace", s.handleBookPace)
+			r.Get("/books/{id}/sessions", s.handleBookSessions)
+			r.Get("/reading/sessions", s.handleReadingSessions)
 			r.Get("/reading/activity", s.handleReadingActivity)
 			r.Get("/reading/today", s.handleReadingToday)
 			r.Delete("/books/{id}/summary", s.handleDeleteSummary)

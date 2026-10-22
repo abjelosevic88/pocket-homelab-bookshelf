@@ -166,6 +166,14 @@ place and Bookshelf reads titles, authors, covers, page counts and finished / di
 statuses from it (right after an unknown book shows up, and every 15 minutes). Every update is kept
 raw in `kosync_events`, viewable per book under *History*.
 
+**Reading log.** Each book page lists every sitting on the e-reader: when, how many pages and how
+long. A session runs from the device asking for the position (it does when it opens the book or
+wakes) to the update it sends on sleep, close or every few pages; updates less than 45 minutes
+apart continue it, and breaks under 15 minutes keep it one session. When the start was not seen
+(CrossPoint Sync's mirror forwards updates, not opens) the minutes are estimated from your own pace
+and shown with a `~`. Pages are the share of the book times its page count. Pocket Day reads the
+sessions from `GET /api/v1/reading/sessions`.
+
 ## Characters
 
 The book page lists each novel's characters with a one- or two-sentence note on each — only what you learn

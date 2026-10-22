@@ -88,3 +88,15 @@ export function lifespan(birth: string, death: string): string {
 }
 
 export function authorPhotoSrc(a: { id: number; photo: string }): string { return `/api/v1/authors/${a.id}/photo?v=${encodeURIComponent(a.photo)}` }
+
+/** 95 → "1 h 35 min"; 40 → "40 min". */
+export function fmtMinutes(m: number): string {
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60), r = m % 60
+  return r ? `${h} h ${r} min` : `${h} h`
+}
+
+/** An RFC 3339 time → "20:05" in the browser's clock. */
+export function fmtClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
