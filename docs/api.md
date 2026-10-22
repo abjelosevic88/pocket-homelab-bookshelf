@@ -115,6 +115,8 @@ A short spoiler-free "what it is about" paragraph per book and preferred languag
 |---|---|---|
 | `GET` | `/books/{id}/summary` | `{"langs": ["en", "sr"], "summaries": {"en": {…}}, "writer": true}` — `writer` is false without an AI. |
 | `DELETE` | `/books/{id}/summary` | Forget it, so it is written again. |
+| `GET` | `/books/{id}/sessions` | The book's reading log from the e-reader, newest first: `{"sessions": [{day, start, end, minutes, pages, from, to, from_page, to_page, device, estimated, updates}], "totals": {sessions, minutes, pages, pages_per_hour}, "minutes_per_page"}`. |
+| `GET` | `/reading/sessions?from=YYYY-MM-DD&to=YYYY-MM-DD` | Every book's sessions on those days (today by default), same shape plus `book_id`, `title`, `authors`. Open to linked apps with `books:read`. |
 | `GET` | `/books/{id}/covers/ai` | Covers found with the person's AI, each checked by downloading it: `{"covers": [{url, thumb, source, label}], "hints": {original_title, original_authors, isbns, publisher, year, cover_urls}}`. Up to ~2 minutes. |
 | `POST` | `/characters/run` | Write what is missing now (also un-pauses and retries failed books). |
 | `GET` · `PUT` | `/settings/ai` | `{"key_set", "key_hint", "key_env", "model", "default_model", "web_search"}`. Your own key: everyone has their own. PUT: `{"key": "sk-…"` (omit to keep)`, "clear_key": true, "model", "web_search"}`. `key_env` is true only for the owner (first account), whose fallback `OPENAI_API_KEY` is. |

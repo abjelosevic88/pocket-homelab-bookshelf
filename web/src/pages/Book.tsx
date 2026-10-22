@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Book as BookT, Pace, Quote, Read, Status } from '../lib/types'
-import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
+import type { Book as BookT, Pace, Quote, Read, SessionLog, Status } from '../lib/types'
+import { daysBetween, fmtClock, fmtDate, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
@@ -99,6 +99,7 @@ export default function Book() {
         <NotesCard src={`${V1}/books/${b.id}/notes`} />
         <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
+        <ReadingLogCard book={b} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />
       </div>
 
@@ -281,6 +282,45 @@ export function QuoteModal({ bookId, quote, onClose, onSaved }: { bookId: number
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary">Save</button></div>
       </form>
     </Modal>
+  )
+}
+
+// ReadingLogCard is every sitting with the book on an e-reader: when, how
+// many pages and how long, worked out from the device's syncs.
+function ReadingLogCard({ book }: { book: BookT }) {
+  const { data } = useAsync(() => api.get<SessionLog>(`${V1}/books/${book.id}/sessions`), [book.id, book.current_page])
+  const [all, setAll] = useState(false)
+  if (!data || data.sessions.length === 0) return null
+  const t = data.totals
+  const shown = all ? data.sessions : data.sessions.slice(0, 12)
+  const days: { day: string; items: typeof shown }[] = []
+  for (const s of shown) {
+    if (days.length === 0 || days[days.length - 1].day !== s.day) days.push({ day: s.day, items: [] })
+    days[days.length - 1].items.push(s)
+  }
+  return (
+    <Card className="mt" title="Reading log" sub={<>{t.sessions} {t.sessions === 1 ? 'session' : 'sessions'} · {fmtMinutes(t.minutes)}{t.pages > 0 && <> · {t.pages} pages</>}{t.pages_per_hour > 0 && <> · {t.pages_per_hour} pages an hour</>}</>}>
+      <div className="session-log">
+        {days.map(d => (
+          <div key={d.day} className="session-day">
+            <div className="session-date muted small">{fmtDate(d.day)}</div>
+            <ul className="reads">
+              {d.items.map(s => (
+                <li key={s.start}>
+                  <span className="session-time small">{fmtClock(s.start)}–{fmtClock(s.end)}</span>
+                  <span className="grow">
+                    {s.pages > 0 ? <><b>{s.pages}</b> {s.pages === 1 ? 'page' : 'pages'}</> : <><b>{Math.max(1, Math.round((s.to - s.from) * 100))}%</b> of the book</>} in <b>{s.estimated && '~'}{fmtMinutes(s.minutes)}</b>
+                    {s.to_page ? <span className="muted small"> · p. {s.from_page}–{s.to_page}</span> : <span className="muted small"> · {Math.round(s.from * 100)}–{Math.round(s.to * 100)}%</span>}
+                  </span>
+                  <span className="muted small" title={s.estimated ? `Part of the time was not synced; estimated at your pace of ${data.minutes_per_page} min a page` : `${s.updates} ${s.updates === 1 ? 'sync' : 'syncs'}`}>{s.device}{s.estimated && ' · estimated'}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      {data.sessions.length > shown.length && <button type="button" className="btn ghost sm mt-sm" onClick={() => setAll(true)}>Show all {data.sessions.length}</button>}
+    </Card>
   )
 }
 
