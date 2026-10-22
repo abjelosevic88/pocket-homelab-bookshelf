@@ -72,6 +72,19 @@ Write Latin-script languages entirely in Latin letters — not a single Cyrillic
 
 // Prompt is the instruction for one book.
 func Prompt(b Book, langs []string) string {
+	var ls []string
+	for _, l := range langs {
+		name := langNames[l]
+		if name == "" {
+			name = l
+		}
+		ls = append(ls, fmt.Sprintf("- %s: %s", l, name))
+	}
+	return fmt.Sprintf(promptText, bookFacts(b), strings.Join(ls, "\n"))
+}
+
+// bookFacts lists what the shelf knows about a book, one "- " line each.
+func bookFacts(b Book) string {
 	title := b.Title
 	if b.Subtitle != "" {
 		title += ": " + b.Subtitle
@@ -101,15 +114,7 @@ func Prompt(b Book, langs []string) string {
 	if b.Description != "" {
 		facts = append(facts, "- Catalogue description: "+b.Description)
 	}
-	var ls []string
-	for _, l := range langs {
-		name := langNames[l]
-		if name == "" {
-			name = l
-		}
-		ls = append(ls, fmt.Sprintf("- %s: %s", l, name))
-	}
-	return fmt.Sprintf(promptText, strings.Join(facts, "\n"), strings.Join(ls, "\n"))
+	return strings.Join(facts, "\n")
 }
 
 // Schema is the JSON Schema of the answer (strict: every field required).

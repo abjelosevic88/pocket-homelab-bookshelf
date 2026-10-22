@@ -39,6 +39,7 @@ type Server struct {
 	authorKick chan struct{}
 	charKick   chan struct{}
 	chars      charWriter
+	summaries  summaryWriter
 	log        *slog.Logger
 	webFS      fs.FS
 	started    time.Time
@@ -227,6 +228,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/covers/fetch-missing", s.handleFetchCovers)
 			r.Get("/covers/fetch-missing", s.handleCoverStatus)
 			r.Get("/books/{id}/characters", s.handleGetCharacters)
+			r.Get("/books/{id}/summary", s.handleGetSummary)
+			r.Delete("/books/{id}/summary", s.handleDeleteSummary)
 			r.Put("/books/{id}/characters", s.handlePutCharacters)
 			r.Delete("/books/{id}/characters", s.handleDeleteCharacters)
 			r.Get("/characters/missing", s.handleMissingCharacters)

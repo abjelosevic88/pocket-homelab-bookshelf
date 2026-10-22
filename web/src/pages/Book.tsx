@@ -14,6 +14,7 @@ import { EditBook } from '../components/BookForm'
 import { CoverPicker } from '../components/CoverPicker'
 import { FinishModal } from '../components/FinishModal'
 import { CharactersCard } from '../components/Characters'
+import { AboutCard } from '../components/AboutCard'
 import { NotesCard } from '../components/NotesCard'
 import { Icon } from '../components/icons'
 import { useCrumb } from '../components/Layout'
@@ -90,7 +91,7 @@ export default function Book() {
         <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />
-        {b.description && <Card title="About the book" className="mt"><Description text={b.description} /></Card>}
+        <AboutCard bookId={b.id} description={b.description} />
       </div>
 
       {coverOpen && <CoverPicker book={b} onClose={() => setCoverOpen(false)} onChanged={nb => setBook({ ...b, cover: nb.cover })} />}
@@ -312,12 +313,3 @@ function ReadsCard({ book, reads, onChanged }: { book: BookT; reads: Read[]; onC
   )
 }
 
-function Description({ text }: { text: string }) {
-  const [open, setOpen] = useState(text.length < 600)
-  return (
-    <div className={`description ${open ? '' : 'clamped'}`}>
-      {text}
-      {!open && <button type="button" className="btn ghost sm more-btn" onClick={() => setOpen(true)}>Read more</button>}
-    </div>
-  )
-}
