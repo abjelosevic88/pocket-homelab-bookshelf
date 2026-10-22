@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/ai"
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/fold"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
@@ -143,6 +144,7 @@ func (s *Server) handleDeleteSummary(w http.ResponseWriter, r *http.Request) {
 // writeMissingFacts asks the AI, ten books at a time, for the series and
 // original title of books that have neither; only blanks are filled.
 func (s *Server) writeMissingFacts(ctx context.Context, uid int64, oa *ai.OpenAI) {
+	s.dropScriptTwins(ctx, uid)
 	books, err := s.store.BooksWithoutAIFacts(ctx, uid)
 	if err != nil || len(books) == 0 {
 		return
@@ -179,7 +181,7 @@ func (s *Server) writeMissingFacts(ctx context.Context, uid int64, oa *ai.OpenAI
 					series = append(series, name)
 				}
 			}
-			if t := strings.TrimSpace(f.OriginalTitle); b.OriginalTitle == "" && t != "" && !strings.EqualFold(t, b.Title) {
+			if t := strings.TrimSpace(f.OriginalTitle); b.OriginalTitle == "" && t != "" && !sameWorkTitle(t, b.Title) {
 				b.OriginalTitle, changed = clip(t, 300), true
 			}
 			if changed {
@@ -192,6 +194,29 @@ func (s *Server) writeMissingFacts(ctx context.Context, uid int64, oa *ai.OpenAI
 		}
 		for _, b := range batch {
 			_ = s.store.MarkAIFacts(ctx, b.ID)
+		}
+	}
+}
+
+// sameWorkTitle reports whether two titles are the same apart from script, case
+// and punctuation: "На Дрини ћуприја" is "Na Drini ćuprija", not its original.
+func sameWorkTitle(a, b string) bool {
+	return fold.String(metadata.Latin(a)) == fold.String(metadata.Latin(b))
+}
+
+// dropScriptTwins clears original titles that only spell the shelf title in another script.
+func (s *Server) dropScriptTwins(ctx context.Context, uid int64) {
+	books, err := s.store.ListBooks(ctx, store.BookFilter{UserID: uid})
+	if err != nil {
+		return
+	}
+	for i := range books {
+		b := &books[i]
+		if b.OriginalTitle != "" && sameWorkTitle(b.OriginalTitle, b.Title) {
+			b.OriginalTitle = ""
+			if err := s.store.UpdateBook(ctx, b); err == nil {
+				s.log.Info("book facts: dropped a same-title original", "book", b.ID, "title", b.Title)
+			}
 		}
 	}
 }
