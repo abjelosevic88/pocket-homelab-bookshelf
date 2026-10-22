@@ -183,6 +183,8 @@ func TestKosyncCrossPointPull(t *testing.T) {
 
 	known, missing := "11111111111111111111111111111111", "01a01cdb62f88f29ecbdbe3808822849"
 	var calls int
+	statusPut := make(chan string, 4)
+	knownAt, missingAt := time.Now().Unix()+60, time.Now().Unix()-60
 	cps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Auth-User") != "ana" || r.Header.Get("X-Auth-Key") != md5hex("cps-password") {
 			w.WriteHeader(401)
@@ -196,8 +198,27 @@ func TestKosyncCrossPointPull(t *testing.T) {
 			fmt.Fprintf(w, `{"items":[
 				{"document":%q,"title":"Dune","author":"Frank Herbert","filename":null,"percentage":0.5,"progress":"/body/p[1]","device":"CrossPoint","device_id":"x4","timestamp":%d,"status":"reading","cover_url":null,"page_count":412},
 				{"document":%q,"title":"Nebeski oganj","author":"Robert Jordan","filename":"Nebeski oganj - Robert Jordan.epub","percentage":0.011707,"progress":"/body/DocFragment[7]","device":"CrossPoint","device_id":"x4","timestamp":%d,"status":"reading","cover_url":null,"page_count":900}
-			]}`, known, time.Now().Unix()+60, missing, time.Now().Unix()-60)
+			]}`, known, knownAt, missing, missingAt)
+		case "/api/v1/clippings":
+			fmt.Fprintf(w, `{"items":[
+				{"document":%q,"id":"c1","chapter":"Book One","text":"Fear is the mind-killer.","note":"the litany","created_at":1790000000},
+				{"document":%q,"id":"c2","chapter":"Book One","text":"A beginning is the time for taking the most delicate care.","note":null,"created_at":1790000100},
+				{"document":"99999999999999999999999999999999","id":"c3","chapter":"","text":"From a file nobody linked","note":null,"created_at":1790000200}
+			]}`, known, known)
+		case "/api/v1/stats/activity":
+			today, yesterday := time.Now().Format("2006-01-02"), time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+			fmt.Fprintf(w, `{"pages_total":60,"books":[],"days":[
+				{"day":%q,"pages":30,"syncs":3,"books":[{"document":%q,"pages":30,"syncs":3,"from":0.40,"to":0.45}]},
+				{"day":%q,"pages":30,"syncs":2,"books":[{"document":%q,"pages":30,"syncs":2,"from":0.45,"to":0.50}]}
+			]}`, yesterday, known, today, known)
 		default:
+			if strings.HasPrefix(r.URL.Path, "/api/v1/documents/") && r.Method == http.MethodPut {
+				var body map[string]any
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				statusPut <- fmt.Sprintf("%s=%v", strings.Split(r.URL.Path, "/")[4], body["status"])
+				w.Write([]byte(`{}`))
+				return
+			}
 			http.NotFound(w, r)
 		}
 	}))
@@ -253,6 +274,70 @@ func TestKosyncCrossPointPull(t *testing.T) {
 	books, _ := h.st.ListBooks(context.Background(), store.BookFilter{UserID: h.ana.ID})
 	if len(books) != 2 {
 		t.Fatalf("books after second pull: %d", len(books))
+	}
+
+	// Highlights of linked books became quotes, once; the unlinked file's waited.
+	var quotes []store.Quote
+	h.json(h.anaTok, "GET", "/quotes", nil, &quotes)
+	if len(quotes) != 2 {
+		t.Fatalf("quotes: %+v", quotes)
+	}
+	for _, q := range quotes {
+		if q.BookID != dune.Book.ID || q.Page != "Book One" {
+			t.Fatalf("quote: %+v", q)
+		}
+		if strings.HasPrefix(q.Text, "Fear") && q.Note != "the litany" {
+			t.Fatalf("note lost: %+v", q)
+		}
+	}
+
+	// Two days of reading: 5% of 400 pages each → 20 pages a day, 200 left → 10 days.
+	var pace Pace
+	h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d/pace", dune.Book.ID), nil, &pace)
+	if pace.ReadingDays != 2 || pace.PagesPerDay != 20 || pace.PagesToday != 20 || pace.PagesLeft != 200 || pace.DaysLeft != 10 {
+		t.Fatalf("pace: %+v", pace)
+	}
+	var act Activity
+	h.json(h.anaTok, "GET", "/reading/activity", nil, &act)
+	if act.Streak != 2 || act.Pages7 != 40 || !act.Connected {
+		t.Fatalf("activity: %+v", act)
+	}
+	var today struct {
+		Reading []struct {
+			ID       int64 `json:"id"`
+			DaysLeft int   `json:"days_left"`
+		} `json:"reading"`
+		PagesToday int `json:"pages_today"`
+	}
+	h.json(h.anaTok, "GET", "/reading/today", nil, &today)
+	if today.PagesToday != 20 || len(today.Reading) != 2 {
+		t.Fatalf("today: %+v", today)
+	}
+
+	// The device reaching the end asks once whether it is finished.
+	ctx := context.Background()
+	d := &store.KosyncDocument{Document: known, Progress: "/end", Percentage: 0.99, Device: "CrossPoint", Timestamp: time.Now().Unix() + 120}
+	if err := h.st.SaveKosyncProgress(ctx, h.ana.ID, d); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.s.applyKosync(ctx, h.ana, known, ""); err != nil {
+		t.Fatal(err)
+	}
+	if first, _ := h.st.MarkKosyncFinishAsked(ctx, h.ana.ID, known); first {
+		t.Fatal("finish question not recorded")
+	}
+
+	// Marking it read here tells CrossPoint Sync it is finished.
+	if code := h.json(h.anaTok, "POST", fmt.Sprintf("/books/%d/status", dune.Book.ID), map[string]any{"status": "read"}, nil); code != 200 {
+		t.Fatalf("status: %d", code)
+	}
+	select {
+	case got := <-statusPut:
+		if got != known+"=finished" {
+			t.Fatalf("status pushed: %s", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("status not sent to CrossPoint Sync")
 	}
 }
 

@@ -9,9 +9,9 @@ import (
 
 const bookCols = `b.id, b.user_id, b.title, b.subtitle, b.authors, b.isbn13, b.isbn10, b.pages, b.published, b.publisher,
 	b.language, b.description, b.format, b.tags, b.cover, b.source, b.source_id, b.source_url, b.status, b.rating,
-	b.review, b.favorite, b.current_page, b.queue_pos, b.planned_for, b.plan_note, b.series, b.series_no, b.series_qid, b.created_at, b.updated_at,
+	b.review, b.favorite, b.current_page, b.queue_pos, b.planned_for, b.plan_note, b.series, b.series_no, b.series_qid, b.original_title, b.created_at, b.updated_at,
 	COALESCE((SELECT r.started_on FROM reads r WHERE r.book_id = b.id ORDER BY (r.finished_on = '') DESC, r.id DESC LIMIT 1), ''),
-	COALESCE((SELECT MAX(r.finished_on) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''), ''),
+	COALESCE((SELECT MAX(r.finished_on) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''), '') AS finished_on_derived,
 	(SELECT COUNT(1) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''),
 	(SELECT COUNT(1) FROM quotes q WHERE q.book_id = b.id),
 	(SELECT d.percentage FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1)`
@@ -22,7 +22,7 @@ func scanBook(row interface{ Scan(...any) error }) (*Book, error) {
 	var reader sql.NullFloat64
 	err := row.Scan(&b.ID, &b.UserID, &b.Title, &b.Subtitle, &b.Authors, &b.ISBN13, &b.ISBN10, &b.Pages, &b.Published, &b.Publisher,
 		&b.Language, &b.Description, &b.Format, &b.Tags, &b.Cover, &b.Source, &b.SourceID, &b.SourceURL, &b.Status, &b.Rating,
-		&b.Review, &fav, &b.CurrentPage, &b.QueuePos, &b.PlannedFor, &b.PlanNote, &b.Series, &b.SeriesNo, &b.SeriesQID, &b.CreatedAt, &b.UpdatedAt,
+		&b.Review, &fav, &b.CurrentPage, &b.QueuePos, &b.PlannedFor, &b.PlanNote, &b.Series, &b.SeriesNo, &b.SeriesQID, &b.OriginalTitle, &b.CreatedAt, &b.UpdatedAt,
 		&b.StartedOn, &b.FinishedOn, &b.ReadCount, &b.QuoteCount, &reader)
 	if err != nil {
 		return nil, notFound(err)
@@ -100,7 +100,7 @@ func (s *Store) ListBooks(ctx context.Context, f BookFilter) ([]Book, error) {
 	case "rating":
 		order = "b.rating DESC, LOWER(b.title)"
 	case "finished":
-		order = "33 DESC, b.updated_at DESC" // 33 = the derived finished_on column
+		order = "finished_on_derived DESC, b.updated_at DESC"
 	case "series":
 		order = "LOWER(b.series), CAST(NULLIF(b.series_no, '') AS REAL), LOWER(b.title)"
 	case "queue":
@@ -174,10 +174,10 @@ func (s *Store) CreateBook(ctx context.Context, b *Book, startedOn, finishedOn s
 	now := Now()
 	res, err := tx.ExecContext(ctx, `INSERT INTO books (user_id, title, subtitle, authors, isbn13, isbn10, pages, published, publisher, language,
 		description, format, tags, cover, source, source_id, source_url, status, rating, review, favorite, current_page, queue_pos,
-		planned_for, plan_note, series, series_no, series_qid, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		planned_for, plan_note, series, series_no, series_qid, original_title, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		b.UserID, b.Title, b.Subtitle, b.Authors, b.ISBN13, b.ISBN10, b.Pages, b.Published, b.Publisher, b.Language,
 		b.Description, b.Format, b.Tags, b.Cover, b.Source, b.SourceID, b.SourceURL, b.Status, b.Rating, b.Review, boolInt(b.Favorite),
-		b.CurrentPage, b.QueuePos, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, now, now)
+		b.CurrentPage, b.QueuePos, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, b.OriginalTitle, now, now)
 	if err != nil {
 		return err
 	}
@@ -225,9 +225,9 @@ func (s *Store) UpdateBook(ctx context.Context, b *Book, after ...core.CommitHoo
 	b.UpdatedAt = Now()
 	res, err := tx.ExecContext(ctx, `UPDATE books SET title = ?, subtitle = ?, authors = ?, isbn13 = ?, isbn10 = ?, pages = ?, published = ?,
 		publisher = ?, language = ?, description = ?, format = ?, tags = ?, source = ?, source_id = ?, source_url = ?, rating = ?, review = ?,
-		favorite = ?, current_page = ?, planned_for = ?, plan_note = ?, series = ?, series_no = ?, series_qid = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+		favorite = ?, current_page = ?, planned_for = ?, plan_note = ?, series = ?, series_no = ?, series_qid = ?, original_title = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
 		b.Title, b.Subtitle, b.Authors, b.ISBN13, b.ISBN10, b.Pages, b.Published, b.Publisher, b.Language, b.Description, b.Format, b.Tags,
-		b.Source, b.SourceID, b.SourceURL, b.Rating, b.Review, boolInt(b.Favorite), b.CurrentPage, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, b.UpdatedAt, b.ID, b.UserID)
+		b.Source, b.SourceID, b.SourceURL, b.Rating, b.Review, boolInt(b.Favorite), b.CurrentPage, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, b.OriginalTitle, b.UpdatedAt, b.ID, b.UserID)
 	if err != nil {
 		return err
 	}
@@ -413,10 +413,10 @@ func (s *Store) ImportBook(ctx context.Context, b *Book, reads []Read, quotes []
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO books (user_id, title, subtitle, authors, isbn13, isbn10, pages, published, publisher, language,
 		description, format, tags, cover, source, source_id, source_url, status, rating, review, favorite, current_page, queue_pos,
-		planned_for, plan_note, series, series_no, series_qid, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		planned_for, plan_note, series, series_no, series_qid, original_title, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		b.UserID, b.Title, b.Subtitle, b.Authors, b.ISBN13, b.ISBN10, b.Pages, b.Published, b.Publisher, b.Language,
 		b.Description, b.Format, b.Tags, "", b.Source, b.SourceID, b.SourceURL, b.Status, b.Rating, b.Review, boolInt(b.Favorite),
-		b.CurrentPage, b.QueuePos, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, b.CreatedAt, now)
+		b.CurrentPage, b.QueuePos, b.PlannedFor, b.PlanNote, b.Series, b.SeriesNo, b.SeriesQID, b.OriginalTitle, b.CreatedAt, now)
 	if err != nil {
 		return err
 	}
