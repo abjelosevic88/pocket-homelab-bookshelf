@@ -471,3 +471,9 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
   .book-side > .row { grid-column: 2; grid-row: 2; align-self: end; }
   .book-side .segmented { grid-column: 1 / -1; grid-row: 3; }
 }
+
+/* Settings → Reader sync */
+.plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; line-height: 1.5; }
+.kosync-docs { gap: 0; }
+.kosync-docs > li { align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+.kosync-docs > li:first-child { border-top: 0; }

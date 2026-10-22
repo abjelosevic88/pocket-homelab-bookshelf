@@ -51,6 +51,8 @@ type Server struct {
 	coreErr  string
 	resolved map[string]resolvedURL
 
+	kosync kosyncAuth
+
 	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
 	oidcMu sync.Mutex
 }
@@ -184,6 +186,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/metrics", s.handleMetrics)
 	}
 
+	r.Mount("/kosync", s.kosyncRoutes())
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/setup", s.handleSetup)
@@ -269,6 +273,12 @@ func (s *Server) Router() http.Handler {
 			r.Put("/settings/ai", s.handlePutAISettings)
 			r.Post("/settings/ai/test", s.handleTestAI)
 			r.Get("/ai/models", s.handleInferenceModels)
+
+			r.Get("/kosync", s.handleGetKosync)
+			r.Put("/kosync/account", s.handleSaveKosyncAccount)
+			r.Delete("/kosync/account", s.handleDeleteKosyncAccount)
+			r.Put("/kosync/documents/{document}", s.handleLinkKosyncDocument)
+			r.Delete("/kosync/documents/{document}", s.handleDeleteKosyncDocument)
 
 			r.Get("/tokens", s.handleListTokens)
 			r.Post("/tokens", s.handleCreateToken)
