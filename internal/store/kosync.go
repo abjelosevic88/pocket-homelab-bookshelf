@@ -206,6 +206,13 @@ func (s *Store) AddKosyncEvent(ctx context.Context, userID int64, e *KosyncEvent
 	return err
 }
 
+// HasKosyncEvents reports whether any raw update of the document is kept.
+func (s *Store) HasKosyncEvents(ctx context.Context, userID int64, document string) bool {
+	var n int
+	_ = s.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM kosync_events WHERE user_id = ? AND document = ?`, userID, document).Scan(&n)
+	return n > 0
+}
+
 // ListKosyncEvents returns a document's raw updates, newest first.
 func (s *Store) ListKosyncEvents(ctx context.Context, userID int64, document string, limit int) ([]KosyncEvent, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, document, source, device, device_id, percentage, timestamp, body, received_at

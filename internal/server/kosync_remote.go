@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -42,6 +43,17 @@ func (s *Server) kickKosyncPull(userID int64) {
 }
 
 func (s *Server) kosyncWorker(ctx context.Context) {
+	pullAll := func() {
+		ids, err := s.store.KosyncRemoteUsers(ctx)
+		if err != nil {
+			return
+		}
+		for _, uid := range ids {
+			s.pullOrLog(ctx, uid)
+		}
+	}
+	first := time.NewTimer(30 * time.Second) // catch up after a restart
+	defer first.Stop()
 	t := time.NewTicker(kosyncPullEvery)
 	defer t.Stop()
 	for {
@@ -51,14 +63,10 @@ func (s *Server) kosyncWorker(ctx context.Context) {
 		case uid := <-s.kosyncKick:
 			time.Sleep(2 * time.Second) // let the device's burst of updates land first
 			s.pullOrLog(ctx, uid)
+		case <-first.C:
+			pullAll()
 		case <-t.C:
-			ids, err := s.store.KosyncRemoteUsers(ctx)
-			if err != nil {
-				continue
-			}
-			for _, uid := range ids {
-				s.pullOrLog(ctx, uid)
-			}
+			pullAll()
 		}
 	}
 }
@@ -168,14 +176,17 @@ func (s *Server) pullCrossPoint(ctx context.Context, uid int64) (pullResult, err
 		if err := s.store.SaveKosyncMeta(ctx, uid, meta); err != nil {
 			return out, err
 		}
-		if !known || it.Timestamp > before.Timestamp {
+		newer := !known || it.Timestamp > before.Timestamp
+		if newer || !s.store.HasKosyncEvents(ctx, uid, it.Document) {
+			_ = s.store.AddKosyncEvent(ctx, uid, &store.KosyncEvent{Document: it.Document, Source: "crosspoint", Device: it.Device,
+				DeviceID: it.DeviceID, Percentage: it.Percentage, Timestamp: it.Timestamp, Body: raw})
+		}
+		if newer {
 			d := &store.KosyncDocument{Document: it.Document, Progress: clip(it.Progress, 1024), Percentage: min(max(it.Percentage, 0), 1),
 				Device: clip(it.Device, 100), DeviceID: clip(it.DeviceID, 100), Timestamp: it.Timestamp}
 			if err := s.store.SaveKosyncProgress(ctx, uid, d); err != nil {
 				return out, err
 			}
-			_ = s.store.AddKosyncEvent(ctx, uid, &store.KosyncEvent{Document: d.Document, Source: "crosspoint", Device: d.Device,
-				DeviceID: d.DeviceID, Percentage: d.Percentage, Timestamp: d.Timestamp, Body: raw})
 			out.Updated++
 		}
 		status := str(it.Status)
@@ -185,21 +196,39 @@ func (s *Server) pullCrossPoint(ctx context.Context, uid int64) (pullResult, err
 		if err := s.applyKosync(ctx, u, it.Document, status); err != nil {
 			s.log.Warn("kosync apply", "user", uid, "document", it.Document, "err", err)
 		}
-		if after, err := s.store.GetKosyncDocument(ctx, uid, it.Document); err == nil && after.BookID != nil && (!known || before.BookID == nil) {
-			out.Linked++
+		if after, err := s.store.GetKosyncDocument(ctx, uid, it.Document); err == nil {
+			if after.BookID != nil && (!known || before.BookID == nil) {
+				out.Linked++
+			}
+			s.retryKosyncCovers(ctx, u, after)
 		}
 	}
 	s.store.SetKosyncPull(ctx, uid, "")
 	return out, nil
 }
 
-// createKosyncBook adds a book a device is reading to the shelf: the
-// catalogue's edition when one has the same title and author, else what the
-// device said, with CrossPoint Sync's cover and page count.
+// createKosyncBook adds a book a device is reading to the shelf, under the
+// title and author the device gave, filled in from the catalogue.
 func (s *Server) createKosyncBook(ctx context.Context, u *store.User, d *store.KosyncDocument) (int64, error) {
-	titles, authors := kosyncNames(d)
 	b := &store.Book{UserID: u.ID, Title: d.Title, Authors: d.Authors, Pages: d.PageCount, Status: store.StatusWant, Source: "kosync"}
-	cover := d.CoverURL
+	if msg := clean(b); msg != "" {
+		return 0, errors.New(msg)
+	}
+	if err := s.store.CreateBook(ctx, b, "", ""); err != nil {
+		return 0, err
+	}
+	s.enrichKosyncBook(ctx, u, d, b)
+	s.kickCharacters()
+	s.log.Info("kosync added book", "user", u.ID, "book", b.ID, "title", b.Title, "document", d.Document)
+	return b.ID, nil
+}
+
+// enrichKosyncBook fills the blanks of a book sync added: details from the
+// catalogue edition with the same title and author, else from the work the
+// catalogue finds for that title by that author (a translation: its cover,
+// page count and description, not its ISBN); else CrossPoint Sync's cover.
+func (s *Server) enrichKosyncBook(ctx context.Context, u *store.User, d *store.KosyncDocument, b *store.Book) {
+	titles, authors := kosyncNames(d)
 	first := ""
 	if a := splitList(d.Authors); len(a) > 0 {
 		first = a[0]
@@ -210,47 +239,57 @@ func (s *Server) createKosyncBook(ctx context.Context, u *store.User, d *store.K
 	if err != nil {
 		s.log.Warn("kosync catalogue search", "title", d.Title, "err", err)
 	}
-	if c := pickKosyncCandidate(cands, titles, authors); c != nil {
-		b.Subtitle, b.ISBN13, b.ISBN10 = c.Subtitle, c.ISBN13, c.ISBN10
-		b.Published, b.Publisher, b.Language, b.Description = c.Published, c.Publisher, c.Language, c.Description
-		b.Source, b.SourceID, b.SourceURL = c.Source, c.SourceID, c.SourceURL
-		if c.Pages > 0 {
-			b.Pages = c.Pages
+	cover := d.CoverURL
+	if c, exact := pickKosyncCandidate(cands, titles, authors); c != nil {
+		if exact {
+			b.Subtitle = firstOf(b.Subtitle, c.Subtitle)
+			b.ISBN13, b.ISBN10 = firstOf(b.ISBN13, c.ISBN13), firstOf(b.ISBN10, c.ISBN10)
+			b.Publisher, b.Language = firstOf(b.Publisher, c.Publisher), firstOf(b.Language, c.Language)
 		}
-		if len(c.Authors) > 0 {
-			b.Authors = strings.Join(c.Authors, ", ")
+		b.Published, b.Description = firstOf(b.Published, c.Published), firstOf(b.Description, c.Description)
+		if b.Source == "kosync" || b.Source == "" {
+			b.Source, b.SourceID, b.SourceURL = c.Source, c.SourceID, c.SourceURL
+		}
+		if b.Pages == 0 && c.Pages > 0 {
+			b.Pages = c.Pages
+			if d.Percentage > 0 {
+				b.CurrentPage = int(math.Round(d.Percentage * float64(b.Pages)))
+			}
 		}
 		if c.CoverURL != "" {
 			cover = c.CoverURL
 		}
+		if msg := clean(b); msg == "" {
+			if err := s.store.UpdateBook(ctx, b); err != nil {
+				s.log.Warn("kosync enrich", "book", b.ID, "err", err)
+			}
+		}
 	}
-	if b.Authors == "" {
-		b.Authors = d.Authors
-	}
-	if msg := clean(b); msg != "" {
-		return 0, errors.New(msg)
-	}
-	if err := s.store.CreateBook(ctx, b, "", ""); err != nil {
-		return 0, err
-	}
-	if cover != "" {
+	if cover != "" && b.Cover == "" {
 		if data, ct, err := s.meta.FetchCover(ctx, cover, s.cfg.MaxCoverBytes); err != nil {
 			s.log.Warn("kosync cover", "book", b.ID, "url", cover, "err", err)
 		} else if err := s.writeCover(ctx, b, data, ct); err != nil {
 			s.log.Warn("kosync cover", "book", b.ID, "err", err)
 		}
 	}
-	s.kickCharacters()
-	s.log.Info("kosync added book", "user", u.ID, "book", b.ID, "title", b.Title, "document", d.Document)
-	return b.ID, nil
 }
 
-// pickKosyncCandidate is the first catalogue result with the device's title,
-// preferring one by the same author; nil when none has the title.
-func pickKosyncCandidate(cands []metadata.Candidate, titles, authors []string) *metadata.Candidate {
-	var byTitle *metadata.Candidate
+func firstOf(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// pickKosyncCandidate is the catalogue result for the device's book: the first
+// with the same title (preferring the same author), exact; else, for a
+// translated title, the first by the same author, not exact. nil when the
+// title matches only someone else's book or nothing fits.
+func pickKosyncCandidate(cands []metadata.Candidate, titles, authors []string) (c *metadata.Candidate, exact bool) {
+	var byTitle, byAuthor *metadata.Candidate
 	for i := range cands {
 		c := &cands[i]
+		sameAuthor := len(authors) > 0 && kosyncAuthorsMatch(strings.Join(c.Authors, ", "), authors)
 		same := false
 		for _, t := range titles {
 			if t == fold.String(c.Title) || t == fold.String(c.Title+" "+c.Subtitle) || (c.OriginalTitle != "" && t == fold.String(c.OriginalTitle)) {
@@ -258,20 +297,38 @@ func pickKosyncCandidate(cands []metadata.Candidate, titles, authors []string) *
 				break
 			}
 		}
-		if !same {
-			continue
-		}
-		if len(authors) == 0 || kosyncAuthorsMatch(strings.Join(c.Authors, ", "), authors) {
-			return c
-		}
-		if byTitle == nil {
+		switch {
+		case same && (len(authors) == 0 || sameAuthor):
+			return c, true
+		case same && byTitle == nil:
 			byTitle = c
+		case sameAuthor && byAuthor == nil:
+			byAuthor = c
 		}
 	}
-	if len(authors) > 0 {
-		return nil // same title, someone else's book
+	if len(authors) == 0 && byTitle != nil {
+		return byTitle, true
 	}
-	return byTitle
+	if byAuthor != nil {
+		return byAuthor, false
+	}
+	return nil, false
+}
+
+// retryKosyncCovers looks up again, once per run, the books sync added that
+// still have no cover (the catalogue or CrossPoint Sync may know it by now).
+func (s *Server) retryKosyncCovers(ctx context.Context, u *store.User, d *store.KosyncDocument) {
+	if d.BookID == nil || d.Ignored {
+		return
+	}
+	if _, done := s.kosyncRetried.LoadOrStore(*d.BookID, true); done {
+		return
+	}
+	b, err := s.store.GetBook(ctx, u.ID, *d.BookID)
+	if err != nil || b.Cover != "" || b.Source != "kosync" {
+		return // has a cover, or is the person's own book: leave it as they made it
+	}
+	s.enrichKosyncBook(ctx, u, d, b)
 }
 
 // ---- Settings → Reader sync: CrossPoint Sync and choices ----
