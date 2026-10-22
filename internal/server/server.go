@@ -51,10 +51,11 @@ type Server struct {
 	coreErr  string
 	resolved map[string]resolvedURL
 
-	kosync     kosyncAuth
-	kosyncMu   sync.Mutex // one document is matched (or its book created) at a time
-	kosyncKick chan int64
-	kosyncLast sync.Map // user id → time of the last CrossPoint Sync pull
+	kosync        kosyncAuth
+	kosyncMu      sync.Mutex // one document is matched (or its book created) at a time
+	kosyncKick    chan int64
+	kosyncLast    sync.Map // user id → time of the last CrossPoint Sync pull
+	kosyncRetried sync.Map // book ids sync added whose cover was looked up again this run
 
 	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
 	oidcMu sync.Mutex

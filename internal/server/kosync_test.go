@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
 )
 
@@ -252,5 +253,25 @@ func TestKosyncCrossPointPull(t *testing.T) {
 	books, _ := h.st.ListBooks(context.Background(), store.BookFilter{UserID: h.ana.ID})
 	if len(books) != 2 {
 		t.Fatalf("books after second pull: %d", len(books))
+	}
+}
+
+func TestKosyncCandidateForTranslation(t *testing.T) {
+	d := &store.KosyncDocument{Title: "Nebeski oganj", Authors: "Robert Jordan"}
+	titles, authors := kosyncNames(d)
+	cands := []metadata.Candidate{
+		{Title: "Nebo", Authors: []string{"Someone Else"}},
+		{Title: "The Fires of Heaven", Authors: []string{"Robert Jordan"}, Pages: 894, ISBN13: "9780312854270"},
+	}
+	c, exact := pickKosyncCandidate(cands, titles, authors)
+	if c == nil || exact || c.Pages != 894 {
+		t.Fatalf("translation: %+v exact=%v", c, exact)
+	}
+	cands = append(cands, metadata.Candidate{Title: "Nebeski oganj", Authors: []string{"Robert Jordan"}})
+	if c, exact = pickKosyncCandidate(cands, titles, authors); c == nil || !exact || c.Title != "Nebeski oganj" {
+		t.Fatalf("exact: %+v %v", c, exact)
+	}
+	if c, _ = pickKosyncCandidate([]metadata.Candidate{{Title: "Nebeski oganj", Authors: []string{"Other Author"}}}, titles, authors); c != nil {
+		t.Fatalf("someone else's book picked: %+v", c)
 	}
 }
