@@ -5,12 +5,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { APIToken, Book, KosyncDocument, KosyncEvent, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
-import { Avatar, Confirm, CopyField, Field, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
+import { Avatar, Confirm, CopyField, Field, MenuButton, type MenuItem, Loading, Modal, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
 import { KindleImport } from '../components/KindleImport'
 import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
+import { Cover } from '../components/Cover'
 
 type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'profile' | 'users' | 'api' | 'data' | 'about'
 
@@ -290,12 +291,13 @@ function ReaderSync() {
   const [history, setHistory] = useState<KosyncDocument | null>(null)
   const [remote, setRemote] = useState({ url: 'https://sync.crosspointreader.com', user: '', password: '' })
   const [pulling, setPulling] = useState(false)
+  const [editing, setEditing] = useState(false)
   useEffect(() => { if (data) setUsername(data.account?.username || (user?.email || '').split('@')[0].replace(/[^A-Za-z0-9._@+-]/g, '')) }, [data?.account?.username]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!data) return <Loading />
   const acc = data.account
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { setData(await api.put<KosyncState>(`${V1}/kosync/account`, { username, password })); setPassword(''); toast(acc ? 'Saved — log in again on your devices if you changed anything' : 'Reader sync is on') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+    try { setData(await api.put<KosyncState>(`${V1}/kosync/account`, { username, password })); setPassword(''); setEditing(false); toast(acc ? 'Saved — log in again on your devices if you changed anything' : 'Reader sync is on') } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   const link = async (d: KosyncDocument, book_id: number | null, ignored = false) => {
     try { await api.put(`${V1}/kosync/documents/${d.document}`, { book_id, ignored }); setLinking(null); reload() } catch (e) { toast((e as Error).message, 'err') }
@@ -309,71 +311,116 @@ function ReaderSync() {
     try { const r = await api.post<{ documents: number; updated: number; linked: number }>(`${V1}/kosync/pull`); toast(`${r.documents} books checked · ${r.updated} updated · ${r.linked} linked`); reload(); books.reload() } catch (e) { toast((e as Error).message, 'err'); reload() } finally { setPulling(false) }
   }
   const forget = async (d: KosyncDocument) => { try { await api.del(`${V1}/kosync/documents/${d.document}`); reload() } catch (e) { toast((e as Error).message, 'err') } }
-  const name = (d: KosyncDocument) => d.title ? `${d.title}${d.authors ? ` — ${d.authors}` : ''}` : d.filename ? d.filename.split('/').pop() : `Document ${d.document.slice(0, 8)}…`
+  const name = (d: KosyncDocument) => d.title ? `${d.title}${d.authors ? ` — ${d.authors}` : ''}` : d.filename ? d.filename.split('/').pop() : 'Unknown book'
   const when = (ts: number) => new Date(ts * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
   const options = (books.data || []).map(b => ({ value: String(b.id), label: b.authors ? `${b.title} — ${b.authors}` : b.title }))
+  const doc = (d: KosyncDocument) => {
+    const book = d.book_id ? (books.data || []).find(b => b.id === d.book_id) : undefined
+    const pct = Math.round(d.percentage * 100)
+    const items: MenuItem[] = [
+      { label: 'History', icon: 'clock', hint: 'every update as it arrived', onSelect: () => setHistory(d) },
+      d.book_id ? { label: 'Unlink from the book', icon: 'x', onSelect: () => link(d, null) }
+        : d.ignored ? { label: 'Stop ignoring', icon: 'eye', onSelect: () => link(d, null, false) }
+        : { label: 'Ignore this file', icon: 'eye', onSelect: () => link(d, null, true) },
+      'sep',
+      { label: 'Forget', icon: 'trash', danger: true, hint: 'the device sends it again on its next sync', onSelect: () => forget(d) },
+    ]
+    return (
+      <li key={d.document} className="kosync-doc">
+        <Cover book={book || { id: 0, title: d.title || '?', authors: d.authors, cover: '' }} size="xs" />
+        <div className="info">
+          <div className="nm ellipsis">{book ? <Link to={`/books/${book.id}`}>{book.title}</Link> : d.title || name(d)}</div>
+          <div className="muted small ellipsis">{book ? book.authors : d.title ? d.authors : <>No title from the device yet · file <span className="mono">{d.document.slice(0, 12)}…</span></>}</div>
+          <div className="kosync-progress">
+            <div className="bar"><span className="fill" style={{ width: `${pct}%` }} /></div>
+            <span className="muted small">{pct}% · {d.device || 'device'} · {when(d.timestamp)}</span>
+          </div>
+          {linking === d.document && <div className="kosync-link"><Select value={d.book_id ? String(d.book_id) : ''} onChange={v => v && link(d, Number(v))} options={options} placeholder="Find the book on your shelf…" ariaLabel="Book" /></div>}
+        </div>
+        <div className="actions">
+          {d.ignored ? <span className="badge">Ignored</span> : !d.book_id && <span className="badge warn">Not linked</span>}
+          <button type="button" className="btn sm" onClick={() => setLinking(linking === d.document ? null : d.document)}>{linking === d.document ? 'Cancel' : d.book_id ? 'Change' : 'Link'}</button>
+          <MenuButton items={items} label={`More for ${name(d)}`} align="right" width={250}><Icon name="more" size={16} /></MenuButton>
+        </div>
+      </li>
+    )
+  }
   return (
-    <>
+    <div className="stack loose">
       <Section title="Your sync account" icon="key" sub="E-readers log in with a username and password of their own, not your Bookshelf login. Pick them here, then enter the same on each device."
         actions={acc && <button type="button" className="btn ghost sm danger-text" onClick={() => setOff(true)}>Turn off</button>}>
         {acc && <>
-          <SettingRow stack title="Server" help="Use this exact address as the custom sync server."><CopyField value={data.url} label="Sync server" /></SettingRow>
-          <SettingRow title="Last sync" help="When a device last logged in or sent progress.">{acc.last_seen ? <span className="muted">{when(Date.parse(acc.last_seen) / 1000)}</span> : <span className="muted">never</span>}</SettingRow>
+          <SettingRow title="Status" help={<>Last device sync: {acc.last_seen ? when(Date.parse(acc.last_seen) / 1000) : 'never'}</>}><span className="badge ok">On</span></SettingRow>
+          <SettingRow stack title="Server address" help="Enter it as the custom sync server on each device."><CopyField value={data.url} label="Sync server" /></SettingRow>
+          <SettingRow stack title="Username"><CopyField value={acc.username} label="Sync username" /></SettingRow>
         </>}
-        <form onSubmit={save} className="stack mt">
-          <Field label="Username"><input value={username} onChange={e => setUsername(e.target.value.trim())} autoComplete="off" spellCheck={false} required /></Field>
-          <Field label={acc ? 'New password' : 'Password'} help={acc ? 'Leave empty to keep the current one.' : 'At least 8 characters. Devices only ever send a hash of it.'}><input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" minLength={acc ? undefined : 8} required={!acc} /></Field>
-          <div><button type="submit" className="btn primary" disabled={busy}>{acc ? 'Save' : 'Turn on reader sync'}</button></div>
-        </form>
+        {acc && !editing
+          ? <div className="kosync-foot"><button type="button" className="btn sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} />Change username or password</button></div>
+          : (
+            <form onSubmit={save} className="kosync-form">
+              <Field label="Username"><input value={username} onChange={e => setUsername(e.target.value.trim())} autoComplete="off" spellCheck={false} required /></Field>
+              <Field label={acc ? 'New password' : 'Password'} help={acc ? 'Leave empty to keep the current one.' : 'At least 8 characters. Devices only send a hash of it.'}><input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" minLength={acc ? undefined : 8} required={!acc} /></Field>
+              <div className="kosync-form-actions">
+                <button type="submit" className="btn primary" disabled={busy}>{acc ? 'Save' : 'Turn on reader sync'}</button>
+                {acc && <button type="button" className="btn ghost" onClick={() => { setEditing(false); setPassword(''); setUsername(acc.username) }}>Cancel</button>}
+              </div>
+            </form>
+          )}
       </Section>
-      {acc && <Section title="Connect a device" icon="link">
-        <ul className="plain-list">
-          <li><b>KOReader</b>: open a book → Tools → Progress sync → Custom sync server → <code>{data.url}</code>. Then Register / login → <b>Login</b> with the username and password above (registering new accounts is closed).</li>
-          <li><b>CrossPoint</b>: Settings → KOReader Sync → server <code>{data.url}</code>, same username and password. Turn on “send metadata” so books match by title on their own.</li>
-          <li><b>CrossPoint Sync</b>: Connections → <b>Another KOSync server</b> → <code>{data.url}</code>, username, password → Connect. It mirrors progress only, without titles: link each book once below.</li>
-        </ul>
+
+      {acc && <Section title="Connect a device" icon="link" sub="Use the server address, username and password from above.">
+        <div className="kosync-devices">
+          <div className="kosync-device">
+            <h4>KOReader</h4>
+            <ol>
+              <li>Open a book → Tools → <b>Progress sync</b>.</li>
+              <li><b>Custom sync server</b> → the server address.</li>
+              <li>Register / login → <b>Login</b>. Registering is closed.</li>
+            </ol>
+          </div>
+          <div className="kosync-device">
+            <h4>CrossPoint</h4>
+            <ol>
+              <li>Settings → <b>KOReader Sync</b>.</li>
+              <li>Server address, username and password.</li>
+              <li>Turn on <b>send metadata</b> so books match by title.</li>
+            </ol>
+          </div>
+          <div className="kosync-device">
+            <h4>CrossPoint Sync</h4>
+            <ol>
+              <li>Connections → <b>Another KOSync server</b>.</li>
+              <li>Server address, username, password → <b>Connect</b>.</li>
+              <li>It sends no titles: connect it below as well.</li>
+            </ol>
+          </div>
+        </div>
       </Section>}
-      <Section title="CrossPoint Sync" icon="link" sub="CrossPoint Sync's mirror sends only a file hash, not the book's title. Connect your CrossPoint Sync account so Bookshelf can read titles, authors, covers and page counts from it. It checks right after an unknown book shows up, and every 15 minutes."
+
+      <Section title="CrossPoint Sync" icon="refresh" sub="Its mirror sends only a file hash. With your CrossPoint Sync account Bookshelf reads each book's title, author, cover and page count. It checks right after an unknown book shows up, and every 15 minutes."
         actions={data.prefs.remote_url && <button type="button" className="btn sm" onClick={pull} disabled={pulling}><Icon name="refresh" size={14} />{pulling ? 'Syncing…' : 'Sync now'}</button>}>
         {data.prefs.remote_url ? <>
           <SettingRow title={<>Connected as <b>{data.prefs.remote_user}</b></>} help={data.prefs.remote_url}><button type="button" className="btn ghost sm danger-text" disabled={busy} onClick={() => savePrefs({ remote_url: '', remote_user: '' }, 'Disconnected')}>Disconnect</button></SettingRow>
-          <SettingRow title="Last checked" help={data.prefs.last_error && <span className="danger-text">{data.prefs.last_error}</span>}><span className="muted">{data.prefs.last_pull ? when(Date.parse(data.prefs.last_pull) / 1000) : 'never'}</span></SettingRow>
+          <SettingRow title="Last checked" help={data.prefs.last_error && <span className="danger-text">{data.prefs.last_error}</span>}><span className="muted small">{data.prefs.last_pull ? when(Date.parse(data.prefs.last_pull) / 1000) : 'never'}</span></SettingRow>
         </> : (
-          <form className="stack" onSubmit={e => { e.preventDefault(); savePrefs({ remote_url: remote.url, remote_user: remote.user, remote_password: remote.password }, 'Connected to CrossPoint Sync') }}>
-            <Field label="Server"><input value={remote.url} onChange={e => setRemote({ ...remote, url: e.target.value.trim() })} spellCheck={false} required /></Field>
+          <form className="kosync-form" onSubmit={e => { e.preventDefault(); savePrefs({ remote_url: remote.url, remote_user: remote.user, remote_password: remote.password }, 'Connected to CrossPoint Sync') }}>
+            <Field label="Server" className="wide"><input value={remote.url} onChange={e => setRemote({ ...remote, url: e.target.value.trim() })} spellCheck={false} required /></Field>
             <Field label="Username"><input value={remote.user} onChange={e => setRemote({ ...remote, user: e.target.value.trim() })} autoComplete="off" spellCheck={false} required /></Field>
-            <Field label="Password" help="Your CrossPoint Sync password. Only its hash is stored, the same thing devices send."><input type="password" value={remote.password} onChange={e => setRemote({ ...remote, password: e.target.value })} autoComplete="off" required /></Field>
-            <div><button type="submit" className="btn primary" disabled={busy}>Connect</button></div>
+            <Field label="Password" help="Only its hash is stored, the same thing devices send."><input type="password" value={remote.password} onChange={e => setRemote({ ...remote, password: e.target.value })} autoComplete="off" required /></Field>
+            <div className="kosync-form-actions"><button type="submit" className="btn primary" disabled={busy}>Connect</button></div>
           </form>
         )}
       </Section>
-      <Section title="Books from your e-readers" icon="book" sub="Each file a device reads. Progress on a linked book moves its page (books with a page count) and moves it from Want to read to Reading. Books it cannot match by title wait here to be linked once.">
-        <SettingRow title="Add books that are not on my shelf" help="A book a device reads that has no match on your shelf is looked up in the catalogues and added as Reading, with its cover."><Switch checked={data.prefs.add_missing} onChange={v => savePrefs({ add_missing: v }, v ? 'Missing books will be added' : 'Missing books wait here to be linked')} label="Add books that are not on my shelf" /></SettingRow>
-        {data.documents.length === 0 ? <p className="muted">Nothing synced yet.</p> : (
-          <ul className="plain-list kosync-docs">
-            {data.documents.map(d => (
-              <li key={d.document} className="row wrap">
-                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-                  <div className="ellipsis">{name(d)}</div>
-                  <div className="muted small">{Math.round(d.percentage * 100)}% · {d.device || 'device'} · {when(d.timestamp)}</div>
-                  <div className="small">{d.ignored ? <span className="muted">Ignored</span> : d.book_id ? <>→ <Link to={`/books/${d.book_id}`}>{d.book_title}</Link></> : <span className="danger-text">Not linked to a book</span>}</div>
-                </div>
-                {linking === d.document
-                  ? <div style={{ flex: '1 1 260px' }}><Select value={d.book_id ? String(d.book_id) : ''} onChange={v => v && link(d, Number(v))} options={options} placeholder="Find the book…" ariaLabel="Book" /></div>
-                  : <div className="row">
-                      <button type="button" className="btn sm" onClick={() => setLinking(d.document)}>{d.book_id ? 'Change' : 'Link'}</button>
-                      {(d.book_id || !d.ignored) && <button type="button" className="btn ghost sm" onClick={() => link(d, null, !d.book_id)}>{d.book_id ? 'Unlink' : 'Ignore'}</button>}
-                      <button type="button" className="btn ghost sm" onClick={() => setHistory(d)} title="Every update as it arrived">History</button>
-                      <button type="button" className="btn ghost sm danger-text" onClick={() => forget(d)} title="Forget it; the device sends it again on its next sync">Forget</button>
-                    </div>}
-              </li>
-            ))}
-          </ul>
-        )}
+
+      <Section title="Books from your e-readers" icon="book" sub="Each file a device reads. Progress on a linked book moves its page and moves it from Want to read to Reading.">
+        <SettingRow title="Add books that are not on my shelf" help="Looked up in the catalogues and added as Reading, with a cover. Off: they wait here to be linked."><Switch checked={data.prefs.add_missing} onChange={v => savePrefs({ add_missing: v }, v ? 'Missing books will be added' : 'Missing books wait here to be linked')} label="Add books that are not on my shelf" /></SettingRow>
+        {data.documents.length === 0
+          ? <p className="muted kosync-empty">Nothing synced yet. Books show up here after a device sends its first progress.</p>
+          : <ul className="kosync-docs">{data.documents.map(doc)}</ul>}
       </Section>
       {history && <SyncHistory doc={history} title={name(history) || ''} onClose={() => setHistory(null)} />}
-      {off && <Confirm confirmLabel="Turn off" title="Turn reader sync off?" message="Devices can no longer log in or send progress. The books listed here and their links stay." onCancel={() => setOff(false)} onConfirm={async () => { setOff(false); try { await api.del(`${V1}/kosync/account`); setPassword(''); reload() } catch (e) { toast((e as Error).message, 'err') } }} />}
-    </>
+      {off && <Confirm confirmLabel="Turn off" title="Turn reader sync off?" message="Devices can no longer log in or send progress. The books listed here and their links stay." onCancel={() => setOff(false)} onConfirm={async () => { setOff(false); try { await api.del(`${V1}/kosync/account`); setPassword(''); setEditing(false); reload() } catch (e) { toast((e as Error).message, 'err') } }} />}
+    </div>
   )
 }
 
