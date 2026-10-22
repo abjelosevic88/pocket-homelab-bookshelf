@@ -455,7 +455,7 @@ function AITab() {
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (data) { setModel(data.model); setWeb(data.web_search); setProvider(data.ai_provider || 'auto') } }, [data])
   // the model list comes from the account behind the saved key
-  useEffect(() => { if (data?.key_set || data?.key_env) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [data?.key_set, data?.key_env])
+  useEffect(() => { if (provider === 'openai' && (data?.key_set || data?.key_env)) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [provider, data?.key_set, data?.key_env])
   // follow a run while it is going
   useEffect(() => {
     if (!status.data?.running) return
@@ -486,26 +486,27 @@ function AITab() {
     <div className="stack loose">
       <Section title="AI provider" icon="sparkles" sub="Writes short, spoiler-free character notes in your preferred languages after you add a book. Automatic prefers Pocket AI when connected through Core; standalone installs use your own OpenAI key.">
         <SettingRow title="Text generation" help="Pocket AI uses your Claude account and model from Pocket AI settings.">
-          <select aria-label="Text generation provider" value={provider} onChange={e => setProvider(e.target.value)}><option value="auto">Automatic — prefer Pocket AI</option><option value="pocket">Pocket AI</option><option value="openai">OpenAI</option></select>
+          <Select ariaLabel="Text generation provider" value={provider} onChange={setProvider} options={[{ value: 'auto', label: 'Automatic — prefer Pocket AI' }, { value: 'pocket', label: 'Pocket AI' }, { value: 'openai', label: 'OpenAI' }]} />
         </SettingRow>
         <p className="muted small" role="status">Saved selection: {data.ai_status?.detail}</p>
-        <p className="muted small">The key, model and web search below apply to OpenAI. Pocket AI generates from its existing knowledge without web search.</p>
-        <SettingRow stack title="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
-          <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} aria-label="OpenAI API key" />
-        </SettingRow>
-        <SettingRow title="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
-          {models.length > 0
-            ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} clearLabel="Default" ariaLabel="Model" />
-            : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} style={{ width: 200 }} aria-label="Model" />}
-        </SettingRow>
-        <SettingRow title="Let it look books up on the web" help="More accurate for translations and lesser-known books. OpenAI charges a small fee per search.">
-          <Switch checked={web} onChange={setWeb} label="Let it look books up on the web" />
-        </SettingRow>
+        {provider === 'openai' && <>
+          <SettingRow stack title="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
+            <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} aria-label="OpenAI API key" />
+          </SettingRow>
+          <SettingRow title="Model" help={`Bigger models know more books; smaller ones are cheaper. Default: ${data.default_model}.`}>
+            {models.length > 0
+              ? <Select value={model} onChange={setModel} options={models.map(m => ({ value: m, label: m }))} placeholder={data.default_model} clearLabel="Default" ariaLabel="Model" />
+              : <input value={model} onChange={e => setModel(e.target.value.trim())} placeholder={data.default_model} style={{ width: 200 }} aria-label="Model" />}
+          </SettingRow>
+          <SettingRow title="Let it look books up on the web" help="More accurate for translations and lesser-known books. OpenAI charges a small fee per search.">
+            <Switch checked={web} onChange={setWeb} label="Let it look books up on the web" />
+          </SettingRow>
+        </>}
       </Section>
       <div className="row wrap">
         <button type="button" className="btn primary" onClick={() => save()} disabled={busy}>Save changes</button>
-        <button type="button" className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>
-        {data.key_set && <button type="button" className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
+        {provider === 'openai' && <button type="button" className="btn" onClick={test} disabled={busy || !(key || hasKey)}>{busy ? 'Checking…' : 'Test key'}</button>}
+        {provider === 'openai' && data.key_set && <button type="button" className="btn ghost danger-text" onClick={() => save({ clear_key: true, key: undefined })} disabled={busy}>Remove key</button>}
       </div>
       <Section title="Characters" icon="users" sub={<>The <Icon name="refresh" size={12} className="inline-icon" /> button on a book page writes that book's characters again.</>}
         actions={st?.writer === 'app' ? <button type="button" className="btn sm" onClick={run} disabled={st.running}><Icon name="sparkles" size={14} />{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
