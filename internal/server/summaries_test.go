@@ -111,3 +111,14 @@ func TestSummariesWrittenInEveryLanguage(t *testing.T) {
 		t.Fatalf("bob: %d", code)
 	}
 }
+
+func TestSameTitleAcrossScripts(t *testing.T) {
+	for _, c := range [][2]string{{"На Дрини ћуприја", "Na Drini ćuprija"}, {"Благо цара Радована", "Blago cara Radovana"}} {
+		if !sameWorkTitle(c[0], c[1]) {
+			t.Errorf("%q and %q should be the same title", c[0], c[1])
+		}
+	}
+	if sameWorkTitle("The Fires of Heaven", "Nebeski oganj") {
+		t.Error("a translation is not the same title")
+	}
+}
