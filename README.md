@@ -221,3 +221,5 @@ The model and Claude account come from the person's Pocket AI settings.
 The background character writer uses the same provider choice. Web search and
 the OpenAI model selector apply only to OpenAI; Pocket AI uses its existing
 knowledge and can report unknown books.
+
+Pocket AI model selection: AI settings offer the models discovered from your connected Claude account. “Use Pocket AI default” follows your current model in Pocket AI (Sonnet when no model is set). An explicit choice is saved per person in this app and never changes the Pocket AI default or your OpenAI model. Loading models does not create a chat or send a generation prompt. If a saved model is no longer offered, choose another model or return to the default; generation does not silently substitute a different model.

@@ -268,6 +268,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/settings/ai", s.handleGetAISettings)
 			r.Put("/settings/ai", s.handlePutAISettings)
 			r.Post("/settings/ai/test", s.handleTestAI)
+			r.Get("/ai/models", s.handleInferenceModels)
 
 			r.Get("/tokens", s.handleListTokens)
 			r.Post("/tokens", s.handleCreateToken)

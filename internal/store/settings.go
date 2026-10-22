@@ -136,16 +136,17 @@ func (s *Store) UsersWithSetting(ctx context.Context, key string) ([]int64, erro
 
 // AISettings configure writing characters with OpenAI; each person has their own.
 type AISettings struct {
-	AIProvider string `json:"ai_provider"`
-	OpenAIKey  string
-	Model      string
-	WebSearch  bool
+	AIProvider    string `json:"ai_provider"`
+	AIPocketModel string `json:"ai_pocket_model"`
+	OpenAIKey     string
+	Model         string
+	WebSearch     bool
 }
 
 // GetAISettings loads the AI settings of userID (web search on by default).
 func (s *Store) GetAISettings(ctx context.Context, userID int64) (AISettings, error) {
 	a := AISettings{WebSearch: true}
-	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM user_settings WHERE user_id = ? AND key IN ('ai_provider', 'ai_openai_key', 'ai_model', 'ai_web_search')`, userID)
+	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM user_settings WHERE user_id = ? AND key IN ('ai_pocket_model', 'ai_provider', 'ai_openai_key', 'ai_model', 'ai_web_search')`, userID)
 	if err != nil {
 		return a, err
 	}
@@ -156,6 +157,8 @@ func (s *Store) GetAISettings(ctx context.Context, userID int64) (AISettings, er
 			return a, err
 		}
 		switch k {
+		case "ai_pocket_model":
+			a.AIPocketModel = v
 		case "ai_provider":
 			a.AIProvider = v
 		case "ai_openai_key":
@@ -171,5 +174,5 @@ func (s *Store) GetAISettings(ctx context.Context, userID int64) (AISettings, er
 
 // SaveAISettings stores the AI settings of userID.
 func (s *Store) SaveAISettings(ctx context.Context, userID int64, a AISettings) error {
-	return s.putUserSettings(ctx, userID, map[string]string{"ai_provider": a.AIProvider, "ai_openai_key": a.OpenAIKey, "ai_model": a.Model, "ai_web_search": map[bool]string{true: "1", false: "0"}[a.WebSearch]})
+	return s.putUserSettings(ctx, userID, map[string]string{"ai_provider": a.AIProvider, "ai_pocket_model": a.AIPocketModel, "ai_openai_key": a.OpenAIKey, "ai_model": a.Model, "ai_web_search": map[bool]string{true: "1", false: "0"}[a.WebSearch]})
 }

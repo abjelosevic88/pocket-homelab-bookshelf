@@ -58,6 +58,7 @@ func (s *Server) openAI(ctx context.Context, uid int64) *ai.OpenAI {
 		key = s.cfg.OpenAIKey
 	}
 	pocket, _ := s.inferenceFor(ctx, uid, a.AIProvider, key != "")
+	pocket = pocket.WithModel(a.AIPocketModel)
 	if key == "" && pocket == nil {
 		return nil
 	}
@@ -275,7 +276,7 @@ func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 	}
 	_, aiStatus := s.inferenceFor(r.Context(), me(r), a.AIProvider, a.OpenAIKey != "" || (s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r))))
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ai_provider": aiStatus.Provider, "ai_status": aiStatus, "ai_configured": aiStatus.Ready,
+		"ai_provider": aiStatus.Provider, "ai_pocket_model": a.AIPocketModel, "ai_status": aiStatus, "ai_configured": aiStatus.Ready,
 		"key_set": a.OpenAIKey != "", "key_hint": keyHint(a.OpenAIKey), "key_env": s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r)),
 		"model": a.Model, "default_model": ai.DefaultModel, "web_search": a.WebSearch,
 	})
@@ -284,11 +285,12 @@ func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 // handlePutAISettings: {"key": "sk-…" (omit to keep), "clear_key": true, "model", "web_search"}.
 func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		AIProvider *string `json:"ai_provider"`
-		Key        *string `json:"key"`
-		ClearKey   bool    `json:"clear_key"`
-		Model      string  `json:"model"`
-		WebSearch  bool    `json:"web_search"`
+		AIProvider    *string `json:"ai_provider"`
+		AIPocketModel *string `json:"ai_pocket_model"`
+		Key           *string `json:"key"`
+		ClearKey      bool    `json:"clear_key"`
+		Model         string  `json:"model"`
+		WebSearch     bool    `json:"web_search"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -311,6 +313,13 @@ func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.AIProvider = *in.AIProvider
+	}
+	if in.AIPocketModel != nil {
+		if !validPocketModel(*in.AIPocketModel) {
+			writeErr(w, 400, "invalid Pocket AI model")
+			return
+		}
+		a.AIPocketModel = *in.AIPocketModel
 	}
 	a.Model, a.WebSearch = strings.TrimSpace(in.Model), in.WebSearch
 	if err := s.store.SaveAISettings(r.Context(), me(r), a); err != nil {
