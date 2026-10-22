@@ -47,7 +47,7 @@ func (s *Server) kickCharacters() {
 	}
 }
 
-// openAI returns the client for one person's key, or nil when they have none.
+// openAI returns the selected generation client, using this person's Core link or key.
 func (s *Server) openAI(ctx context.Context, uid int64) *ai.OpenAI {
 	a, err := s.store.GetAISettings(ctx, uid)
 	if err != nil {
@@ -57,10 +57,11 @@ func (s *Server) openAI(ctx context.Context, uid int64) *ai.OpenAI {
 	if key == "" && s.cfg.OpenAIKey != "" && s.isOwner(ctx, uid) {
 		key = s.cfg.OpenAIKey
 	}
-	if key == "" {
+	pocket, _ := s.inferenceFor(ctx, uid, a.AIProvider, key != "")
+	if key == "" && pocket == nil {
 		return nil
 	}
-	return &ai.OpenAI{Key: key, Model: a.Model, WebSearch: a.WebSearch, BaseURL: s.cfg.OpenAIBaseURL}
+	return &ai.OpenAI{Pocket: pocket, Key: key, Model: a.Model, WebSearch: a.WebSearch, BaseURL: s.cfg.OpenAIBaseURL}
 }
 
 func (s *Server) characterWorker(ctx context.Context) {
@@ -170,7 +171,7 @@ func (s *Server) writeMissingFor(ctx context.Context, uid int64, oa *ai.OpenAI) 
 					delete(cw.retryAt[uid], j.b.ID)
 					return
 				}
-				s.log.Warn("characters: OpenAI failed", "user", uid, "book", j.b.ID, "title", j.b.Title, "err", err)
+				s.log.Warn("characters: AI generation failed", "user", uid, "book", j.b.ID, "title", j.b.Title, "err", err)
 				if cw.lastError == nil {
 					cw.lastError = map[int64]string{}
 				}
@@ -204,7 +205,7 @@ func (s *Server) writeMissingFor(ctx context.Context, uid int64, oa *ai.OpenAI) 
 	}
 }
 
-// writeCharacters asks OpenAI for one book and saves what came back. An
+// writeCharacters asks the selected provider for one book and saves the result. An
 // empty language stays missing, so it is asked for again.
 func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Book, langs []string) error {
 	in := ai.Book{Title: b.Title, Subtitle: b.Subtitle, Authors: b.Authors, Published: b.Published, Series: b.Series,
@@ -221,6 +222,10 @@ func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Boo
 	model := oa.Model
 	if model == "" {
 		model = ai.DefaultModel
+	}
+	source := "openai " + model
+	if oa.Pocket != nil {
+		source = "pocket-ai"
 	}
 	saved := 0
 	for _, l := range langs {
@@ -241,7 +246,7 @@ func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Boo
 				cs.Characters = append(cs.Characters, store.Character{Name: c.Name, Role: c.Role, Description: c.Description})
 			}
 		}
-		if err := s.store.PutCharacters(ctx, b.UserID, b.ID, l, cleanCharacters(cs, "openai "+model)); err != nil {
+		if err := s.store.PutCharacters(ctx, b.UserID, b.ID, l, cleanCharacters(cs, source)); err != nil {
 			return err
 		}
 		saved++
@@ -268,7 +273,9 @@ func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "settings")
 		return
 	}
+	_, aiStatus := s.inferenceFor(r.Context(), me(r), a.AIProvider, a.OpenAIKey != "" || (s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r))))
 	writeJSON(w, http.StatusOK, map[string]any{
+		"ai_provider": aiStatus.Provider, "ai_status": aiStatus, "ai_configured": aiStatus.Ready,
 		"key_set": a.OpenAIKey != "", "key_hint": keyHint(a.OpenAIKey), "key_env": s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r)),
 		"model": a.Model, "default_model": ai.DefaultModel, "web_search": a.WebSearch,
 	})
@@ -277,10 +284,11 @@ func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 // handlePutAISettings: {"key": "sk-…" (omit to keep), "clear_key": true, "model", "web_search"}.
 func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Key       *string `json:"key"`
-		ClearKey  bool    `json:"clear_key"`
-		Model     string  `json:"model"`
-		WebSearch bool    `json:"web_search"`
+		AIProvider *string `json:"ai_provider"`
+		Key        *string `json:"key"`
+		ClearKey   bool    `json:"clear_key"`
+		Model      string  `json:"model"`
+		WebSearch  bool    `json:"web_search"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -296,6 +304,13 @@ func (s *Server) handlePutAISettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.ClearKey {
 		a.OpenAIKey = ""
+	}
+	if in.AIProvider != nil {
+		if !validAIProvider(*in.AIProvider) {
+			writeErr(w, 400, "choose automatic, Pocket AI or OpenAI")
+			return
+		}
+		a.AIProvider = *in.AIProvider
 	}
 	a.Model, a.WebSearch = strings.TrimSpace(in.Model), in.WebSearch
 	if err := s.store.SaveAISettings(r.Context(), me(r), a); err != nil {
@@ -317,7 +332,7 @@ func (s *Server) handleTestAI(w http.ResponseWriter, r *http.Request) {
 	if k := strings.TrimSpace(in.Key); k != "" {
 		oa = &ai.OpenAI{Key: k, BaseURL: s.cfg.OpenAIBaseURL}
 	}
-	if oa == nil {
+	if oa == nil || oa.Key == "" {
 		writeErr(w, http.StatusBadRequest, "no OpenAI key yet")
 		return
 	}

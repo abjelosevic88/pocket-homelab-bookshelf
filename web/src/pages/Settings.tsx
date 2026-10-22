@@ -18,7 +18,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'metadata', label: 'Book search', icon: 'search', sub: 'Where book details and covers come from, and which languages come first.' },
   { id: 'templates', label: 'Templates', icon: 'text', sub: 'Starting points for “My thoughts” on a book.' },
   { id: 'daily', label: 'Daily highlights', icon: 'sun', sub: 'A few of your highlights every morning — and whether they are sent to your phone.' },
-  { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Your OpenAI key, for the characters of the novels on your shelf.' },
+  { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Pocket AI or OpenAI, for the characters of the novels on your shelf.' },
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
   { id: 'users', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
   { id: 'api', label: 'API tokens', icon: 'key', sub: 'Personal tokens for widgets, shortcuts and scripts.' },
@@ -439,7 +439,7 @@ function Templates() {
   )
 }
 
-interface AISettings { key_set: boolean; key_hint: string; key_env: boolean; model: string; default_model: string; web_search: boolean }
+interface AISettings { ai_provider: string; ai_configured: boolean; ai_status: { selected: string; detail: string; ready: boolean }; key_set: boolean; key_hint: string; key_env: boolean; model: string; default_model: string; web_search: boolean }
 interface CharacterStatus { writer: 'app' | 'external'; running: boolean; paused: boolean; waiting: number; written: number; failed: number; last_error: string; last_run?: string }
 
 /** AI: your own OpenAI key lets the app write the characters of your books itself. */
@@ -448,11 +448,12 @@ function AITab() {
   const { data, setData } = useAsync(() => api.get<AISettings>(`${V1}/settings/ai`), [])
   const status = useAsync(() => api.get<CharacterStatus>(`${V1}/characters/status`), [])
   const [key, setKey] = useState('')
+  const [provider, setProvider] = useState('auto')
   const [model, setModel] = useState('')
   const [web, setWeb] = useState(true)
   const [models, setModels] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (data) { setModel(data.model); setWeb(data.web_search) } }, [data])
+  useEffect(() => { if (data) { setModel(data.model); setWeb(data.web_search); setProvider(data.ai_provider || 'auto') } }, [data])
   // the model list comes from the account behind the saved key
   useEffect(() => { if (data?.key_set || data?.key_env) api.post<{ models: string[] }>(`${V1}/settings/ai/test`, {}).then(r => setModels(r.models)).catch(() => {}) }, [data?.key_set, data?.key_env])
   // follow a run while it is going
@@ -475,7 +476,7 @@ function AITab() {
   const save = async (extra: Record<string, unknown> = {}) => {
     setBusy(true)
     try {
-      const r = await api.put<AISettings>(`${V1}/settings/ai`, { key: key || undefined, model, web_search: web, ...extra })
+      const r = await api.put<AISettings>(`${V1}/settings/ai`, { key: key || undefined, model, web_search: web, ai_provider: provider, ...extra })
       setData(r); setKey(''); toast(extra.clear_key ? 'Key removed' : 'Saved'); setTimeout(status.reload, 1500)
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
@@ -483,7 +484,12 @@ function AITab() {
   const st = status.data
   return (
     <div className="stack loose">
-      <Section title="OpenAI" icon="sparkles" sub="With your own OpenAI API key the app writes the characters of the novels on your shelf itself — a short, spoiler-free note on each, in your preferred languages — right after you add a book. Each book is one request to OpenAI, billed to your account. Other people's keys are never used for your books.">
+      <Section title="AI provider" icon="sparkles" sub="Writes short, spoiler-free character notes in your preferred languages after you add a book. Automatic prefers Pocket AI when connected through Core; standalone installs use your own OpenAI key.">
+        <SettingRow title="Text generation" help="Pocket AI uses your Claude account and model from Pocket AI settings.">
+          <select aria-label="Text generation provider" value={provider} onChange={e => setProvider(e.target.value)}><option value="auto">Automatic — prefer Pocket AI</option><option value="pocket">Pocket AI</option><option value="openai">OpenAI</option></select>
+        </SettingRow>
+        <p className="muted small" role="status">Saved selection: {data.ai_status?.detail}</p>
+        <p className="muted small">The key, model and web search below apply to OpenAI. Pocket AI generates from its existing knowledge without web search.</p>
         <SettingRow stack title="API key" help={<>From <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>. Stored in the app's database, for your account only. {data.key_env && !data.key_set && 'A key is set through OPENAI_API_KEY.'}</>}>
           <input type="password" value={key} onChange={e => setKey(e.target.value.trim())} placeholder={data.key_set ? `saved (${data.key_hint}) — type to replace` : data.key_env ? 'using OPENAI_API_KEY' : 'sk-…'} autoComplete="off" spellCheck={false} aria-label="OpenAI API key" />
         </SettingRow>
@@ -505,7 +511,7 @@ function AITab() {
         actions={st?.writer === 'app' ? <button type="button" className="btn sm" onClick={run} disabled={st.running}><Icon name="sparkles" size={14} />{st.running ? 'Writing…' : 'Write missing now'}</button> : undefined}>
         {st ? (
           <dl className="set-dl">
-            <div><dt>Written by</dt><dd>{st.writer === 'app' ? <>OpenAI · {data.model || data.default_model}</> : <span className="muted">the external writer (scripts/characters.py), if you run one</span>}</dd></div>
+            <div><dt>Written by</dt><dd>{st.writer === 'app' ? <>{data.ai_status?.selected === 'pocket' ? 'Pocket AI' : `OpenAI · ${data.model || data.default_model}`}</> : <span className="muted">the external writer (scripts/characters.py), if you run one</span>}</dd></div>
             <div><dt>Waiting</dt><dd>{st.waiting === 0 ? 'nothing — every book has them' : `${st.waiting} book${st.waiting === 1 ? '' : 's'}`}{st.running && <span className="badge cat" style={{ marginLeft: 8 }}>writing…</span>}</dd></div>
             {st.writer === 'app' && <div><dt>Written</dt><dd>{st.written} since the app started{st.failed > 0 && <span className="muted"> · {st.failed} failed, retried in 2 hours</span>}</dd></div>}
             {st.last_error && <div><dt>Last error</dt><dd className="danger-text small">{st.last_error}{st.paused && <div className="muted">Paused until the key or model changes, or you press “Write missing now”.</div>}</dd></div>}

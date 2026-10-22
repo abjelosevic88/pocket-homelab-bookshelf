@@ -402,7 +402,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
 		Offers:    linkOffers,
-		Uses:      []core.Use{notesUse},
+		Uses:      []core.Use{notesUse, core.InferenceUse()},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration

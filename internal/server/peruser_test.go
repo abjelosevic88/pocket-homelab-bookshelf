@@ -38,6 +38,12 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 	t.Helper()
 	h := &shelfHarness{}
 	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/links/status" && r.URL.Query().Get("app") == "ai" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+			return
+		}
+
 		if r.URL.Path == "/api/v1/links/token" && h.linkToken != nil {
 			h.linkToken(w, r)
 			return
