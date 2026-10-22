@@ -504,3 +504,7 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .ai-covers { padding: 14px 16px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface-2); display: grid; gap: 10px; }
 .ai-covers h3 { margin: 0 0 2px; }
 .ai-covers p { margin: 0; }
+.about-summary { margin-bottom: 14px; }
+.about-summary p:first-child { margin: 0 0 6px; font-size: 15px; line-height: 1.6; color: var(--text); }
+.about-summary p.muted { margin: 0; }
+.about-summary + .description { padding-top: 14px; border-top: 1px solid var(--hairline); }

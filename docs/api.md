@@ -106,6 +106,16 @@ One set per book and language: `{"status": "ok" | "none" | "unknown", "character
 | `PUT` | `/books/{id}/characters` | `{"source": "claude sonnet", "sets": {"en": {"status": "ok", "characters": […]}}}` — replaces the given languages. Up to 40 characters. Only your own books (admins included); another user's book is a 404. |
 | `DELETE` | `/books/{id}/characters` | Forget them, so they are written again. |
 | `GET` | `/characters/status` | `{"writer": "app" \| "external", "running", "paused", "waiting", "written", "failed", "last_error", "last_run"}` — `app` when the app has an OpenAI key. |
+
+### Summary
+
+A short spoiler-free "what it is about" paragraph per book and preferred language, written in the background by the person's AI (Pocket AI or their OpenAI key) after the characters, and shown first under *About the book*. `{"status": "ok" | "unknown", "text", "source", "updated_at"}`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/books/{id}/summary` | `{"langs": ["en", "sr"], "summaries": {"en": {…}}, "writer": true}` — `writer` is false without an AI. |
+| `DELETE` | `/books/{id}/summary` | Forget it, so it is written again. |
+| `GET` | `/books/{id}/covers/ai` | Covers found with the person's AI, each checked by downloading it: `{"covers": [{url, thumb, source, label}], "hints": {original_title, original_authors, isbns, publisher, year, cover_urls}}`. Up to ~2 minutes. |
 | `POST` | `/characters/run` | Write what is missing now (also un-pauses and retries failed books). |
 | `GET` · `PUT` | `/settings/ai` | `{"key_set", "key_hint", "key_env", "model", "default_model", "web_search"}`. Your own key: everyone has their own. PUT: `{"key": "sk-…"` (omit to keep)`, "clear_key": true, "model", "web_search"}`. `key_env` is true only for the owner (first account), whose fallback `OPENAI_API_KEY` is. |
 | `POST` | `/settings/ai/test` | `{"key"}` (or your saved key) → `{"models": [...]}` the key can use. |

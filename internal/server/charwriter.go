@@ -76,6 +76,7 @@ func (s *Server) characterWorker(ctx context.Context) {
 		case <-tick.C:
 		}
 		s.writeMissingCharacters(ctx)
+		s.writeMissingSummaries(ctx) // after: both ask the same AI, which takes a couple of requests at a time
 	}
 }
 
@@ -206,9 +207,9 @@ func (s *Server) writeMissingFor(ctx context.Context, uid int64, oa *ai.OpenAI) 
 	}
 }
 
-// writeCharacters asks the selected provider for one book and saves the result. An
-// empty language stays missing, so it is asked for again.
-func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Book, langs []string) error {
+// aiBook is what the AI is told about a book: the shelf's facts and, for an
+// Open Library work, its original title.
+func (s *Server) aiBook(ctx context.Context, b store.Book) ai.Book {
 	in := ai.Book{Title: b.Title, Subtitle: b.Subtitle, Authors: b.Authors, Published: b.Published, Series: b.Series,
 		SeriesNo: b.SeriesNo, SourceURL: b.SourceURL, Description: clip(b.Description, 1500)}
 	if b.Source == "openlibrary" && strings.HasPrefix(b.SourceID, "/works/") {
@@ -216,18 +217,17 @@ func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Boo
 			in.WorkTitle = t
 		}
 	}
-	res, err := oa.Characters(ctx, in, langs)
+	return in
+}
+
+// writeCharacters asks the selected provider for one book and saves the result. An
+// empty language stays missing, so it is asked for again.
+func (s *Server) writeCharacters(ctx context.Context, oa *ai.OpenAI, b store.Book, langs []string) error {
+	res, err := oa.Characters(ctx, s.aiBook(ctx, b), langs)
 	if err != nil {
 		return err
 	}
-	model := oa.Model
-	if model == "" {
-		model = ai.DefaultModel
-	}
-	source := "openai " + model
-	if oa.Pocket != nil {
-		source = "pocket-ai"
-	}
+	source := oa.Source()
 	saved := 0
 	for _, l := range langs {
 		cs := store.CharacterSet{Status: "unknown"}
