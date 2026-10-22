@@ -19,8 +19,9 @@ import (
 )
 
 type summaryWriter struct {
-	mu      sync.Mutex
-	retryAt map[int64]time.Time // book id → not before
+	mu         sync.Mutex
+	retryAt    map[int64]time.Time // book id → not before
+	coverTried map[int64]time.Time // book id → last automatic cover lookup
 }
 
 const summaryMaxFails = 3 // failures in a row before a person's run stops until the next one
@@ -36,6 +37,8 @@ func (s *Server) writeMissingSummaries(ctx context.Context) {
 		}
 		if oa := s.openAI(ctx, u.ID); oa != nil {
 			s.writeSummariesFor(ctx, u.ID, oa)
+			s.writeMissingFacts(ctx, u.ID, oa)
+			s.findMissingCovers(ctx, u.ID)
 		}
 	}
 }
@@ -135,4 +138,96 @@ func (s *Server) handleDeleteSummary(w http.ResponseWriter, r *http.Request) {
 	s.summaries.mu.Unlock()
 	s.kickCharacters()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// writeMissingFacts asks the AI, ten books at a time, for the series and
+// original title of books that have neither; only blanks are filled.
+func (s *Server) writeMissingFacts(ctx context.Context, uid int64, oa *ai.OpenAI) {
+	books, err := s.store.BooksWithoutAIFacts(ctx, uid)
+	if err != nil || len(books) == 0 {
+		return
+	}
+	var series []string
+	if list, err := s.store.ListSeries(ctx, uid); err == nil {
+		for _, sr := range list {
+			series = append(series, sr.Name)
+		}
+	}
+	for start := 0; start < len(books) && ctx.Err() == nil; start += 10 {
+		batch := books[start:min(start+10, len(books))]
+		in := make([]ai.FactsBook, len(batch))
+		byID := map[int64]*store.Book{}
+		for i := range batch {
+			b := &batch[i]
+			in[i] = ai.FactsBook{ID: b.ID, Title: b.Title, Authors: b.Authors, Published: b.Published, Lang: b.Language}
+			byID[b.ID] = b
+		}
+		facts, err := oa.Facts(ctx, in, series)
+		if err != nil {
+			s.log.Warn("book facts: AI generation failed", "user", uid, "err", err)
+			return // try again on the next run
+		}
+		for _, f := range facts {
+			b := byID[f.ID]
+			if b == nil {
+				continue
+			}
+			changed := false
+			if name := strings.TrimSpace(f.Series); b.Series == "" && name != "" {
+				b.Series, b.SeriesNo, changed = clip(name, 120), clip(strings.TrimSpace(f.SeriesNo), 10), true
+				if !slicesContains(series, name) {
+					series = append(series, name)
+				}
+			}
+			if t := strings.TrimSpace(f.OriginalTitle); b.OriginalTitle == "" && t != "" && !strings.EqualFold(t, b.Title) {
+				b.OriginalTitle, changed = clip(t, 300), true
+			}
+			if changed {
+				if err := s.store.UpdateBook(ctx, b); err != nil {
+					s.log.Warn("book facts: save", "book", b.ID, "err", err)
+					continue
+				}
+				s.log.Info("book facts", "user", uid, "book", b.ID, "title", b.Title, "series", b.Series, "no", b.SeriesNo, "original", b.OriginalTitle)
+			}
+		}
+		for _, b := range batch {
+			_ = s.store.MarkAIFacts(ctx, b.ID)
+		}
+	}
+}
+
+func slicesContains(list []string, v string) bool {
+	for _, x := range list {
+		if strings.EqualFold(x, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// findMissingCovers runs the cover lookup (ISBN, then AI) for books still
+// without a cover, each at most once a day.
+func (s *Server) findMissingCovers(ctx context.Context, uid int64) {
+	books, err := s.store.ListBooks(ctx, store.BookFilter{UserID: uid})
+	if err != nil {
+		return
+	}
+	var ids []int64
+	s.summaries.mu.Lock()
+	if s.summaries.coverTried == nil {
+		s.summaries.coverTried = map[int64]time.Time{}
+	}
+	for _, b := range books {
+		if b.Cover == "" && time.Since(s.summaries.coverTried[b.ID]) > 24*time.Hour {
+			ids = append(ids, b.ID)
+		}
+	}
+	s.summaries.mu.Unlock()
+	if len(ids) > 0 && s.fetchMissingCovers(uid, ids) {
+		s.summaries.mu.Lock()
+		for _, id := range ids {
+			s.summaries.coverTried[id] = time.Now()
+		}
+		s.summaries.mu.Unlock()
+	}
 }

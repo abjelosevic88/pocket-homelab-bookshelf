@@ -508,3 +508,14 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .about-summary p:first-child { margin: 0 0 6px; font-size: 15px; line-height: 1.6; color: var(--text); }
 .about-summary p.muted { margin: 0; }
 .about-summary + .description { padding-top: 14px; border-top: 1px solid var(--hairline); }
+.book-original { margin-top: 2px; }
+.finish-ask { align-items: center; }
+.finish-ask .grow { flex: 1; }
+.pace-line { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.reader-stats { margin-bottom: 16px; }
+.day-bars { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; height: 90px; align-items: end; }
+.db-col { height: 100%; display: flex; align-items: flex-end; cursor: default; }
+.db-col .b { display: block; width: 100%; background: var(--surface-3); border-radius: 4px 4px 0 0; }
+.db-col.on .b { background: var(--accent); }
+.db-col:hover .b { opacity: .8; }
+.day-bars-axis { display: flex; justify-content: space-between; margin-top: 6px; }

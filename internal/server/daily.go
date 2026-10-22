@@ -155,7 +155,22 @@ func (s *Server) sendDaily(ctx context.Context, userID int64) error {
 	}
 	link := strings.TrimRight(s.cfg.BaseURL, "/") + "/daily"
 	title := fmt.Sprintf("📚 Your highlights · %s", time.Now().Format("Mon 2 Jan"))
-	body := dailyMessage(set)
+	if err := s.notify(ctx, userID, title, dailyMessage(set), link, map[string]any{"date": set.Date, "quotes": set.Quotes}); err != nil {
+		return err
+	}
+	return s.store.MarkDailySent(ctx, userID, set.Date)
+}
+
+// notify sends a message to the person's phone through the channel and
+// address set under Settings → Daily highlights. extra goes into a webhook's JSON.
+func (s *Server) notify(ctx context.Context, userID int64, title, body, link string, extra ...map[string]any) error {
+	ds, err := s.store.GetDailySettings(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if ds.URL == "" {
+		return fmt.Errorf("no address to send to: set it under Settings → Daily highlights")
+	}
 	var req *http.Request
 	switch ds.Channel {
 	case "ntfy":
@@ -168,7 +183,13 @@ func (s *Server) sendDaily(ctx context.Context, userID int64) error {
 			}
 		}
 	case "webhook":
-		payload, _ := json.Marshal(map[string]any{"title": title, "body": body, "url": link, "date": set.Date, "quotes": set.Quotes})
+		m := map[string]any{"title": title, "body": body, "url": link}
+		for _, e := range extra {
+			for k, v := range e {
+				m[k] = v
+			}
+		}
+		payload, _ := json.Marshal(m)
 		req, err = http.NewRequestWithContext(ctx, http.MethodPost, ds.URL, bytes.NewReader(payload))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -195,7 +216,7 @@ func (s *Server) sendDaily(ctx context.Context, userID int64) error {
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 300))
 		return fmt.Errorf("%s answered HTTP %d: %s", ds.Channel, res.StatusCode, strings.TrimSpace(string(msg)))
 	}
-	return s.store.MarkDailySent(ctx, userID, set.Date)
+	return nil
 }
 
 // dailyDue: within two hours after the chosen time. Late enough to catch up

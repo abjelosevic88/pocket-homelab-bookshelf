@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Book as BookT, Quote, Read, Status } from '../lib/types'
+import type { Book as BookT, Pace, Quote, Read, Status } from '../lib/types'
 import { daysBetween, fmtDate, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
@@ -76,6 +76,7 @@ export default function Book() {
         <h1 className="book-title">{b.title}</h1>
         {b.subtitle && <div className="book-subtitle">{b.subtitle}</div>}
         <div className="book-authors">{splitTags(b.authors).map((a, i) => <span key={a}>{i > 0 && ', '}<AuthorLink name={a} /></span>)}</div>
+        {b.original_title && <div className="book-original muted small">Original title: <i>{b.original_title}</i></div>}
         {b.series && <div className="book-series"><Link to={`/series/${encodeURIComponent(b.series)}`} className="icon-text"><Icon name="layers" size={14} />{b.series}{b.series_no !== '' && <> · #{b.series_no}</>}</Link></div>}
         <div className="row wrap mt-sm">
           <Stars value={b.rating} onChange={v => patch({ rating: v }, v ? `Rated ${v}★` : 'Rating cleared')} size="lg" />
@@ -83,15 +84,22 @@ export default function Book() {
           {splitTags(b.tags).map(t => <Link key={t} to={`/library?tag=${encodeURIComponent(t)}`} className="badge tag">{t}</Link>)}
         </div>
 
+        {b.status === 'reading' && b.reader_percent != null && b.reader_percent >= 0.98 && (
+          <div className="callout info mt finish-ask">
+            <Icon name="check-circle" size={16} />
+            <span className="grow">Your e-reader is at <b>{Math.round(b.reader_percent * 100)}%</b>. Finished it?</span>
+            <button type="button" className="btn primary sm" onClick={() => setFinishing('read')}>Mark as read</button>
+          </div>
+        )}
         {b.status === 'reading' && <ProgressCard book={b} onSaved={setBook} onFinish={() => setFinishing('read')} />}
         {b.status === 'want' && <PlanCard book={b} onSave={patch} onStart={() => changeStatus('reading')} />}
+        <AboutCard bookId={b.id} description={b.description} />
 
         <ReviewCard book={b} onSave={review => patch({ review }, 'Thoughts saved')} />
         <NotesCard src={`${V1}/books/${b.id}/notes`} />
         <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />
-        <AboutCard bookId={b.id} description={b.description} />
       </div>
 
       {coverOpen && <CoverPicker book={b} onClose={() => setCoverOpen(false)} onChanged={nb => setBook({ ...b, cover: nb.cover })} />}
@@ -113,6 +121,7 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
     try { onSaved(await api.post<BookT>(`${V1}/books/${book.id}/progress`, { page: n })) } catch (e) { toast((e as Error).message, 'err') }
   }
   const days = book.started_on ? daysBetween(book.started_on, todayISO()) : null
+  const { data: pace } = useAsync(() => book.reader_percent != null ? api.get<Pace>(`${V1}/books/${book.id}/pace`) : Promise.resolve(null), [book.id, book.current_page])
   return (
     <Card className="mt" title="Progress" actions={<button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button>}>
       {hasProgress(book) && <div className="bar lg mb-sm"><span className="fill" style={{ width: `${pct}%` }} /></div>}
@@ -124,6 +133,13 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
         <span className="spacer" />
         {days !== null && book.started_on && <span className="muted small">Started {fmtDate(book.started_on)} · day {days + 1}</span>}
       </div>
+      {pace && pace.reading_days > 0 && (
+        <div className="pace-line small mt-sm">
+          {pace.pages_today > 0 && <span><b>{pace.pages_today}</b> pages today</span>}
+          <span><b>{pace.pages_per_day}</b> pages a day <span className="muted">({pace.reading_days} reading {pace.reading_days === 1 ? 'day' : 'days'} in 30)</span></span>
+          {pace.days_left > 0 && <span>about <b>{pace.days_left}</b> {pace.days_left === 1 ? 'day' : 'days'} left <span className="muted">· {fmtDate(pace.finish_on)}</span></span>}
+        </div>
+      )}
       {book.reader_percent != null && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from your e-reader · <Link to="/settings/reader">Reader sync</Link></p>}
     </Card>
   )

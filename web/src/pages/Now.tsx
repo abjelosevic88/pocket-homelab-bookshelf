@@ -134,6 +134,7 @@ function ReadingCard({ book, onChanged, onFinish }: { book: Book; onChanged: () 
             {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null && <span className="muted small">{pct}% on your e-reader</span>}
           </label>
         </div>
+        {book.reader_percent != null && book.reader_percent >= 0.98 && <div className="callout info mt-sm finish-ask"><Icon name="check-circle" size={15} /><span>Your e-reader is at <b>{Math.round(book.reader_percent * 100)}%</b>. Finished it?</span></div>}
         <div className="row mt-sm"><button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button><Link to={`/books/${book.id}`} className="btn ghost sm">Notes & quotes</Link></div>
       </div>
     </div>

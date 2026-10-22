@@ -308,7 +308,7 @@ function ReaderSync() {
   }
   const pull = async () => {
     setPulling(true)
-    try { const r = await api.post<{ documents: number; updated: number; linked: number }>(`${V1}/kosync/pull`); toast(`${r.documents} books checked · ${r.updated} updated · ${r.linked} linked`); reload(); books.reload() } catch (e) { toast((e as Error).message, 'err'); reload() } finally { setPulling(false) }
+    try { const r = await api.post<{ documents: number; updated: number; linked: number; quotes: number }>(`${V1}/kosync/pull`); toast(`${r.documents} books checked · ${r.updated} updated · ${r.linked} linked · ${r.quotes} highlights`); reload(); books.reload() } catch (e) { toast((e as Error).message, 'err'); reload() } finally { setPulling(false) }
   }
   const forget = async (d: KosyncDocument) => { try { await api.del(`${V1}/kosync/documents/${d.document}`); reload() } catch (e) { toast((e as Error).message, 'err') } }
   const name = (d: KosyncDocument) => d.title ? `${d.title}${d.authors ? ` — ${d.authors}` : ''}` : d.filename ? d.filename.split('/').pop() : 'Unknown book'
@@ -397,7 +397,7 @@ function ReaderSync() {
         </div>
       </Section>}
 
-      <Section title="CrossPoint Sync" icon="refresh" sub="Its mirror sends only a file hash. With your CrossPoint Sync account Bookshelf reads each book's title, author, cover and page count. It checks right after an unknown book shows up, and every 15 minutes."
+      <Section title="CrossPoint Sync" icon="refresh" sub="Its mirror sends only a file hash. With your CrossPoint Sync account Bookshelf reads each book's title, author, cover and page count, your highlights (as quotes), and the pages you read each day (Stats). Marking a book read or stopped here tells CrossPoint Sync too. It checks right after an unknown book shows up, and every 15 minutes."
         actions={data.prefs.remote_url && <button type="button" className="btn sm" onClick={pull} disabled={pulling}><Icon name="refresh" size={14} />{pulling ? 'Syncing…' : 'Sync now'}</button>}>
         {data.prefs.remote_url ? <>
           <SettingRow title={<>Connected as <b>{data.prefs.remote_user}</b></>} help={data.prefs.remote_url}><button type="button" className="btn ghost sm danger-text" disabled={busy} onClick={() => savePrefs({ remote_url: '', remote_user: '' }, 'Disconnected')}>Disconnect</button></SettingRow>

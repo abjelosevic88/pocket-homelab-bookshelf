@@ -359,7 +359,12 @@ func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, 
 	case status == "dnf":
 		_, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusAbandoned, day, s.bookStatusEvent(ctx, u, day))
 	case b.Status == store.StatusWant && pct > 0:
-		_, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusReading, "", s.bookStatusEvent(ctx, u, ""))
+		if b, err = s.store.SetStatus(ctx, u.ID, b.ID, store.StatusReading, "", s.bookStatusEvent(ctx, u, "")); err != nil {
+			return err
+		}
+		s.askFinished(ctx, u.ID, b, d)
+	default:
+		s.askFinished(ctx, u.ID, b, d)
 	}
 	return err
 }

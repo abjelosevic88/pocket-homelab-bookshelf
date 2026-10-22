@@ -83,6 +83,7 @@ type pullResult struct {
 	Documents int `json:"documents"`
 	Updated   int `json:"updated"` // newer progress than Bookshelf had
 	Linked    int `json:"linked"`  // documents that found (or became) their book
+	Quotes    int `json:"quotes"`  // highlights added or updated
 }
 
 // crossPointItem is one entry of crosspoint-sync's GET /api/v1/progress.
@@ -110,27 +111,7 @@ func str(p *string) string {
 }
 
 func crossPointRequest(ctx context.Context, p *store.KosyncPrefs, path string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.RemoteURL+path, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-Auth-User", p.RemoteUser)
-	req.Header.Set("X-Auth-Key", p.RemoteKey)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "PocketBookshelf/"+Version)
-	res, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode == http.StatusUnauthorized {
-		res.Body.Close()
-		return nil, errors.New("CrossPoint Sync did not accept the username or password")
-	}
-	if res.StatusCode != http.StatusOK {
-		res.Body.Close()
-		return nil, fmt.Errorf("CrossPoint Sync answered %s", res.Status)
-	}
-	return res, nil
+	return crossPointDo(ctx, p, http.MethodGet, path, nil)
 }
 
 // pullCrossPoint reads the person's CrossPoint Sync account once.
@@ -202,6 +183,15 @@ func (s *Server) pullCrossPoint(ctx context.Context, uid int64) (pullResult, err
 			}
 			s.retryKosyncCovers(ctx, u, after)
 		}
+	}
+	// Highlights and the day-by-day log are extras: a failure there does not fail the sync.
+	if n, err := s.pullClippings(ctx, uid, p); err != nil {
+		s.log.Warn("crosspoint highlights", "user", uid, "err", err)
+	} else {
+		out.Quotes = n
+	}
+	if err := s.pullActivity(ctx, uid, p); err != nil {
+		s.log.Warn("crosspoint activity", "user", uid, "err", err)
 	}
 	s.store.SetKosyncPull(ctx, uid, "")
 	return out, nil
