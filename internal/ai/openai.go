@@ -141,15 +141,29 @@ func (o *OpenAI) Characters(ctx context.Context, b Book, langs []string) (*Resul
 		return &result, nil
 	}
 
+	text, err := o.structured(ctx, "book_characters", Schema(langs), Prompt(b, langs))
+	if err != nil {
+		return nil, err
+	}
+	var res Result
+	if err := json.Unmarshal([]byte(text), &res); err != nil {
+		return nil, fmt.Errorf("OpenAI answer is not valid JSON: %w", err)
+	}
+	return &res, nil
+}
+
+// structured asks OpenAI for one JSON answer matching schema, letting it
+// search the web when that is on.
+func (o *OpenAI) structured(ctx context.Context, name string, schema map[string]any, input string) (string, error) {
 	model := o.Model
 	if model == "" {
 		model = DefaultModel
 	}
 	body := map[string]any{
 		"model": model,
-		"input": Prompt(b, langs),
+		"input": input,
 		"text": map[string]any{"format": map[string]any{
-			"type": "json_schema", "name": "book_characters", "strict": true, "schema": Schema(langs),
+			"type": "json_schema", "name": name, "strict": true, "schema": schema,
 		}},
 	}
 	// Web search: the current tool name, the older preview one, then none (models without it).
@@ -172,7 +186,7 @@ func (o *OpenAI) Characters(ctx context.Context, b Book, langs []string) (*Resul
 		}
 	}
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	text := r.text()
 	if text == "" {
@@ -180,13 +194,9 @@ func (o *OpenAI) Characters(ctx context.Context, b Book, langs []string) (*Resul
 		if r.Incomplete != nil && r.Incomplete.Reason != "" {
 			reason = r.Incomplete.Reason
 		}
-		return nil, fmt.Errorf("OpenAI returned no answer (%s)", reason)
+		return "", fmt.Errorf("OpenAI returned no answer (%s)", reason)
 	}
-	var res Result
-	if err := json.Unmarshal([]byte(text), &res); err != nil {
-		return nil, fmt.Errorf("OpenAI answer is not valid JSON: %w", err)
-	}
-	return &res, nil
+	return text, nil
 }
 
 type responsesReply struct {
