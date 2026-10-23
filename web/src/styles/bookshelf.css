@@ -514,8 +514,9 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .pace-line { display: flex; flex-wrap: wrap; gap: 6px 18px; }
 .session-day + .session-day { margin-top: 10px; }
 .session-date { text-transform: uppercase; letter-spacing: .04em; font-size: 11px; margin-bottom: 2px; }
-.session-time { font-variant-numeric: tabular-nums; min-width: 92px; color: var(--muted); }
-.session-log .reads li { flex-wrap: wrap; row-gap: 2px; }
+.session-log .reads li { display: block; padding: 8px 0; }
+.session-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-bottom: 2px; }
+.session-time { font-variant-numeric: tabular-nums; color: var(--muted); }
 .reader-stats { margin-bottom: 16px; }
 .day-bars { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; height: 90px; align-items: end; }
 .db-col { height: 100%; display: flex; align-items: flex-end; cursor: default; }
