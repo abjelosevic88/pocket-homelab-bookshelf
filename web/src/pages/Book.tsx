@@ -307,12 +307,14 @@ function ReadingLogCard({ book }: { book: BookT }) {
             <ul className="reads">
               {d.items.map(s => (
                 <li key={s.start}>
-                  <span className="session-time small">{fmtClock(s.start)}–{fmtClock(s.end)}</span>
-                  <span className="grow">
+                  <div className="session-head small">
+                    <span className="session-time">{fmtClock(s.start)}–{fmtClock(s.end)}</span>
+                    <span className="muted" title={s.estimated ? `Part of the time was not synced; estimated at your pace of ${data.minutes_per_page} min a page` : `${s.updates} ${s.updates === 1 ? 'sync' : 'syncs'}`}>{s.device}{s.estimated && ' · estimated'}</span>
+                  </div>
+                  <div>
                     {s.pages > 0 ? <><b>{s.pages}</b> {s.pages === 1 ? 'page' : 'pages'}</> : <><b>{Math.max(1, Math.round((s.to - s.from) * 100))}%</b> of the book</>} in <b>{s.estimated && '~'}{fmtMinutes(s.minutes)}</b>
                     {s.to_page ? <span className="muted small"> · p. {s.from_page}–{s.to_page}</span> : <span className="muted small"> · {Math.round(s.from * 100)}–{Math.round(s.to * 100)}%</span>}
-                  </span>
-                  <span className="muted small" title={s.estimated ? `Part of the time was not synced; estimated at your pace of ${data.minutes_per_page} min a page` : `${s.updates} ${s.updates === 1 ? 'sync' : 'syncs'}`}>{s.device}{s.estimated && ' · estimated'}</span>
+                  </div>
                 </li>
               ))}
             </ul>
