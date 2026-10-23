@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import { Icon } from './icons'
 
-export interface SelectOption { value: string; label: string; hint?: string; group?: string }
+export interface SelectOption { value: string; label: string; hint?: string; group?: string; disabled?: boolean }
 
 interface Props {
   value: string
@@ -88,7 +88,7 @@ export function Select({ value, onChange, options, placeholder = 'Choose…', on
       try { const v = await onCreate(q.trim()); onChange(v); setOpen(false) } finally { setBusy(false) }
       return
     }
-    if (row.opt) { onChange(row.opt.value); setOpen(false) }
+    if (row.opt && !row.opt.disabled) { onChange(row.opt.value); setOpen(false) }
   }
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setHl(h => Math.min(rows.length - 1, h + 1)) }
@@ -116,7 +116,7 @@ export function Select({ value, onChange, options, placeholder = 'Choose…', on
               return (
                 <div key={r.kind === 'opt' ? r.opt!.value : r.kind}>
                   {head && <div className="sel-group">{head}</div>}
-                  <div role="option" aria-selected={r.opt?.value === value} data-i={i} className={`sel-opt ${i === hl ? 'hl' : ''} ${r.opt && r.opt.value === value ? 'cur' : ''} ${r.kind !== 'opt' ? 'action' : ''}`}
+                  <div role="option" aria-selected={r.opt?.value === value} aria-disabled={r.opt?.disabled || undefined} data-i={i} className={`sel-opt ${i === hl ? 'hl' : ''} ${r.opt && r.opt.value === value ? 'cur' : ''} ${r.kind !== 'opt' ? 'action' : ''} ${r.opt?.disabled ? 'off' : ''}`}
                     onMouseEnter={() => setHl(i)} onMouseDown={e => e.preventDefault()} onClick={() => pick(r)}>
                     {r.kind === 'clear' ? <><Icon name="x" size={14} /><span>{clearLabel}</span></> : r.kind === 'create' ? <><Icon name="plus" size={14} /><span>{busy ? 'Creating…' : `${createLabel} “${q.trim()}”`}</span></> : <><span className="sel-lbl">{r.opt!.label}</span>{r.opt!.hint && <span className="sel-hint muted">{r.opt!.hint}</span>}</>}
                     {r.opt && r.opt.value === value && <span className="sel-check"><Icon name="check" size={14} /></span>}

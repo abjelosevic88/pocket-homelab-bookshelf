@@ -35,6 +35,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 // ---------- hooks ----------
 
+// NeedsCore explains a choice that only works through Pocket Core, shown
+// (greyed) on a server that has none.
+export function NeedsCore({ what = 'Needs Pocket Core.' }: { what?: string }) {
+  return <p className="core-hint">{what} Pocket Core connects your Pocket apps to each other and to your services: one sign-in for everyone, each person’s own accounts, nothing to copy or paste. Set <code>CORE_URL</code> to connect this app. <a href="https://github.com/abjelosevic88/pocket-homelab-core" target="_blank" rel="noreferrer">Learn more</a></p>
+}
+
 export function useMediaQuery(q: string) {
   const [m, setM] = useState(() => window.matchMedia(q).matches)
   useEffect(() => {

@@ -81,6 +81,10 @@ a.stat:hover { border-color: var(--border-strong); box-shadow: var(--shadow); te
 .sel-opt.hl { background: var(--hover); }
 .sel-opt.cur { font-weight: 600; }
 .sel-opt.action { color: var(--accent-ink); font-weight: 600; }
+.sel-opt.off { opacity: .45; cursor: not-allowed; }
+/* a choice that only works through Pocket Core, on a server without one */
+.core-hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.core-hint a { color: inherit; text-decoration: underline; }
 .sel-lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .sel-hint { font-size: 12px; color: var(--muted); }
 .sel-check { color: var(--accent); display: grid; }

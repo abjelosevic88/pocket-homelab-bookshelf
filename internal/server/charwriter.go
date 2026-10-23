@@ -281,6 +281,7 @@ func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 		"ai_provider": aiStatus.Provider, "ai_pocket_model": a.AIPocketModel, "ai_status": aiStatus, "ai_configured": aiStatus.Ready,
 		"key_set": a.OpenAIKey != "", "key_hint": keyHint(a.OpenAIKey), "key_env": s.cfg.OpenAIKey != "" && s.isOwner(r.Context(), me(r)),
 		"model": a.Model, "default_model": ai.DefaultModel, "web_search": a.WebSearch,
+		"core": s.coreStatus(), // the page greys out Pocket AI without Core
 	})
 }
 
