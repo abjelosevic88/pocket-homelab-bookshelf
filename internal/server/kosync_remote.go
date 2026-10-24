@@ -200,7 +200,7 @@ func (s *Server) pullCrossPoint(ctx context.Context, uid int64) (pullResult, err
 // createKosyncBook adds a book a device is reading to the shelf, under the
 // title and author the device gave, filled in from the catalogue.
 func (s *Server) createKosyncBook(ctx context.Context, u *store.User, d *store.KosyncDocument) (int64, error) {
-	b := &store.Book{UserID: u.ID, Title: d.Title, Authors: d.Authors, Pages: d.PageCount, Status: store.StatusWant, Source: "kosync"}
+	b := &store.Book{UserID: u.ID, Title: d.Title, Authors: d.Authors, Pages: d.PageCount, Status: store.StatusWant, Source: "kosync", Format: "ebook"}
 	if msg := clean(b); msg != "" {
 		return 0, errors.New(msg)
 	}
