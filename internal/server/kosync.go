@@ -326,6 +326,11 @@ func (s *Server) applyKosync(ctx context.Context, u *store.User, document, statu
 		}
 		d.BookID = &id
 		s.log.Info("kosync linked", "user", u.ID, "document", d.Document, "book", id)
+		// read on an e-reader: an e-book, unless its format was set already
+		if b, err := s.store.GetBook(ctx, u.ID, id); err == nil && b.Format == "" {
+			b.Format = "ebook"
+			_ = s.store.UpdateBook(ctx, b)
+		}
 	}
 	return s.kosyncToBook(ctx, u, *d.BookID, d, status)
 }
