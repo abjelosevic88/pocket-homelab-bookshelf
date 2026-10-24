@@ -32,7 +32,7 @@ import (
 
 var libraryUse = core.Use{App: "library", Scopes: []string{"reading:read"}, Reason: "Ebooks you finish (or are reading) in Pocket Library, as reads on your shelves, and your highlights there as quotes"}
 
-const libraryEvery = 10 * time.Minute
+const libraryEvery = 2 * time.Minute
 
 var (
 	libMu     sync.Mutex
@@ -314,6 +314,11 @@ func (s *Server) syncLibrary(ctx context.Context, uid int64, email string) libSt
 				st.Started++
 			} else if changed, err := s.store.StartFromAudiobook(ctx, uid, bookID, start); err == nil && changed {
 				st.Started++
+			} else if bk, err := s.store.GetBook(ctx, uid, bookID); err == nil && (bk.Status == store.StatusRead || bk.Status == store.StatusAbandoned) && start > bk.FinishedOn {
+				// started again after the last read here: a re-read
+				if _, err := s.store.SetStatus(ctx, uid, bookID, store.StatusReading, start); err == nil {
+					st.Started++
+				}
 			}
 		}
 		// the page follows the position, for books still being read here

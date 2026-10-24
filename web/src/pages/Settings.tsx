@@ -346,7 +346,7 @@ function LibrarySync() {
     <div className="stack loose">
       <Section title="From Pocket Library" icon="book" sub="Every ebook you finish in Pocket Library — in its reader, in KOReader or on a CrossPoint — becomes a read here, on the day you finished it. One you are reading goes on “Reading” with its page, and your highlights and notes there become quotes. A book is matched by ISBN, else by title and author, or added as an ebook with its cover. A book you remove is not added again.">
         {!data.core && <NeedsCore what="Needs Pocket Core: ebooks come from Pocket Library through it." />}
-        <SettingRow title="Take in my reading" help="Every ten minutes, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Library”).">
+        <SettingRow title="Take in my reading" help="Every two minutes, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Library”).">
           <Switch checked={data.core && data.enabled} disabled={!data.core} onChange={set} label="Take in reading from Pocket Library" />
         </SettingRow>
         {data.core && l && (
