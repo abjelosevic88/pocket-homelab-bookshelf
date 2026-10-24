@@ -32,7 +32,23 @@ import (
 
 var libraryUse = core.Use{App: "library", Scopes: []string{"reading:read"}, Reason: "Ebooks you finish (or are reading) in Pocket Library, as reads on your shelves, and your highlights there as quotes"}
 
-const libraryEvery = 2 * time.Minute
+// How often each person's reading is looked at: their choice (setting
+// library_every, minutes), ten minutes unless they pick another.
+const libraryDefaultEvery = 10
+
+var libraryEveryChoices = []int{2, 5, 10, 30, 60}
+
+// libraryEvery is the person's interval.
+func (s *Server) libraryEvery(ctx context.Context, uid int64) time.Duration {
+	if n, err := strconv.Atoi(s.store.UserKey(ctx, uid, "library_every")); err == nil {
+		for _, c := range libraryEveryChoices {
+			if c == n {
+				return time.Duration(n) * time.Minute
+			}
+		}
+	}
+	return libraryDefaultEvery * time.Minute
+}
 
 var (
 	libMu     sync.Mutex
@@ -51,18 +67,24 @@ type libState struct {
 	Off      bool      `json:"off,omitempty"`
 }
 
-// libraryWorker syncs everyone every ten minutes (and soon after a start).
+// libraryWorker looks every minute whose interval is up, and syncs them
+// (everyone soon after a start).
 func (s *Server) libraryWorker(ctx context.Context) {
 	first := time.NewTimer(2 * time.Minute)
 	defer first.Stop()
-	t := time.NewTicker(libraryEvery)
+	t := time.NewTicker(time.Minute)
 	defer t.Stop()
+	started := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-first.C:
+			started = true
 		case <-t.C:
+		}
+		if !started {
+			continue
 		}
 		if !s.core.Configured() {
 			continue
@@ -73,6 +95,12 @@ func (s *Server) libraryWorker(ctx context.Context) {
 		}
 		for _, u := range users {
 			if s.store.UserKey(ctx, u.ID, "library_sync") == "off" {
+				continue
+			}
+			libMu.Lock()
+			last, ran := libStates[u.ID]
+			libMu.Unlock()
+			if ran && time.Since(last.At) < s.libraryEvery(ctx, u.ID)-15*time.Second {
 				continue
 			}
 			cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -440,29 +468,47 @@ func (s *Server) handleLibraryStatus(w http.ResponseWriter, r *http.Request) {
 	st, ran := libStates[uid]
 	busy := libBusy[uid]
 	libMu.Unlock()
-	out := map[string]any{"core": s.core.Configured(), "enabled": s.store.UserKey(r.Context(), uid, "library_sync") != "off", "syncing": busy}
+	out := map[string]any{"core": s.core.Configured(), "enabled": s.store.UserKey(r.Context(), uid, "library_sync") != "off", "syncing": busy,
+		"every": int(s.libraryEvery(r.Context(), uid) / time.Minute), "choices": libraryEveryChoices}
 	if ran {
 		out["last"] = st
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
-// PUT /api/v1/library {"enabled": bool}
+// PUT /api/v1/library {"enabled": bool, "every": minutes}
 func (s *Server) handleLibrarySet(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Enabled bool `json:"enabled"`
+		Enabled *bool `json:"enabled"`
+		Every   int   `json:"every"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	v := "on"
-	if !in.Enabled {
-		v = "off"
+	if in.Enabled != nil {
+		v := "on"
+		if !*in.Enabled {
+			v = "off"
+		}
+		if err := s.store.PutUserKey(r.Context(), me(r), "library_sync", v); err != nil {
+			s.fail(w, err, "library")
+			return
+		}
 	}
-	if err := s.store.PutUserKey(r.Context(), me(r), "library_sync", v); err != nil {
-		s.fail(w, err, "library")
-		return
+	if in.Every != 0 {
+		ok := false
+		for _, c := range libraryEveryChoices {
+			ok = ok || c == in.Every
+		}
+		if !ok {
+			writeErr(w, http.StatusBadRequest, "every is one of 2, 5, 10, 30 or 60 minutes")
+			return
+		}
+		if err := s.store.PutUserKey(r.Context(), me(r), "library_every", strconv.Itoa(in.Every)); err != nil {
+			s.fail(w, err, "library")
+			return
+		}
 	}
 	s.handleLibraryStatus(w, r)
 }
