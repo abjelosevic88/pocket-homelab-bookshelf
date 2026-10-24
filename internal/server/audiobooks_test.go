@@ -35,6 +35,10 @@ func TestAudiobooksSync(t *testing.T) {
 		case r.URL.Path == "/api/v1/history":
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
 				{"item_id": "li-drac", "title": "Dracula", "author": "Bram Stoker", "day": today, "duration": 55000, "end_pos": 9000},
+				// a long book just started: half a minute in, far under 2 %
+				{"item_id": "li-ill", "title": "Illborn", "author": "Tyler Whitesides", "day": today, "duration": 79502, "end_pos": 30, "seconds": 32},
+				// tapped and stopped: not started
+				{"item_id": "li-tap", "title": "Tapped", "author": "X", "day": today, "duration": 30000, "end_pos": 5, "seconds": 5},
 				{"item_id": "li-dune", "title": "Dune", "author": "Frank Herbert", "day": "2026-01-03", "duration": 70000, "end_pos": 70000},
 			}})
 		case strings.HasPrefix(r.URL.Path, "/api/v1/cover/"):
@@ -64,7 +68,7 @@ func TestAudiobooksSync(t *testing.T) {
 
 	var st abState
 	h.json(h.anaTok, "POST", "/audiobooks/sync", nil, &st)
-	if st.Error != "" || st.Added != 2 || st.Finished != 2 || st.Started != 1 {
+	if st.Error != "" || st.Added != 3 || st.Finished != 2 || st.Started != 2 {
 		t.Fatalf("first sync: %+v", st)
 	}
 	var lib []struct {
@@ -81,7 +85,7 @@ func TestAudiobooksSync(t *testing.T) {
 	for _, b := range lib {
 		got[b.Title] = b.Status + "|" + b.Format + "|" + b.StartedOn + "|" + b.FinishedOn + "|" + map[bool]string{true: "cover", false: ""}[b.Cover != ""]
 	}
-	if len(lib) != 3 || got["Dune"] != "read||2026-01-03|"+today+"|" || got["The Time Machine"] != "read|audio||"+today+"|cover" || got["Dracula"] != "reading|audio|"+today+"||cover" {
+	if len(lib) != 4 || got["Illborn"] != "reading|audio|"+today+"||cover" || got["Tapped"] != "" || got["Dune"] != "read||2026-01-03|"+today+"|" || got["The Time Machine"] != "read|audio||"+today+"|cover" || got["Dracula"] != "reading|audio|"+today+"||cover" {
 		t.Fatalf("shelves: %v", got)
 	}
 
@@ -100,7 +104,7 @@ func TestAudiobooksSync(t *testing.T) {
 	}
 	h.json(h.anaTok, "POST", "/audiobooks/sync", nil, &st)
 	h.json(h.anaTok, "GET", "/books", nil, &lib)
-	if len(lib) != 2 {
+	if len(lib) != 3 {
 		t.Fatalf("removed book came back: %d books", len(lib))
 	}
 

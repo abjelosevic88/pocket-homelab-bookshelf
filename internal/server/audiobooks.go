@@ -28,9 +28,12 @@ import (
 
 var audiobooksUse = core.Use{App: "audiobooks", Scopes: []string{"listening:read"}, Reason: "Audiobooks you finish (or are in the middle of) in Pocket Audiobooks, as reads on your shelves"}
 
-const audiobooksEvery = 30 * time.Minute
+const audiobooksEvery = 10 * time.Minute
 
 var abHTTP = &http.Client{Timeout: 30 * time.Second}
+
+// abStartedAfter is how much listening (seconds) puts a book on Reading.
+const abStartedAfter = 30
 
 // abState is how the last sync went for one person (shown in Settings).
 type abState struct {
@@ -48,7 +51,7 @@ var (
 	abBusy   = map[int64]bool{}
 )
 
-// audiobooksWorker syncs everyone every half hour (and soon after a start).
+// audiobooksWorker syncs everyone every ten minutes (and soon after a start).
 func (s *Server) audiobooksWorker(ctx context.Context) {
 	first := time.NewTimer(90 * time.Second)
 	defer first.Stop()
@@ -178,6 +181,7 @@ type abListen struct {
 	Day      string `json:"day"`
 	Duration int    `json:"duration"`
 	EndPos   int    `json:"end_pos"`
+	Seconds  int    `json:"seconds"`
 }
 
 // syncAudiobooks takes in one person's finished and in-progress audiobooks.
@@ -222,7 +226,9 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 	}
 	firstDay := map[string]string{}
 	latest := map[string]abListen{}
+	heard := map[string]int{}      // seconds listened per book in the window
 	for _, l := range hist.Items { // newest first
+		heard[l.ItemID] += l.Seconds
 		if _, ok := latest[l.ItemID]; !ok {
 			latest[l.ItemID] = l
 		}
@@ -269,9 +275,10 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 		if finished[id] || l.Duration <= 0 {
 			continue
 		}
+		// started: any real listening (half a minute in all; a tap-and-stop is not), not yet at the end
 		p := float64(l.EndPos) / float64(l.Duration)
 		start := firstDay[id]
-		if p < 0.02 || p > 0.98 || start == "" || s.store.AudiobookEventSeen(ctx, uid, id, "started", start) {
+		if heard[id] < abStartedAfter && p < 0.02 || p > 0.98 || start == "" || s.store.AudiobookEventSeen(ctx, uid, id, "started", start) {
 			continue
 		}
 		bookID, added, ok := s.abBook(ctx, c, uid, id, l.Title, l.Author, store.StatusReading, start, &shelf)

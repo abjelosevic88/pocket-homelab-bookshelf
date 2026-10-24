@@ -303,9 +303,9 @@ function Audiobooks() {
   const l = data.last
   return (
     <div className="stack loose">
-      <Section title="From Pocket Audiobooks" icon="book" sub="Every audiobook you finish — in the Pocket Audiobooks player or any Audiobookshelf app — becomes a read here, on the day you finished it. One you are in the middle of goes on “Reading”. It is matched to a book already on your shelves by title and author, or added as an audio book with its cover. A book you remove is not added again.">
+      <Section title="From Pocket Audiobooks" icon="book" sub="Every audiobook you finish — in the Pocket Audiobooks player or any Audiobookshelf app — becomes a read here, on the day you finished it. One you have started (half a minute of listening is enough) goes on “Reading”. It is matched to a book already on your shelves by title and author, or added as an audio book with its cover. A book you remove is not added again.">
         {!data.core && <NeedsCore what="Needs Pocket Core: audiobooks come from Pocket Audiobooks through it." />}
-        <SettingRow title="Take in my audiobooks" help="Every half hour, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Audiobooks”).">
+        <SettingRow title="Take in my audiobooks" help="Every ten minutes, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Audiobooks”).">
           <Switch checked={data.core && data.enabled} disabled={!data.core} onChange={set} label="Take in audiobooks" />
         </SettingRow>
         {data.core && l && (
