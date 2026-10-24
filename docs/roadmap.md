@@ -11,7 +11,7 @@ Pocket Bookshelf is meant to stay small: a reading log, your thoughts, quotes an
 ## Homelab integrations (opt-in)
 
 - ~~**Audiobookshelf**: import finished audiobooks (and progress) as reads with format *audio*~~ — done in 0.15.0 through Pocket Audiobooks (Settings → Audiobooks).
-- **Kavita / calibre-web**: offer "add to shelf" for ebooks you own; mark progress from Kavita's reading position.
+- ~~**Kavita / calibre-web**: mark progress from the ebook library's reading position~~ — done in 0.16.0 through Pocket Library, which replaces both (Settings → Library).
 - **Hardcover** (hardcover.app, free GraphQL API with a personal token) as a third catalogue, and optional two-way sync of ratings.
 - **Webhook / Apprise** on finish ("finished X ★★★★½") for a journal or ntfy.
 
