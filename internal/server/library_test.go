@@ -112,3 +112,29 @@ func TestLibrarySync(t *testing.T) {
 		t.Fatalf("bob: %+v", st)
 	}
 }
+
+// Each person picks how often Bookshelf looks at Pocket Library: ten minutes
+// unless they choose 2, 5, 30 or 60.
+func TestLibraryInterval(t *testing.T) {
+	h := newShelfHarness(t)
+	var st struct {
+		Every   int   `json:"every"`
+		Choices []int `json:"choices"`
+		Enabled bool  `json:"enabled"`
+	}
+	h.json(h.anaTok, "GET", "/library", nil, &st)
+	if st.Every != 10 || len(st.Choices) != 5 || !st.Enabled {
+		t.Fatalf("default: %+v", st)
+	}
+	h.json(h.anaTok, "PUT", "/library", map[string]any{"every": 5}, &st)
+	if st.Every != 5 || !st.Enabled {
+		t.Fatalf("after choosing 5: %+v", st)
+	}
+	if c, _ := h.do(h.anaTok, "PUT", "/library", map[string]any{"every": 7}); c != http.StatusBadRequest {
+		t.Fatalf("7 minutes = %d", c)
+	}
+	h.json(h.bobTok, "GET", "/library", nil, &st)
+	if st.Every != 10 {
+		t.Fatalf("bob got ana's interval: %+v", st)
+	}
+}
