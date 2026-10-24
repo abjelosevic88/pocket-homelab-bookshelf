@@ -148,6 +148,10 @@ Everything else, including a Homepage `customapi` widget, is in [docs/api.md](do
 
 With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as you) every ten minutes: an audiobook you finish there — in its web player or any Audiobookshelf app — becomes a read on the day you finished it, matched to a book on your shelves by title and author, or added as an *audio* book with its cover; one you have started (half a minute of listening is enough) goes on **Reading**. Each finish is taken in once, and a book you remove is not added again. **Settings → Audiobooks** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Audiobooks” in Core → Links.
 
+
+## Ebooks (Pocket Library)
+
+With Pocket Core, Bookshelf uses Pocket Library's `reading:read` link (as you) every ten minutes: an ebook you finish there — in its web reader, in KOReader or on a CrossPoint e-reader — becomes a read on the day you finished it; one you are reading goes on **Reading** and its page follows your place; your highlights and notes there become quotes. Books are matched by ISBN, else by title and author, or added as an *ebook* with its cover and a link back. Each finish, start and highlight is taken in once, and a book you remove is not added again. **Settings → Library** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Library” in Core → Links.
 ## Reader sync (KOReader, CrossPoint)
 
 Bookshelf is a KOSync server, the protocol behind KOReader's "Progress sync" (sync.koreader.rocks).
