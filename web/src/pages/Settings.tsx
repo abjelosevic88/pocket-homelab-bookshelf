@@ -321,7 +321,7 @@ function Audiobooks() {
   )
 }
 
-interface LibraryState { core: boolean; enabled: boolean; syncing: boolean; last?: { at: string; added: number; finished: number; started: number; quotes: number; error?: string; off?: boolean } }
+interface LibraryState { core: boolean; enabled: boolean; syncing: boolean; every: number; choices: number[]; last?: { at: string; added: number; finished: number; started: number; quotes: number; error?: string; off?: boolean } }
 
 // Library: what is read in Pocket Library (its web reader, KOReader or a
 // CrossPoint) becomes reads here, and highlights become quotes, through Pocket Core.
@@ -330,8 +330,8 @@ function LibrarySync() {
   const { data, reload, setData } = useAsync(() => api.get<LibraryState>(`${V1}/library`), [])
   const [busy, setBusy] = useState(false)
   if (!data) return <Loading />
-  const set = async (enabled: boolean) => {
-    try { setData(await api.put<LibraryState>(`${V1}/library`, { enabled })) } catch (e) { toast((e as Error).message, 'err') }
+  const set = async (patch: { enabled?: boolean; every?: number }) => {
+    try { setData(await api.put<LibraryState>(`${V1}/library`, patch)) } catch (e) { toast((e as Error).message, 'err') }
   }
   const sync = async () => {
     setBusy(true)
@@ -346,8 +346,12 @@ function LibrarySync() {
     <div className="stack loose">
       <Section title="From Pocket Library" icon="book" sub="Every ebook you finish in Pocket Library — in its reader, in KOReader or on a CrossPoint — becomes a read here, on the day you finished it. One you are reading goes on “Reading” with its page, and your highlights and notes there become quotes. A book is matched by ISBN, else by title and author, or added as an ebook with its cover. A book you remove is not added again.">
         {!data.core && <NeedsCore what="Needs Pocket Core: ebooks come from Pocket Library through it." />}
-        <SettingRow title="Take in my reading" help="Every two minutes, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Library”).">
-          <Switch checked={data.core && data.enabled} disabled={!data.core} onChange={set} label="Take in reading from Pocket Library" />
+        <SettingRow title="Take in my reading" help="As you, through the Pocket Core link “Pocket Bookshelf → Pocket Library”.">
+          <Switch checked={data.core && data.enabled} disabled={!data.core} onChange={v => set({ enabled: v })} label="Take in reading from Pocket Library" />
+        </SettingRow>
+        <SettingRow title="Look every" help="How soon a book you open or finish in Pocket Library shows here. “Look now” below is always there.">
+          <Segmented size="sm" value={data.every} onChange={v => set({ every: v })} label="Look every"
+            options={(data.choices || [2, 5, 10, 30, 60]).map(n => ({ value: n, label: n < 60 ? `${n} min` : '1 h', disabled: !data.core || !data.enabled }))} />
         </SettingRow>
         {data.core && l && (
           <p className={`small ${l.error && !l.off ? 'danger-text' : 'muted'}`}>
