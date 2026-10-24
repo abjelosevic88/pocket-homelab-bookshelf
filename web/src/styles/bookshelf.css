@@ -528,3 +528,18 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .db-col.on .b { background: var(--accent); }
 .db-col:hover .b { opacity: .8; }
 .day-bars-axis { display: flex; justify-content: space-between; margin-top: 6px; }
+
+/* format: audiobook, e-book, paper, not set */
+.fmt-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: 11.5px; font-weight: 650; line-height: 18px; white-space: nowrap; color: var(--fmt); background: color-mix(in srgb, var(--fmt) 14%, transparent); }
+.fmt-dot { position: absolute; right: 6px; bottom: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--fmt); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.fmt-badge.audio, .fmt-dot.audio { --fmt: #0d9488; }
+.fmt-badge.ebook, .fmt-dot.ebook { --fmt: #be123c; }
+.fmt-badge.paper, .fmt-dot.paper { --fmt: #b45309; }
+.fmt-badge.other, .fmt-dot.other { --fmt: #71717a; }
+[data-theme="dark"] .fmt-badge.audio { --fmt: #2dd4bf; }
+[data-theme="dark"] .fmt-badge.ebook { --fmt: #fb7185; }
+[data-theme="dark"] .fmt-badge.paper { --fmt: #fbbf24; }
+[data-theme="dark"] .fmt-badge.other { --fmt: #a1a1aa; }
+.fmt-dot.other { display: none; } /* covers stay clean for books with no format set */
+.reading-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.book-row .meta .fmt-badge { margin-right: 2px; }

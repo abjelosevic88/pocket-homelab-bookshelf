@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { Book } from '../lib/types'
 import { fmtDate, hasProgress, progress, splitTags, STATUS_SHORT } from '../lib/format'
 import { Cover } from './Cover'
+import { FormatBadge } from './FormatBadge'
 import { Stars } from './Stars'
 import { Icon } from './icons'
 
@@ -13,6 +14,7 @@ export function BookCard({ book }: { book: Book }) {
         <Cover book={book} size="md" />
         {book.favorite && <span className="fav" title="Favourite"><Icon name="heart" size={12} fill /></span>}
         {book.status !== 'read' && <span className={`status-pill ${book.status}`}>{STATUS_SHORT[book.status]}</span>}
+        <FormatBadge format={book.format} compact className="on-cover" />
       </div>
       <div className="nm">{book.title}</div>
       <div className="au">{book.authors}</div>
@@ -30,6 +32,7 @@ export function BookRow({ book }: { book: Book }) {
       <div className="info">
         <div className="nm">{book.title}{book.favorite && <span className="fav-inline" title="Favourite"><Icon name="heart" size={12} fill className="inline-icon" /></span>}</div>
         <div className="meta">
+          <FormatBadge format={book.format} />
           <span>{book.authors || 'Unknown author'}</span>
           {book.series && <span className="hide-sm">· {book.series}{book.series_no !== '' ? ` #${book.series_no}` : ''}</span>}
           {book.published && !book.series && <span className="hide-sm">· {book.published}</span>}
