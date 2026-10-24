@@ -146,7 +146,7 @@ Everything else, including a Homepage `customapi` widget, is in [docs/api.md](do
 
 ## Audiobooks (Pocket Audiobooks)
 
-With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as you) every half hour: an audiobook you finish there — in its web player or any Audiobookshelf app — becomes a read on the day you finished it, matched to a book on your shelves by title and author, or added as an *audio* book with its cover; one you are in the middle of goes on **Reading**. Each finish is taken in once, and a book you remove is not added again. **Settings → Audiobooks** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Audiobooks” in Core → Links.
+With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as you) every ten minutes: an audiobook you finish there — in its web player or any Audiobookshelf app — becomes a read on the day you finished it, matched to a book on your shelves by title and author, or added as an *audio* book with its cover; one you have started (half a minute of listening is enough) goes on **Reading**. Each finish is taken in once, and a book you remove is not added again. **Settings → Audiobooks** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Audiobooks” in Core → Links.
 
 ## Reader sync (KOReader, CrossPoint)
 
