@@ -164,6 +164,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	go s.dailyScheduler(ctx)
 	go s.characterWorker(ctx)
 	go s.kosyncWorker(ctx)
+	go s.audiobooksWorker(ctx)
 	s.kickCharacters()
 	s.kickAuthors()
 	if s.core.Configured() {
@@ -220,6 +221,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/books/{id}/status", s.handleSetStatus)
 			r.Post("/books/{id}/progress", s.handleProgress)
 			r.Get("/books/{id}/notes", s.handleBookNotes)
+			r.Get("/audiobooks", s.handleAudiobooksStatus)
+			r.Put("/audiobooks", s.handleAudiobooksSet)
+			r.Post("/audiobooks/sync", s.handleAudiobooksSync)
 			r.Get("/books/{id}/cover", s.handleGetCover)
 			r.Get("/books/{id}/covers", s.handleCoverSuggestions)
 			r.Get("/books/{id}/covers/ai", s.handleAICovers)
@@ -430,7 +434,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
 		Offers:    linkOffers,
-		Uses:      []core.Use{notesUse, core.InferenceUse()},
+		Uses:      []core.Use{notesUse, audiobooksUse, core.InferenceUse()},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
