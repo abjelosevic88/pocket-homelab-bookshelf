@@ -5,6 +5,7 @@ import { useApp } from '../lib/app-context'
 import type { Book, DailySet, Dashboard } from '../lib/types'
 import { daysBetween, fmtDate, hasProgress, progress, todayISO, pageLabel } from '../lib/format'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
+import { FormatBadge } from '../components/FormatBadge'
 import { Cover } from '../components/Cover'
 import { Stars } from '../components/Stars'
 import { AddBook } from '../components/AddBook'
@@ -125,7 +126,7 @@ function ReadingCard({ book, onChanged, onFinish }: { book: Book; onChanged: () 
       <div className="body">
         <Link to={`/books/${book.id}`} className="nm">{book.title}</Link>
         <div className="muted">{book.authors}</div>
-        {days !== null && <div className="muted small">{days === 0 ? 'Started today' : `Day ${days + 1}`} · since {fmtDate(book.started_on)}</div>}
+        <div className="muted small reading-meta"><FormatBadge format={book.format} />{days !== null && <span>{days === 0 ? 'Started today' : `Day ${days + 1}`} · since {fmtDate(book.started_on)}</span>}</div>
         <div className="progress-row">
           {hasProgress(book) && <div className="bar lg"><span className="fill" style={{ width: `${pct}%` }} /></div>}
           <label className="page-input">
