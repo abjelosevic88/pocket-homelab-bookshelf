@@ -144,6 +144,10 @@ Everything else, including a Homepage `customapi` widget, is in [docs/api.md](do
 
 **App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Bookshelf offers `books:read` ("See your books": `GET /books`, `GET /books/{id}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their shelf; every other route answers 403. Pocket Day uses it for the day's reading. The link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
 
+## Audiobooks (Pocket Audiobooks)
+
+With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as you) every half hour: an audiobook you finish there — in its web player or any Audiobookshelf app — becomes a read on the day you finished it, matched to a book on your shelves by title and author, or added as an *audio* book with its cover; one you are in the middle of goes on **Reading**. Each finish is taken in once, and a book you remove is not added again. **Settings → Audiobooks** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Audiobooks” in Core → Links.
+
 ## Reader sync (KOReader, CrossPoint)
 
 Bookshelf is a KOSync server, the protocol behind KOReader's "Progress sync" (sync.koreader.rocks).
