@@ -13,7 +13,7 @@ import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 import { Cover } from '../components/Cover'
 
-type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'audiobooks' | 'profile' | 'users' | 'api' | 'data' | 'about'
+type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'audiobooks' | 'library' | 'profile' | 'users' | 'api' | 'data' | 'about'
 
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', sub: 'Your yearly goal and start page, and the app title.' },
@@ -23,6 +23,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Pocket AI or OpenAI, for the characters of the novels on your shelf.' },
   { id: 'reader', label: 'Reader sync', icon: 'refresh', sub: 'Reading progress from KOReader, CrossPoint and other e-readers that speak KOSync.' },
   { id: 'audiobooks', label: 'Audiobooks', icon: 'book', sub: 'Audiobooks you finish in Pocket Audiobooks, as reads on your shelves.' },
+  { id: 'library', label: 'Library', icon: 'book', sub: 'Ebooks you read in Pocket Library, as reads on your shelves, and your highlights as quotes.' },
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
   { id: 'users', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
   { id: 'api', label: 'API tokens', icon: 'key', sub: 'Personal tokens for widgets, shortcuts and scripts.' },
@@ -89,6 +90,7 @@ export default function Settings() {
             {tab === 'ai' && <AITab />}
             {tab === 'reader' && <ReaderSync />}
             {tab === 'audiobooks' && <Audiobooks />}
+            {tab === 'library' && <LibrarySync />}
             {tab === 'profile' && <Profile />}
             {tab === 'users' && <Users />}
             {tab === 'api' && <Tokens />}
@@ -311,6 +313,45 @@ function Audiobooks() {
         {data.core && l && (
           <p className={`small ${l.error && !l.off ? 'danger-text' : 'muted'}`}>
             {l.error ? l.error : `Last looked ${new Date(l.at).toLocaleString()}: ${l.finished} finished, ${l.started} started, ${l.added} added.`}
+          </p>
+        )}
+        {data.core && <div className="row"><button type="button" className="btn sm" onClick={sync} disabled={busy || !data.enabled}><Icon name="refresh" size={14} />{busy ? 'Looking…' : 'Look now'}</button></div>}
+      </Section>
+    </div>
+  )
+}
+
+interface LibraryState { core: boolean; enabled: boolean; syncing: boolean; last?: { at: string; added: number; finished: number; started: number; quotes: number; error?: string; off?: boolean } }
+
+// Library: what is read in Pocket Library (its web reader, KOReader or a
+// CrossPoint) becomes reads here, and highlights become quotes, through Pocket Core.
+function LibrarySync() {
+  const { toast } = useToast()
+  const { data, reload, setData } = useAsync(() => api.get<LibraryState>(`${V1}/library`), [])
+  const [busy, setBusy] = useState(false)
+  if (!data) return <Loading />
+  const set = async (enabled: boolean) => {
+    try { setData(await api.put<LibraryState>(`${V1}/library`, { enabled })) } catch (e) { toast((e as Error).message, 'err') }
+  }
+  const sync = async () => {
+    setBusy(true)
+    try {
+      const r = await api.post<NonNullable<LibraryState['last']>>(`${V1}/library/sync`)
+      toast(r.error ? r.error : `Done: ${r.finished} finished, ${r.started} started, ${r.added} added, ${r.quotes} quotes`, r.error ? 'err' : 'ok')
+      reload()
+    } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const l = data.last
+  return (
+    <div className="stack loose">
+      <Section title="From Pocket Library" icon="book" sub="Every ebook you finish in Pocket Library — in its reader, in KOReader or on a CrossPoint — becomes a read here, on the day you finished it. One you are reading goes on “Reading” with its page, and your highlights and notes there become quotes. A book is matched by ISBN, else by title and author, or added as an ebook with its cover. A book you remove is not added again.">
+        {!data.core && <NeedsCore what="Needs Pocket Core: ebooks come from Pocket Library through it." />}
+        <SettingRow title="Take in my reading" help="Every ten minutes, as you (through the Pocket Core link “Pocket Bookshelf → Pocket Library”).">
+          <Switch checked={data.core && data.enabled} disabled={!data.core} onChange={set} label="Take in reading from Pocket Library" />
+        </SettingRow>
+        {data.core && l && (
+          <p className={`small ${l.error && !l.off ? 'danger-text' : 'muted'}`}>
+            {l.error ? l.error : `Last looked ${new Date(l.at).toLocaleString()}: ${l.finished} finished, ${l.started} started, ${l.added} added, ${l.quotes} quotes.`}
           </p>
         )}
         {data.core && <div className="row"><button type="button" className="btn sm" onClick={sync} disabled={busy || !data.enabled}><Icon name="refresh" size={14} />{busy ? 'Looking…' : 'Look now'}</button></div>}
