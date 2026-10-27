@@ -51,7 +51,7 @@ export function Sidebar({ onAction, onNavigate }: { onAction: (a: ShellAction) =
       <div className="sb-brand">
         <img src="/favicon.svg" alt="" className="sb-logo" />
         <span className="sb-title">{title !== 'Pocket Bookshelf' ? title : <>Pocket <b>Bookshelf</b></>}</span>
-        {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^\d/.test(status.version) ? 'v' + status.version : status.version}</span>}
+        {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^v?\d+\.\d+/.test(status.version) ? 'v' + status.version.replace(/^v/, '').replace(/[-+].*$/, '') : status.version}</span>}
       </div>
       <button type="button" className="btn primary create-btn" onClick={() => onAction({ kind: 'add' })} title="Add a book (a)">
         <Icon name="plus" size={17} strokeWidth={2.2} />Add book<kbd className="kbd-on-primary">A</kbd>
