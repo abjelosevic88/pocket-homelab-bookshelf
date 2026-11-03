@@ -9,6 +9,7 @@ import { Icon } from '../components/icons'
 import { useOnChange } from '../components/Layout'
 import { Cover, RemoteCover } from '../components/Cover'
 import { AddBook, workCandidate } from '../components/AddBook'
+import { GetItMenu } from '../components/GetIt'
 
 function thisMonth(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
@@ -98,6 +99,7 @@ export default function Planner() {
                   <button type="button" className="btn ghost sm" onClick={() => move(b, 1)} disabled={i === g.books.length - 1} aria-label="Move down" title="Move down"><Icon name="chevron-down" size={14} /></button>
                 </span>
                 <button type="button" className="btn sm" onClick={() => start(b)}><Icon name="play" size={13} />Start</button>
+                <GetItMenu book={b} />
                 <button type="button" className="btn ghost sm icon-only danger-text" onClick={() => setRemoving(b)} aria-label="Remove from the plan" title="Remove from the plan"><Icon name="x" size={15} /></button>
               </div>
             </div>

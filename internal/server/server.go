@@ -222,6 +222,8 @@ func (s *Server) Router() http.Handler {
 			r.Post("/books/{id}/status", s.handleSetStatus)
 			r.Post("/books/{id}/progress", s.handleProgress)
 			r.Get("/books/{id}/notes", s.handleBookNotes)
+			r.Get("/books/{id}/requests", s.handleBookRequests)
+			r.Post("/books/{id}/requests", s.handleCreateBookRequest)
 			r.Get("/audiobooks", s.handleAudiobooksStatus)
 			r.Put("/audiobooks", s.handleAudiobooksSet)
 			r.Post("/audiobooks/sync", s.handleAudiobooksSync)
@@ -438,7 +440,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
 		Offers:    linkOffers,
-		Uses:      []core.Use{notesUse, audiobooksUse, libraryUse, core.InferenceUse()},
+		Uses:      []core.Use{notesUse, audiobooksUse, libraryUse, requestsUse, core.InferenceUse()},
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration
