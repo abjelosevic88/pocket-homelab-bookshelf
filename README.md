@@ -152,6 +152,11 @@ With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as yo
 ## Ebooks (Pocket Library)
 
 With Pocket Core, Bookshelf uses Pocket Library's `reading:read` link (as you) every ten minutes (or as often as you choose): an ebook you finish there — in its web reader, in KOReader or on a CrossPoint e-reader — becomes a read on the day you finished it; one you are reading goes on **Reading** and its page follows your place; your highlights and notes there become quotes. Books are matched by ISBN, else by title and author, or added as an *ebook* with its cover and a link back. Each finish, start and highlight is taken in once, and a book you remove is not added again. **Settings → Library** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Library” in Core → Links.
+
+## Get it (Pocket Requests)
+
+With Pocket Core, a book's page has a **Get it** box: for the ebook and the audiobook it says whether the book is already on the server (with a link to open it in Pocket Library or Pocket Audiobooks), how far along your request is (waiting, downloading, arriving — with a link to the request), or offers **Get ebook** / **Get audiobook**, which asks Pocket Requests for it as you. Rows in the **Reading plan** have the same as a small menu. Bookshelf talks to Requests through the `requests:read` + `requests:write` link; your browser never sees the token. Without the link the buttons stay, greyed out, with the reason. The link starts off: turn on “Pocket Bookshelf → Pocket Requests” in Core → Links.
+
 ## Reader sync (KOReader, CrossPoint)
 
 Bookshelf is a KOSync server, the protocol behind KOReader's "Progress sync" (sync.koreader.rocks).

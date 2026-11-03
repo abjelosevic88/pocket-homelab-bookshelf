@@ -18,6 +18,7 @@ import { AboutCard } from '../components/AboutCard'
 import { NotesCard } from '../components/NotesCard'
 import { Icon } from '../components/icons'
 import { useCrumb } from '../components/Layout'
+import { GetItBox } from '../components/GetIt'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
 
@@ -66,6 +67,7 @@ export default function Book() {
           <dt>Added</dt><dd>{fmtDate(b.created_at.slice(0, 10))}</dd>
           {b.source_url && <><dt>Source</dt><dd><a href={b.source_url} target="_blank" rel="noreferrer"><span className="icon-text">{b.source === 'google' ? 'Google Books' : 'Open Library'}<Icon name="external" size={12} /></span></a></dd></>}
         </dl>
+        <GetItBox book={b} />
         <div className="row wrap">
           <button type="button" className="btn sm" onClick={() => setEditing(true)}><Icon name="edit" size={14} />Edit details</button>
           <button type="button" className="btn ghost sm danger-text" onClick={() => setDeleting(true)}><Icon name="trash" size={14} />Delete</button>
