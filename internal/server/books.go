@@ -191,6 +191,14 @@ func (s *Server) handleCreateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp["book"] = saved
+	if saved.Status == store.StatusWant {
+		// "+ Want": also get it from Pocket Requests (the person's choice), or offer to
+		if u, err := s.store.GetUser(r.Context(), saved.UserID); err == nil {
+			if g := s.afterWant(r.Context(), u, saved); g != nil {
+				resp["get_it"] = g
+			}
+		}
+	}
 	writeJSON(w, http.StatusCreated, resp)
 }
 

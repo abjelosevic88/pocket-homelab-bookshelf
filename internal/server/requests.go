@@ -38,6 +38,7 @@ type rqError struct {
 	status    int
 	msg       string
 	requestID int64
+	url       string // the request's page, when Requests named one
 }
 
 func (e *rqError) Error() string { return e.msg }
@@ -149,8 +150,21 @@ type rqLookup struct {
 				Ebook     *rqRequest `json:"ebook"`
 				Audiobook *rqRequest `json:"audiobook"`
 			} `json:"requests"`
+			Asked []rqAsk `json:"asked"`
 		} `json:"book"`
 	} `json:"title"`
+	Languages []string `json:"languages_wanted"`
+}
+
+// rqAsk is one live request for a book (an ebook may be asked for in two languages).
+type rqAsk struct {
+	ID       int64   `json:"id"`
+	Kind     string  `json:"kind"`
+	Language string  `json:"language"`
+	Status   string  `json:"status"`
+	State    string  `json:"state"`
+	Progress float64 `json:"progress"`
+	URL      string  `json:"url,omitempty"`
 }
 
 // getItFormat is one format on the book page.
@@ -168,6 +182,9 @@ type getIt struct {
 	Ebook     getItFormat `json:"ebook"`
 	Audiobook getItFormat `json:"audiobook"`
 	AppURL    string      `json:"app_url,omitempty"`
+	// The languages the box reads (best first) and every live request, per language.
+	Languages []string `json:"languages"`
+	Asked     []rqAsk  `json:"asked"`
 }
 
 var (
@@ -255,7 +272,7 @@ func (s *Server) fetchGetIt(ctx context.Context, u *store.User, b *store.Book) g
 	if err != nil {
 		return getIt{Reason: "Pocket Core: " + err.Error()}
 	}
-	out := getIt{Available: true, AppURL: c.public}
+	out := getIt{Available: true, AppURL: c.public, Languages: []string{}, Asked: []rqAsk{}}
 	q := url.Values{}
 	if isbn := firstNonEmpty(b.ISBN13, b.ISBN10); isbn != "" {
 		q.Set("isbn", isbn)
@@ -272,6 +289,9 @@ func (s *Server) fetchGetIt(ctx context.Context, u *store.User, b *store.Book) g
 		}
 		return getIt{Reason: err.Error()}
 	}
+	if lk.Languages != nil {
+		out.Languages = lk.Languages
+	}
 	if lk.Title == nil {
 		return out
 	}
@@ -283,6 +303,10 @@ func (s *Server) fetchGetIt(ctx context.Context, u *store.User, b *store.Book) g
 		if r != nil {
 			r.URL = c.requestURL(r.ID)
 		}
+	}
+	for _, a := range t.Book.Asked {
+		a.URL = c.requestURL(a.ID)
+		out.Asked = append(out.Asked, a)
 	}
 	return out
 }
@@ -307,12 +331,13 @@ func (s *Server) handleBookRequests(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.lookupGetIt(cctx, u, b, r.URL.Query().Get("fresh") == "1"))
 }
 
-// POST /api/v1/books/{id}/requests {"kind": "ebook"|"audiobook", "note"} — ask for it.
+// POST /api/v1/books/{id}/requests {"kind": "ebook"|"audiobook", "language", "note"} — ask for it.
 func (s *Server) handleCreateBookRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var in struct {
-		Kind string `json:"kind"`
-		Note string `json:"note"`
+		Kind     string `json:"kind"`
+		Language string `json:"language"`
+		Note     string `json:"note"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -332,37 +357,60 @@ func (s *Server) handleCreateBookRequest(w http.ResponseWriter, r *http.Request)
 		s.fail(w, err, "get user")
 		return
 	}
-	if !s.core.Configured() {
-		writeErr(w, http.StatusConflict, "Needs Pocket Core: books are asked for in Pocket Requests, through Pocket Core.")
-		return
-	}
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	c, le, err := s.rqFor(cctx, u.Email)
+	rq, err := s.askRequests(cctx, u, rqAskInput{Kind: in.Kind, Language: in.Language, Note: in.Note, Book: b})
+	writeAskResult(w, rq, err)
+}
+
+// rqAskInput is what Bookshelf asks Requests for: a book on the shelf, or one
+// Requests already knows by its key (an author's other books).
+type rqAskInput struct {
+	Kind, Language, Note string
+	Book                 *store.Book // a book on the shelf
+	BookKey, Title       string      // else: a book by key
+	Author               string
+}
+
+// askRequests asks Pocket Requests for an ebook or audiobook as the person.
+func (s *Server) askRequests(ctx context.Context, u *store.User, in rqAskInput) (*rqRequest, error) {
+	if !s.core.Configured() {
+		return nil, &rqError{status: http.StatusConflict, msg: "Needs Pocket Core: books are asked for in Pocket Requests, through Pocket Core."}
+	}
+	c, le, err := s.rqFor(ctx, u.Email)
 	if le != nil {
-		writeErr(w, http.StatusConflict, rqLinkReason(le))
-		return
+		return nil, &rqError{status: http.StatusConflict, msg: rqLinkReason(le)}
 	}
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, "Pocket Core: "+err.Error())
-		return
+		return nil, &rqError{status: http.StatusBadGateway, msg: "Pocket Core: " + err.Error()}
 	}
-	body := map[string]any{"kind": in.Kind, "title": b.Title}
-	// the key Requests found on the book page beats Bookshelf's own source id
-	key := ""
-	getItMu.Lock()
-	if cached, ok := getItCache[getItKey(u.ID, b.ID)]; ok {
-		key = cached.v.BookKey
+	body := map[string]any{"kind": in.Kind}
+	key, title, author := in.BookKey, in.Title, in.Author
+	if b := in.Book; b != nil {
+		title, author = b.Title, firstAuthor(b.Authors)
+		// the key Requests found on the book page beats Bookshelf's own source id
+		getItMu.Lock()
+		if cached, ok := getItCache[getItKey(u.ID, b.ID)]; ok {
+			key = cached.v.BookKey
+		}
+		getItMu.Unlock()
+		key = firstNonEmpty(key, bookKey(b))
+		if isbn := firstNonEmpty(b.ISBN13, b.ISBN10); isbn != "" {
+			body["isbn"] = isbn
+		}
+		defer forgetGetIt(u.ID, b.ID)
 	}
-	getItMu.Unlock()
-	if key = firstNonEmpty(key, bookKey(b)); key != "" {
+	if key != "" {
 		body["book_key"] = key
 	}
-	if isbn := firstNonEmpty(b.ISBN13, b.ISBN10); isbn != "" {
-		body["isbn"] = isbn
+	if title != "" {
+		body["title"] = title
 	}
-	if a := firstAuthor(b.Authors); a != "" {
-		body["author"] = a
+	if author != "" {
+		body["author"] = author
+	}
+	if l := strings.ToLower(strings.TrimSpace(in.Language)); l != "" && l != "any" && len(l) <= 3 {
+		body["language"] = l
 	}
 	if note := strings.TrimSpace(in.Note); note != "" {
 		if len(note) > 1000 {
@@ -371,26 +419,36 @@ func (s *Server) handleCreateBookRequest(w http.ResponseWriter, r *http.Request)
 		body["note"] = note
 	}
 	var rq rqRequest
-	err = c.do(cctx, http.MethodPost, "/api/v1/requests", nil, body, &rq)
-	forgetGetIt(u.ID, b.ID)
-	if err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/requests", nil, body, &rq); err != nil {
 		var re *rqError
-		if errors.As(err, &re) {
-			status := re.status
-			if status < 400 || status > 599 {
-				status = http.StatusBadGateway
-			}
-			out := map[string]any{"error": re.msg}
-			if re.requestID > 0 {
-				out["request_id"] = re.requestID
-				out["url"] = c.requestURL(re.requestID)
-			}
-			writeJSON(w, status, out)
-			return
+		if errors.As(err, &re) && re.requestID > 0 {
+			re.url = c.requestURL(re.requestID)
 		}
-		writeErr(w, http.StatusBadGateway, err.Error())
-		return
+		return nil, err
 	}
 	rq.URL = c.requestURL(rq.ID)
-	writeJSON(w, http.StatusCreated, rq)
+	return &rq, nil
+}
+
+// writeAskResult answers a "Get it" POST: 201 with the request, or Requests' error with its status.
+func writeAskResult(w http.ResponseWriter, rq *rqRequest, err error) {
+	if err == nil {
+		writeJSON(w, http.StatusCreated, rq)
+		return
+	}
+	var re *rqError
+	if errors.As(err, &re) {
+		status := re.status
+		if status < 400 || status > 599 {
+			status = http.StatusBadGateway
+		}
+		out := map[string]any{"error": re.msg}
+		if re.requestID > 0 {
+			out["request_id"] = re.requestID
+			out["url"] = re.url
+		}
+		writeJSON(w, status, out)
+		return
+	}
+	writeErr(w, http.StatusBadGateway, err.Error())
 }

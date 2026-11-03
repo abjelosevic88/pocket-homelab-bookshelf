@@ -1,3 +1,4 @@
+import { wantFollowUp, type WantGetIt } from './GetIt'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError, V1 } from '../lib/api'
@@ -54,8 +55,9 @@ export function AddBook({ status: initialStatus = 'want', initial, query, extra,
       const body: Record<string, unknown> = { ...draft, status, format, tags: tags || draft.tags, cover_url: coverUrl, allow_duplicate: dup !== null, ...(extra || {}) }
       if (status === 'read') { body.finished_on = finished; body.rating = rating }
       if (status === 'want') body.plan_note = planNote
-      const r = await api.post<{ book: Book; warning?: string }>(`${V1}/books`, body)
+      const r = await api.post<{ book: Book; warning?: string; get_it?: WantGetIt }>(`${V1}/books`, body)
       if (r.warning) toast(r.warning, 'err'); else toast(`Added “${r.book.title}”`)
+      wantFollowUp(toast, r.book, r.get_it)
       onAdded?.(r.book)
       onClose()
     } catch (e) {

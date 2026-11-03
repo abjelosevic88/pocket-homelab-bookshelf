@@ -555,3 +555,16 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 @media (max-width: 900px) {
   .book-side .get-it { grid-column: 1 / -1; grid-row: 4; }
 }
+
+/* Pocket Requests on author pages and the Get it box (0.18) */
+.get-it-block { display: grid; gap: 2px; }
+.get-it-ask { display: flex; justify-content: space-between; gap: 8px; padding-left: 20px; font-size: 12px; }
+.author-shelf-line { display: flex; align-items: center; gap: 8px; }
+.author-shelf-line > .book-row { flex: 1; min-width: 0; }
+.author-get { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.rq-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rq-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-size: 11px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.rq-badge.here { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.also-get { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.also-get-btn { padding: 2px 8px; min-height: 0; }
+@media (max-width: 640px) { .author-get .rq-badges { display: none; } }
