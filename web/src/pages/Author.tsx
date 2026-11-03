@@ -14,8 +14,16 @@ import { FindAuthor } from './Authors'
 import { AddBook } from '../components/AddBook'
 import { AuthorPhotoPicker } from '../components/AuthorPhotoPicker'
 import { langName } from '../lib/languages'
+import { GetMenu, KIND_ICON, liveAsk, openAction, postGet, stateText, wantFollowUp, type Ask, type WantGetIt } from '../components/GetIt'
 
 interface Detail { author: AuthorT; books: Book[] }
+// The author's books in Pocket Requests: here (as an ebook / audiobook) or asked for.
+interface RqBook { book_key: string; title: string; year: number; poster: string; ebook: { url: string } | null; audiobook: { url: string } | null; asked: Ask[] }
+interface RqAuthor { available: boolean; reason?: string; items: RqBook[]; languages: string[]; app_url?: string }
+
+/** fold makes titles comparable: lowercase, no marks or punctuation. */
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'dj').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const sameTitle = (a: string, b: string) => { const x = fold(a), y = fold(b); return !!x && !!y && (x === y || x.startsWith(y + ' ') || y.startsWith(x + ' ')) }
 type Work = Candidate & { on_shelf?: number }
 
 export default function Author() {
@@ -24,6 +32,7 @@ export default function Author() {
   const { toast } = useToast()
   const { data, error, reload, setData } = useAsync(() => api.get<Detail>(`${V1}/authors/${id}`), [id])
   const works = useAsync(() => api.get<{ works: Work[]; linked: boolean; unavailable?: boolean }>(`${V1}/authors/${id}/works`), [id, data?.author.ol_key])
+  const rq = useAsync(() => api.get<RqAuthor>(`${V1}/authors/${id}/requests`), [id])
   const [editing, setEditing] = useState(false)
   const [relinking, setRelinking] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -52,14 +61,29 @@ export default function Author() {
         publisher: full.publisher, language: full.language, description: full.description, source: full.source, source_id: full.source_id, source_url: full.source_url,
         cover_url: full.cover_url, status, allow_duplicate: true,
       }
-      await api.post(`${V1}/books`, body)
+      const r = await api.post<{ book: Book; get_it?: WantGetIt }>(`${V1}/books`, body)
       toast(status === 'want' ? `“${w.title}” added to your plan` : `“${w.title}” added as read`)
+      wantFollowUp(toast, r.book, r.get_it)
       reload(); works.reload()
     } catch (e) { toast((e as Error).message, 'err') }
   }
   const del = async () => { await api.del(`${V1}/authors/${a.id}`); toast(`Removed ${a.name}`); navigate('/authors') }
 
   const other = (works.data?.works || []).filter(w => !w.on_shelf)
+  const rqItems = rq.data?.items || []
+  const rqFor = (title: string) => rqItems.find(i => sameTitle(i.title, title))
+  const rqOk = !!rq.data?.available
+  const langs = rq.data?.languages || []
+  // Pocket Requests: ask for one of the author's books (on the shelf: through the book; else by its key)
+  const getBook = async (kind: 'ebook' | 'audiobook', language: string, target: { bookId?: number; key?: string; title: string }) => {
+    const r = target.bookId ? await postGet(`${V1}/books/${target.bookId}/requests`, { kind, language })
+      : await postGet(`${V1}/authors/${a.id}/requests`, { kind, language, book_key: target.key, title: target.title })
+    toast(r.msg, r.ok ? 'ok' : 'err', openAction(r.url))
+    rq.reload()
+  }
+  const workKey = (w: Work) => rqFor(w.title)?.book_key || (w.source === 'openlibrary' && /W$/.test(w.source_id) ? 'ol:' + w.source_id.replace(/^\/works\//, '') : '')
+  // what Requests has that is neither on the shelf nor in the list below
+  const extra = rqItems.filter(i => !data.books.some(b => sameTitle(b.title, i.title)) && !other.some(w => sameTitle(w.title, i.title)) && !(works.data?.works || []).some(w => sameTitle(w.title, i.title)))
   const shownOther = showAll ? other : other.slice(0, 18)
   const span = lifespan(a.birth_date, a.death_date)
 
@@ -103,7 +127,13 @@ export default function Author() {
       </Card>
 
       <Card title={`On your shelf (${data.books.length})`} className="mt">
-        {data.books.length ? <div className="book-list">{data.books.map(b => <BookRow key={b.id} book={b} />)}</div> : <p className="muted">None yet — pick something below.</p>}
+        {data.books.length ? <div className="book-list">{data.books.map(b => (
+          <div key={b.id} className="author-shelf-line">
+            <BookRow book={b} />
+            <span className="author-get"><RqBadges item={rqFor(b.title)} />{rqOk && <GetMenu languages={langs} onGet={(k, l) => getBook(k, l, { bookId: b.id, title: b.title })} />}</span>
+          </div>
+        ))}</div> : <p className="muted">None yet — pick something below.</p>}
+        {rq.data && !rq.data.available && rq.data.reason && <p className="core-hint mt-sm">Pocket Requests: {rq.data.reason}</p>}
       </Card>
 
       <Card title={`Other books by ${a.name}`} className="mt">
@@ -123,7 +153,9 @@ export default function Author() {
                       <div className="row mt-sm">
                         <button type="button" className="btn sm" onClick={() => addWork(w, 'want')} title="Add to your reading plan"><Icon name="plus" size={14} />Want</button>
                         <button type="button" className="btn ghost sm" onClick={() => addWork(w, 'read')} title="You have read it">Read it</button>
+                        {rqOk && <GetMenu languages={langs} onGet={(k, l) => getBook(k, l, { key: workKey(w), title: w.title })} />}
                       </div>
+                      <RqBadges item={rqFor(w.title)} />
                     </div>
                   </div>
                 ))}
@@ -134,12 +166,49 @@ export default function Author() {
           )}
       </Card>
 
+      {rqOk && extra.length > 0 && (
+        <Card title={`More by ${a.name} in Pocket Requests`} className="mt">
+          <div className="work-grid">
+            {extra.map(i => (
+              <div key={i.book_key} className="work">
+                <RemoteCover url={i.poster} title={i.title} size="sm" />
+                <div className="info">
+                  <div className="nm work-title" title={i.title}>{i.title}</div>
+                  <div className="muted small">{i.year || ''}</div>
+                  <div className="row mt-sm"><GetMenu languages={langs} className="btn sm" onGet={(k, l) => getBook(k, l, { key: i.book_key, title: i.title })}><Icon name="download" size={14} />Get it</GetMenu></div>
+                  <RqBadges item={i} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="muted small mt">Books Pocket Requests knows by {a.name} that aren’t on your shelves or in the list above.</p>
+        </Card>
+      )}
+
       {photoOpen && <AuthorPhotoPicker author={a} onClose={() => setPhotoOpen(false)} onChanged={reload} />}
       {details && <AddBook initial={{ ...details, authors: [a.name] }} status="want" onClose={() => setDetails(null)} onAdded={() => { reload(); works.reload() }} />}
       {editing && <EditAuthor author={a} onClose={() => setEditing(false)} onSaved={na => { setEditing(false); if (na.id !== a.id) navigate(`/authors/${na.id}`, { replace: true }); else reload() }} />}
       {relinking && <FindAuthor initial={a.name} onClose={() => setRelinking(false)} onPick={(c: AuthorCandidate) => { setRelinking(false); refresh(c.key) }} />}
       {deleting && <Confirm title={`Remove ${a.name}?`} message="They have no books on your shelf. The biography and photo are removed." onCancel={() => setDeleting(false)} onConfirm={del} />}
     </div>
+  )
+}
+
+/** RqBadges: here as an ebook / audiobook (opens it), or asked for (how far along). */
+function RqBadges({ item }: { item?: RqBook }) {
+  if (!item) return null
+  const asks = item.asked.filter(liveAsk)
+  if (!item.ebook && !item.audiobook && !asks.length) return null
+  return (
+    <span className="rq-badges">
+      {item.ebook && <a className="rq-badge here" href={item.ebook.url} target="_blank" rel="noreferrer" title="Open the ebook"><Icon name={KIND_ICON.ebook} size={11} />Ebook here</a>}
+      {item.audiobook && <a className="rq-badge here" href={item.audiobook.url} target="_blank" rel="noreferrer" title="Open the audiobook"><Icon name={KIND_ICON.audiobook} size={11} />Audiobook here</a>}
+      {asks.map(x => (
+        <a key={x.id} className="rq-badge" href={x.url} target="_blank" rel="noreferrer" title="The request in Pocket Requests">
+          <Icon name={KIND_ICON[x.kind]} size={11} />{x.language ? langName(x.language) + ' · ' : ''}{stateText(x)}
+        </a>
+      ))}
+    </span>
   )
 }
 

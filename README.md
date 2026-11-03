@@ -157,6 +157,10 @@ With Pocket Core, Bookshelf uses Pocket Library's `reading:read` link (as you) e
 
 With Pocket Core, a book's page has a **Get it** box: for the ebook and the audiobook it says whether the book is already on the server (with a link to open it in Pocket Library or Pocket Audiobooks), how far along your request is (waiting, downloading, arriving — with a link to the request), or offers **Get ebook** / **Get audiobook**, which asks Pocket Requests for it as you. Rows in the **Reading plan** have the same as a small menu. Bookshelf talks to Requests through the `requests:read` + `requests:write` link; your browser never sees the token. Without the link the buttons stay, greyed out, with the reason. The link starts off: turn on “Pocket Bookshelf → Pocket Requests” in Core → Links.
 
+- **Languages**: the ebook can be asked for in any language you read or in one of them (Serbian, English…); each language is its own request, and the box lists them per language.
+- **Authors**: an author's page marks each of their books — on your shelf and in “Other books” — as *Ebook here* / *Audiobook here* (opens it) or with the request's state, and has a Get menu on each. Books Pocket Requests knows by them that aren't in either list come in a “More by … in Pocket Requests” card.
+- **+ Want**: adding a book to Want to read offers “Also get it? Ebook · Audiobook”. Or choose in Settings → Requests to ask for the ebook, the audiobook or both every time — done by the server, so it also works for books added through the API. Nothing is ever asked while the link is off; “already asked” or “already here” counts as done.
+
 ## Reader sync (KOReader, CrossPoint)
 
 Bookshelf is a KOSync server, the protocol behind KOReader's "Progress sync" (sync.koreader.rocks).

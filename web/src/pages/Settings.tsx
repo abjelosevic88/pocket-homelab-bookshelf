@@ -13,7 +13,7 @@ import { LANGUAGES, langName } from '../lib/languages'
 import { Select } from '../components/Select'
 import { Cover } from '../components/Cover'
 
-type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'audiobooks' | 'library' | 'profile' | 'users' | 'api' | 'data' | 'about'
+type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 'audiobooks' | 'library' | 'requests' | 'profile' | 'users' | 'api' | 'data' | 'about'
 
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', sub: 'Your yearly goal and start page, and the app title.' },
@@ -24,6 +24,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'reader', label: 'Reader sync', icon: 'refresh', sub: 'Reading progress from KOReader, CrossPoint and other e-readers that speak KOSync.' },
   { id: 'audiobooks', label: 'Audiobooks', icon: 'book', sub: 'Audiobooks you finish in Pocket Audiobooks, as reads on your shelves.' },
   { id: 'library', label: 'Library', icon: 'book', sub: 'Ebooks you read in Pocket Library, as reads on your shelves, and your highlights as quotes.' },
+  { id: 'requests', label: 'Requests', icon: 'download', sub: 'Ask Pocket Requests for the ebook or audiobook of a book — from its page, an author or right when you add it to Want to read.' },
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email and password.' },
   { id: 'users', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.' },
   { id: 'api', label: 'API tokens', icon: 'key', sub: 'Personal tokens for widgets, shortcuts and scripts.' },
@@ -91,6 +92,7 @@ export default function Settings() {
             {tab === 'reader' && <ReaderSync />}
             {tab === 'audiobooks' && <Audiobooks />}
             {tab === 'library' && <LibrarySync />}
+            {tab === 'requests' && <RequestsTab />}
             {tab === 'profile' && <Profile />}
             {tab === 'users' && <Users />}
             {tab === 'api' && <Tokens />}
@@ -316,6 +318,32 @@ function Audiobooks() {
           </p>
         )}
         {data.core && <div className="row"><button type="button" className="btn sm" onClick={sync} disabled={busy || !data.enabled}><Icon name="refresh" size={14} />{busy ? 'Looking…' : 'Look now'}</button></div>}
+      </Section>
+    </div>
+  )
+}
+
+interface RequestsState { core: boolean; available: boolean; reason?: string; want_get: '' | 'ebook' | 'audiobook' | 'both'; app_url?: string }
+
+// Requests: "Get it" on books and authors asks Pocket Requests through Pocket
+// Core; this is the person's choice for "+ Want".
+function RequestsTab() {
+  const { toast } = useToast()
+  const { data, setData } = useAsync(() => api.get<RequestsState>(`${V1}/requests/settings`), [])
+  if (!data) return <Loading />
+  const set = async (want_get: string) => {
+    try { setData(await api.put<RequestsState>(`${V1}/requests/settings`, { want_get })); toast('Saved') } catch (e) { toast((e as Error).message, 'err') }
+  }
+  return (
+    <div className="stack loose">
+      <Section title="Get it from Pocket Requests" icon="download" sub="A book's page, an author's page and the reading plan can ask Pocket Requests for the ebook or the audiobook — it finds a copy and files it into Pocket Library or Pocket Audiobooks. Asked as you, through the Pocket Core link “Pocket Bookshelf → Pocket Requests”.">
+        {!data.core ? <NeedsCore what="Needs Pocket Core: books are asked for in Pocket Requests, through it." />
+          : !data.available ? <p className="core-hint">{data.reason}</p>
+            : <p className="muted small">Connected{data.app_url && <> · <a href={data.app_url} target="_blank" rel="noreferrer">open Pocket Requests</a></>}.</p>}
+        <SettingRow title="When I add a book to Want to read" help="Ask Pocket Requests for it right away. With “Nothing”, adding a book offers “Also get it?” instead. Already asked for or already here is fine — nothing is asked twice.">
+          <Select ariaLabel="When I add a book to Want to read" value={data.want_get} onChange={set} disabled={!data.available}
+            options={[{ value: '', label: 'Ask for nothing' }, { value: 'ebook', label: 'Ask for the ebook' }, { value: 'audiobook', label: 'Ask for the audiobook' }, { value: 'both', label: 'Ask for both' }]} />
+        </SettingRow>
       </Section>
     </div>
   )
