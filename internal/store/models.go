@@ -77,6 +77,9 @@ type Book struct {
 	QuoteCount int    `json:"quote_count"`
 	// Latest position from an e-reader (0..1), when one syncs this book.
 	ReaderPercent *float64 `json:"reader_percent"`
+	// The same book in Pocket Library, when linked (filled by the API, not stored here).
+	LibraryBookID int64  `json:"library_book_id"`
+	LibraryURL    string `json:"library_url"`
 }
 
 // Read is one time through a book.

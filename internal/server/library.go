@@ -30,7 +30,7 @@ import (
 // Links and events share the audiobook tables, keyed "library:<book id>" and
 // "library-note:<annotation id>", which never clash with Audiobookshelf ids.
 
-var libraryUse = core.Use{App: "library", Scopes: []string{"reading:read"}, Reason: "Ebooks you finish (or are reading) in Pocket Library, as reads on your shelves, and your highlights there as quotes"}
+var libraryUse = core.Use{App: "library", Scopes: []string{"reading:read", "library:read"}, Reason: "Ebooks you finish (or are reading) in Pocket Library, as reads on your shelves, your highlights there as quotes, and finding a book there to link it to one on your shelves by hand"}
 
 // How often each person's reading is looked at: their choice (setting
 // library_every, minutes), ten minutes unless they pick another.
@@ -167,7 +167,12 @@ func (c *libClient) cover(ctx context.Context, coverURL string) ([]byte, string,
 }
 
 func (s *Server) libFor(ctx context.Context, email string) (*libClient, *core.LinkError, error) {
-	lt, err := s.core.ActAs(ctx, email, "library", "reading:read")
+	return s.libForScope(ctx, email, "reading:read")
+}
+
+// libForScope reaches Pocket Library for the person with one of the link's scopes.
+func (s *Server) libForScope(ctx context.Context, email, scope string) (*libClient, *core.LinkError, error) {
+	lt, err := s.core.ActAs(ctx, email, "library", scope)
 	if err != nil {
 		var le *core.LinkError
 		if errors.As(err, &le) {
@@ -175,7 +180,11 @@ func (s *Server) libFor(ctx context.Context, email string) (*libClient, *core.Li
 		}
 		return nil, nil, err
 	}
-	return &libClient{base: strings.TrimRight(lt.URL, "/"), public: strings.TrimRight(lt.PublicURL, "/"), token: lt.AccessToken}, nil, nil
+	c := &libClient{base: strings.TrimRight(lt.URL, "/"), public: strings.TrimRight(lt.PublicURL, "/"), token: lt.AccessToken}
+	if c.public != "" {
+		libPublic.Store(c.public)
+	}
+	return c, nil, nil
 }
 
 // libLinkReason says why Bookshelf can't reach Pocket Library for the person.
@@ -387,8 +396,8 @@ func (s *Server) libQuotes(ctx context.Context, c *libClient, uid int64, shelf *
 			continue
 		}
 		bookID, found := s.store.AudiobookLink(ctx, uid, libKey(a.BookID))
-		if !found {
-			continue // only books the link brought in (or matched)
+		if !found || bookID == 0 {
+			continue // only books the link brought in (or matched), not unlinked ones
 		}
 		page := ""
 		switch {
@@ -408,8 +417,8 @@ func (s *Server) libQuotes(ctx context.Context, c *libClient, uid int64, shelf *
 }
 
 // libBook finds the book on the person's shelves, or adds it as an ebook
-// with the cover from Pocket Library. ok is false when the person removed
-// the book it was linked to.
+// with the cover from Pocket Library (c may be nil: then without one). ok is
+// false when the person removed the book it was linked to, or unlinked it.
 func (s *Server) libBook(ctx context.Context, c *libClient, uid int64, info libBookInfo, status, startedOn string, shelf *[]store.Book) (bookID int64, added, ok bool) {
 	key := libKey(info.BookID)
 	if id, found := s.store.AudiobookLink(ctx, uid, key); found {
@@ -442,7 +451,7 @@ func (s *Server) libBook(ctx context.Context, c *libClient, uid int64, info libB
 	if info.Series != "" && info.SeriesIndex > 0 {
 		b.SeriesNo = strconv.FormatFloat(info.SeriesIndex, 'f', -1, 64)
 	}
-	if c.public != "" {
+	if c != nil && c.public != "" {
 		b.SourceURL = c.public + "/book/" + strconv.FormatInt(info.BookID, 10)
 	}
 	if err := s.store.CreateBook(ctx, b, startedOn, ""); err != nil {
@@ -450,7 +459,9 @@ func (s *Server) libBook(ctx context.Context, c *libClient, uid int64, info libB
 		return 0, false, false
 	}
 	_ = s.store.SetAudiobookLink(ctx, uid, key, b.ID)
-	if data, ct, err := c.cover(ctx, info.Cover); err == nil && len(data) > 0 {
+	if c == nil {
+		// no way to Pocket Library right now: the book comes without its cover
+	} else if data, ct, err := c.cover(ctx, info.Cover); err == nil && len(data) > 0 {
 		if err := s.writeCover(ctx, b, data, ct); err != nil {
 			s.log.Debug("library: cover", "title", info.Title, "err", err)
 		}

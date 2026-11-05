@@ -15,7 +15,8 @@ With Pocket Core on the box, another Pocket app can act for a person with a five
 | Scope | Name | Routes |
 |---|---|---|
 | (any link) | | `GET /auth/me` |
-| `books:read` | See your books | `GET /books` (all its filters), `GET /books/{id}` |
+| `books:read` | See your books | `GET /books` (all its filters), `GET /books/{id}`, `GET /reading/sessions`, `GET /library/links/{libID}` |
+| `books:write` | Update your books | `PUT` · `DELETE /library/links/{libID}`, `POST /library/links/{libID}/apply` |
 
 Anything else answers `403` ("this Pocket Core link does not cover …"). Links are switched on and off in Core → **Links** (box-wide) and **Settings → Apps acting for me** (per person).
 
@@ -69,6 +70,18 @@ A **read** is one time through a book; re-reading adds another. The status call 
 | `want` | Drops an open, unfinished read and puts the book at the end of the plan. Finished reads stay. |
 
 Stats count finished, not-abandoned reads by their finish date. A book marked read without a date (e.g. an import) counts all-time but in no year.
+
+## The same book in Pocket Library
+
+A book on the shelves can be linked to a book in Pocket Library (`library_book_id`, `library_url` on every book; 0 / "" when not linked). The reading sync makes the link when it matches or adds a book; these set it by hand or let Library update the book.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/library/links/{libID}` | `{linked: true, book: {id, title, authors, status, rating, url}}`, `{linked: false, unlinked: true}` after an unlink, else `{linked: false}` |
+| `PUT` | `/library/links/{libID}` | `{book_id}`: link that Library book to one of your books (replaces an earlier link or unlink) |
+| `DELETE` | `/library/links/{libID}` | Unlink: the sync never matches or adds that Library book again (until it is linked by hand) |
+| `POST` | `/library/links/{libID}/apply` | `{book: {title, authors[], isbn, pages, series, series_index, language, published, cover}, status?, day?, rating?}`: the linked book, else one matched by ISBN or title and author, else added as an ebook; then the status (a finished read once per day, which the sync won't add again) and the rating (0 clears, else 0.5–5). `409 {error: "unlinked"}` after an unlink |
+| `GET` | `/library/search?q=` | Books in your Pocket Library to link by hand (through Core's `library:read`): `[{id, title, authors, cover_url, series, series_index, language, url}]`. Not open to linked apps |
 
 ## Quotes
 

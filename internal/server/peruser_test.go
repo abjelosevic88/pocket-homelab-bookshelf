@@ -71,6 +71,15 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf", "user": user,
 				"app": map[string]any{"id": 4, "slug": "day", "name": "Pocket Day"}}
 		}
+		if in.Token == "pcx_bob_libwrite" || in.Token == "pcx_bob_libread" { // Pocket Library acting for Bob
+			scope := "books:read books:write"
+			if in.Token == "pcx_bob_libread" {
+				scope = "books:read"
+			}
+			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf",
+				"user": map[string]any{"id": 7, "email": "bob@example.com", "name": "Bob", "role": "member"},
+				"app":  map[string]any{"id": 5, "slug": "library", "name": "Pocket Library"}}
+		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
 	t.Cleanup(core.Close)

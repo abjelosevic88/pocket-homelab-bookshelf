@@ -17,6 +17,7 @@ import (
 
 var linkOffers = []core.Offer{
 	{Scope: "books:read", Name: "See your books", Description: "List your books, reading progress and finished dates."},
+	{Scope: "books:write", Name: "Update your books", Description: "Set a book's status and rating, add it to your shelves, and link it to the same book in another app."},
 }
 
 type linkRoute struct {
@@ -31,6 +32,10 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/books/\d+$`), "books:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/books/\d+/sessions$`), "books:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/reading/sessions$`), "books:read"},
+	// the same book in Pocket Library: which one it is here, and linking, unlinking and updating it
+	{"GET", regexp.MustCompile(`^/api/v1/library/links/\d+$`), "books:read"},
+	{"PUT DELETE", regexp.MustCompile(`^/api/v1/library/links/\d+$`), "books:write"},
+	{"POST", regexp.MustCompile(`^/api/v1/library/links/\d+/apply$`), "books:write"},
 }
 
 var errLinkScope = errors.New("outside the link's scope")

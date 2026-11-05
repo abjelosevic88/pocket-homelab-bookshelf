@@ -41,6 +41,7 @@ func (s *Server) handleListBooks(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "list books")
 		return
 	}
+	s.withLibraryLinks(r.Context(), f.UserID, books)
 	writeJSON(w, http.StatusOK, books)
 }
 
@@ -59,6 +60,14 @@ func (s *Server) handleGetBook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, err, "list quotes")
 		return
+	}
+	if libID, ok := s.store.LibraryBookOf(r.Context(), b.UserID, b.ID); ok {
+		if libPublicURL() == "" {
+			if u := userFrom(r.Context()); u != nil {
+				s.learnLibraryURL(r.Context(), u.Email)
+			}
+		}
+		b.LibraryBookID, b.LibraryURL = libID, libraryURLFor(b, libID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"book": b, "reads": reads, "quotes": quotes})
 }
