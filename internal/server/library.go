@@ -373,6 +373,9 @@ func (s *Server) syncLibrary(ctx context.Context, uid int64, email string) libSt
 		}
 	}
 	st.Quotes = s.libQuotes(ctx, c, uid, &shelf)
+	if st.Added > 0 {
+		s.kickAuthors() // new books: their authors, characters, summary and cover now, not at the next round
+	}
 	if feed.Now != "" {
 		_ = s.store.PutUserKey(ctx, uid, "library_since", feed.Now)
 	}

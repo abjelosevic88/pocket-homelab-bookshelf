@@ -217,6 +217,9 @@ func (s *Server) handleLibraryLinkApply(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "unlinked"})
 		return
 	}
+	if added {
+		s.kickAuthors()
+	}
 	if in.Status != "" {
 		if err := s.applyLibraryStatus(ctx, u, uid, bookID, key, in.Status, in.Day, added); err != nil {
 			s.fail(w, err, "apply status")
