@@ -66,6 +66,7 @@ export default function Book() {
           {b.language && <><dt>Language</dt><dd>{b.language}</dd></>}
           {b.isbn13 && <><dt>ISBN</dt><dd className="mono">{b.isbn13}</dd></>}
           <dt>Added</dt><dd>{fmtDate(b.created_at.slice(0, 10))}</dd>
+          {b.library_book_id > 0 && b.library_url && <><dt>Library</dt><dd><a href={b.library_url} target="_blank" rel="noreferrer"><span className="icon-text">Open in Pocket Library<Icon name="external" size={12} /></span></a></dd></>}
           {b.source_url && <><dt>Source</dt><dd><a href={b.source_url} target="_blank" rel="noreferrer"><span className="icon-text">{b.source === 'google' ? 'Google Books' : b.source === 'library' ? 'Pocket Library' : 'Open Library'}<Icon name="external" size={12} /></span></a></dd></>}
         </dl>
         <GetItBox book={b} />
