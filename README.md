@@ -142,7 +142,7 @@ curl -H "Authorization: Bearer pb_…" https://bookshelf.example.com/api/v1/dash
 
 Everything else, including a Homepage `customapi` widget, is in [docs/api.md](docs/api.md).
 
-**App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Bookshelf offers `books:read` ("See your books": `GET /books`, `GET /books/{id}`); `GET /auth/me` answers any linked app. The token acts as that person and sees only their shelf; every other route answers 403. Pocket Day uses it for the day's reading. The link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
+**App links (Pocket Core):** another Pocket app the person allowed in Core can act for them here with a five-minute `pcx_` token. Bookshelf offers `books:read` ("See your books": `GET /books`, `GET /books/{id}`, which book is linked to a Pocket Library book) and `books:write` ("Update your books": set a book's status and rating, add it, link and unlink it — Pocket Library uses it so its status and stars land here); `GET /auth/me` answers any linked app. The token acts as that person and sees only their shelf; every other route answers 403. Pocket Day uses it for the day's reading. The link can be switched off in Core → **Links** (box-wide) or under **Settings → Apps acting for me** (per person).
 
 ## Audiobooks (Pocket Audiobooks)
 
@@ -152,6 +152,8 @@ With Pocket Core, Bookshelf uses Pocket Audiobooks' `listening:read` link (as yo
 ## Ebooks (Pocket Library)
 
 With Pocket Core, Bookshelf uses Pocket Library's `reading:read` link (as you) every ten minutes (or as often as you choose): an ebook you finish there — in its web reader, in KOReader or on a CrossPoint e-reader — becomes a read on the day you finished it; one you are reading goes on **Reading** and its page follows your place; your highlights and notes there become quotes. Books are matched by ISBN, else by title and author, or added as an *ebook* with its cover and a link back. Each finish, start and highlight is taken in once, and a book you remove is not added again. **Settings → Library** switches it off for you and has "Look now". The link starts off: turn on “Pocket Bookshelf → Pocket Library” in Core → Links.
+
+A book's page shows its twin in Pocket Library: **Open** it there, **Unlink** it (the sync then never matches or adds that Library book again), or, when the sync didn't find it, **Link…** and pick it from a search of your Library (`library:read`). Pocket Library can link books too, and set their status and rating here, through `books:write`.
 
 ## Get it (Pocket Requests)
 

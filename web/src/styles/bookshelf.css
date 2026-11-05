@@ -568,3 +568,17 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .also-get { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .also-get-btn { padding: 2px 8px; min-height: 0; }
 @media (max-width: 640px) { .author-get .rq-badges { display: none; } }
+
+/* the book page's "Pocket Library" box: the same book there, linked by hand (0.19) */
+@media (max-width: 900px) {
+  .book-side .lib-link { grid-column: 1 / -1; grid-row: 5; }
+}
+.lib-pick { display: grid; gap: 6px; }
+.lib-pick input { flex: 1; min-width: 0; height: 30px; font-size: 13px; }
+.lib-hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 280px; overflow-y: auto; }
+.lib-hit { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lib-hit:hover, .lib-hit:focus-visible { background: var(--hover, rgba(127,127,127,.12)); }
+.lib-hit img, .lib-hit-ph { width: 28px; height: 42px; flex-shrink: 0; border-radius: 3px; object-fit: cover; background: var(--border); }
+.lib-hit-text { display: grid; min-width: 0; }
+.lib-hit-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-hit-text .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -54,6 +54,8 @@ export interface Book {
   read_count: number
   quote_count: number
   reader_percent: number | null // latest position from an e-reader (0..1)
+  library_book_id: number // the same book in Pocket Library (0 = not linked)
+  library_url: string
   original_title: string
 }
 

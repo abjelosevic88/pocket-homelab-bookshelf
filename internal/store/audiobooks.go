@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
 )
 
 // AudiobookLink is the book on the person's shelves an audiobook was taken in
@@ -113,4 +115,41 @@ func (s *Store) UserKey(ctx context.Context, userID int64, key string) string {
 // PutUserKey saves one of a person's settings.
 func (s *Store) PutUserKey(ctx context.Context, userID int64, key, value string) error {
 	return s.putUserSettings(ctx, userID, map[string]string{key: value})
+}
+
+// LibraryBookOf is the Pocket Library book a book on the person's shelves is
+// linked to (the latest link when several editions point at it); found is
+// false when none is.
+func (s *Store) LibraryBookOf(ctx context.Context, userID, bookID int64) (libID int64, found bool) {
+	var item string
+	err := s.DB.QueryRowContext(ctx, `SELECT item_id FROM audiobook_links WHERE user_id = ? AND book_id = ? AND item_id LIKE 'library:%'
+		ORDER BY created_at DESC, item_id DESC LIMIT 1`, userID, bookID).Scan(&item)
+	if err != nil || bookID == 0 {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(strings.TrimPrefix(item, "library:"), 10, 64)
+	return id, err == nil && id > 0
+}
+
+// LibraryBooks maps each linked book on the person's shelves to its Pocket
+// Library book (tombstones left out).
+func (s *Store) LibraryBooks(ctx context.Context, userID int64) (map[int64]int64, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT item_id, book_id FROM audiobook_links WHERE user_id = ? AND book_id > 0 AND item_id LIKE 'library:%'
+		ORDER BY created_at, item_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int64{}
+	for rows.Next() {
+		var item string
+		var bookID int64
+		if err := rows.Scan(&item, &bookID); err != nil {
+			return nil, err
+		}
+		if id, err := strconv.ParseInt(strings.TrimPrefix(item, "library:"), 10, 64); err == nil && id > 0 {
+			out[bookID] = id // the latest link wins, as in LibraryBookOf
+		}
+	}
+	return out, rows.Err()
 }
