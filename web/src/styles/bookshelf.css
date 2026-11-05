@@ -415,7 +415,7 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .series-list li.missing b { color: var(--muted); font-weight: 600; }
 .series-open { all: unset; cursor: pointer; display: flex; gap: 12px; align-items: center; min-width: 0; }
 .series-open.grow { flex: 1; }
-.series-open:hover b { color: var(--accent-ink); text-decoration: underline; }
+.series-open:hover b { color: var(--accent-ink); }
 .series-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .series-list li.missing .cover { opacity: .85; }
 .next-no { width: 40px; height: 60px; border-radius: 4px; background: var(--surface-2); display: grid; place-items: center; font-weight: 700; color: var(--muted); flex-shrink: 0; }
