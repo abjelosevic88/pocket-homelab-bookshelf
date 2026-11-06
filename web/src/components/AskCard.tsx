@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, V1 } from '../lib/api'
 import type { Book } from '../lib/types'
-import { Card, useToast } from './ui'
+import { Card, useMediaQuery, useToast } from './ui'
 import { Icon } from './icons'
 import { Select } from './Select'
+import { CHAT_DESKTOP, openAppChat } from './AppChat'
 
 // "Ask about this book": ready questions that suit where the book stands (and
 // your own), each starting a Pocket AI chat about the book, which knows the
@@ -44,6 +45,12 @@ export function AskCard({ book }: { book: Book }) {
   const [open, setOpen] = useState<BookChat | null>(null)
   const [all, setAll] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
+  // on a computer a chat opens in the app's chat window (floating or as a sidebar); on a phone, full screen here
+  const desktop = useMediaQuery(CHAT_DESKTOP)
+  const show = (c: BookChat) => {
+    if (desktop) openAppChat(c.id, { title: chatName(c, book), sub: book.title })
+    else setOpen(c)
+  }
 
   const load = () => api.get<ChatsBox>(`${V1}/books/${book.id}/chats`).then(setBox).catch(() => {})
   useEffect(() => { setBox(null); setOpen(null); setText(''); load() }, [book.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,7 +72,7 @@ export function AskCard({ book }: { book: Book }) {
       const chat = await api.post<BookChat>(`${V1}/books/${book.id}/chats`, { text: q, name, model: model || box.model })
       setText(''); setStarter(null)
       setBox(b => b && { ...b, chats: [chat, ...b.chats.filter(c => c.id !== chat.id)] })
-      setOpen(chat)
+      show(chat)
     } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
   }
   const shown = all ? box.chats : box.chats.slice(0, 5)
@@ -99,7 +106,7 @@ export function AskCard({ book }: { book: Book }) {
         <ul className="mini-list ask-chats">
           {shown.map(c => (
             <li key={c.id} className={open?.id === c.id ? 'on' : ''}>
-              <button type="button" className="ask-chat" onClick={() => setOpen(c)}>
+              <button type="button" className="ask-chat" onClick={() => show(c)}>
                 <span className={`ask-dot ${c.status}`} aria-hidden />
                 <span className="grow">
                   <b>{chatName(c, book)}</b>
@@ -136,8 +143,7 @@ function ChatPanel({ chat, name, book, onClose, onStatus }: { chat: BookChat; na
     window.addEventListener('message', h)
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.modal-backdrop')) onClose() }
     window.addEventListener('keydown', k)
-    document.documentElement.classList.add('ask-panel-open')
-    return () => { window.removeEventListener('message', h); window.removeEventListener('keydown', k); document.documentElement.classList.remove('ask-panel-open') }
+    return () => { window.removeEventListener('message', h); window.removeEventListener('keydown', k) }
   }, [chat.id, origin]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <aside className="ask-panel" aria-label={`Pocket AI: ${name}`}>

@@ -222,6 +222,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/books/{id}/status", s.handleSetStatus)
 			r.Post("/books/{id}/progress", s.handleProgress)
 			r.Get("/books/{id}/notes", s.handleBookNotes)
+			r.Get("/ai", s.handleAIInfo)
 			r.Get("/books/{id}/chats", s.handleBookChats)
 			r.Post("/books/{id}/chats", s.handleStartBookChat)
 			r.Get("/books/{id}/requests", s.handleBookRequests)
