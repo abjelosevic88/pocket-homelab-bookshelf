@@ -76,6 +76,7 @@ Goodreads is a social network, and StoryGraph is too. This is just your notebook
 | **Quotes** | Text, page or location, your note. Searchable, with a random one on the home page and the Quotes page. |
 | **Plan** | Want-to-read queue: reorder, plan for a month (overdue months are flagged), note why you want to read it or who recommended it, start reading with one tap. Yearly goal with pace (“3 behind schedule”). |
 | **Authors** | Created from your books automatically, then filled in from Open Library in the background: short biography (Wikipedia summary when linked), birth/death, photo. Per author: books read, reading, planned, average rating, pages; your books; their full bibliography (English titles where an English edition exists) with one-tap *Want* / *Read it*. Find and follow new authors, edit name (renames it on every book, merges duplicates), bio, dates and photo, re-link to the right Open Library author. |
+| **Ask about a book** | Every book gets its own Pocket AI chats (with Pocket Core): tap a ready question that suits where the book stands — *Recap so far*, *Who's who*, *Discuss the ending*, *Read next*… (yours to edit under Settings → Templates) — or ask your own. Pocket AI gets the book, your page (so it keeps what comes after it to itself), your thoughts and quotes. The book's chats are listed on its page and open beside it. See [Ask about a book](#ask-about-a-book-pocket-ai). |
 | **Characters** | Every novel's characters with a short, spoiler-free note on each, in each of your preferred languages (switch on the book page). Written in the background with your OpenAI key (Settings → AI), or without one by `scripts/characters.py` using `claude -p` / `codex exec`. See [Characters](#characters). |
 | **Stats** | Per year: books, pages, average rating, books per month, rating distribution, top authors and tags, formats, longest book, the finished list. All-time totals. |
 | **Metadata** | Open Library and Google Books, searched in parallel, deduplicated by ISBN. ISBN queries pin the exact edition. Covers are downloaded and stored locally, and any book can re-fetch details and cover later. See [docs/metadata.md](docs/metadata.md). |
@@ -162,6 +163,12 @@ With Pocket Core, a book's page has a **Get it** box: for the ebook and the audi
 - **Languages**: the ebook can be asked for in any language you read or in one of them (Serbian, English…); each language is its own request, and the box lists them per language.
 - **Authors**: an author's page marks each of their books — on your shelf and in “Other books” — as *Ebook here* / *Audiobook here* (opens it) or with the request's state, and has a Get menu on each. Books Pocket Requests knows by them that aren't in either list come in a “More by … in Pocket Requests” card.
 - **+ Want**: adding a book to Want to read offers “Also get it? Ebook · Audiobook”. Or choose in Settings → Requests to ask for the ebook, the audiobook or both every time — done by the server, so it also works for books added through the API. Nothing is ever asked while the link is off; “already asked” or “already here” counts as done.
+
+## Ask about a book (Pocket AI)
+
+With Pocket Core and Pocket AI, a book's page has **Ask about this book**: ready questions for where the book stands (reading: recap so far, who's who; finished: the ending, themes, what to read next; want to read: is it for me?) and a box for your own. Each starts a Pocket AI Ask chat about the book — Claude with your Pocket tools — that knows the book, where you are in it, your thoughts and your quotes, and won't spoil what comes after your page. The book's chats stay listed on its page and open in a panel beside it.
+
+Turn on the link once in Pocket Core: Links → *Pocket Bookshelf → Pocket AI* (“Start chats about your items”), and Ask must be connected in Pocket AI. Edit the questions and pick the model under Settings → Templates. API: `GET`/`POST /api/v1/books/{id}/chats` ([docs/api.md](docs/api.md)).
 
 ## Reader sync (KOReader, CrossPoint)
 

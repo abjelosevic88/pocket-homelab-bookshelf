@@ -20,6 +20,7 @@ import { Icon } from '../components/icons'
 import { useCrumb } from '../components/Layout'
 import { GetItBox } from '../components/GetIt'
 import { LibraryLinkBox } from '../components/LibraryLink'
+import { AskCard } from '../components/AskCard'
 
 interface Detail { book: BookT; reads: Read[]; quotes: Quote[] }
 
@@ -98,6 +99,7 @@ export default function Book() {
         )}
         {b.status === 'reading' && <ProgressCard book={b} onSaved={setBook} onFinish={() => setFinishing('read')} />}
         {b.status === 'want' && <PlanCard book={b} onSave={patch} onStart={() => changeStatus('reading')} />}
+        <AskCard book={b} />
         <AboutCard bookId={b.id} description={b.description} />
 
         <ReviewCard book={b} onSave={review => patch({ review }, 'Thoughts saved')} />

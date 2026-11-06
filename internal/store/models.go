@@ -123,7 +123,34 @@ type Settings struct {
 	Languages string `json:"languages"`
 	// Templates for "My thoughts": section headings to start from.
 	ThoughtTemplates []ThoughtTemplate `json:"thought_templates"`
-	SetupComplete    bool              `json:"setup_complete"`
+	// Ready questions for "Ask about this book", and the Pocket AI model its chats use.
+	AskStarters   []AskStarter `json:"ask_starters"`
+	AskModel      string       `json:"ask_model"` // sonnet | opus | haiku
+	SetupComplete bool         `json:"setup_complete"`
+}
+
+// AskStarter is a ready question for a book's Pocket AI chat. Text may use
+// {title} {author} {page} {pages} {percent}; When limits it to books with
+// these statuses ("reading,abandoned"; "" or "any" = every book).
+type AskStarter struct {
+	Label string `json:"label"`
+	Text  string `json:"text"`
+	When  string `json:"when"`
+}
+
+// DefaultAskStarters are offered until the person edits their own.
+var DefaultAskStarters = []AskStarter{
+	{Label: "Recap so far", When: "reading,abandoned", Text: "Give me a recap of the story up to page {page}: what happened, who matters and what is at stake. Nothing beyond that page."},
+	{Label: "Who's who", When: "reading,abandoned", Text: "Who are the characters I have met up to page {page}, and how are they connected? Nothing beyond that page."},
+	{Label: "Help me understand", When: "reading", Text: "I'm on page {page}. Help me understand what is going on right now and why it matters — no spoilers past this point."},
+	{Label: "What to watch for", When: "reading", Text: "Without spoilers: which themes, motifs or details should I keep an eye on for the rest of the book?"},
+	{Label: "Before I start", When: "want", Text: "What should I know before I start {title} — background, context, how to approach it? No spoilers."},
+	{Label: "Is it for me?", When: "want", Text: "Should I read {title} next? Look at what I have read and how I rated it, and tell me honestly whether it fits me."},
+	{Label: "Discuss the ending", When: "read", Text: "Let's talk about the ending of {title}. What happened, what did it mean, and how do readers interpret it?"},
+	{Label: "Challenge my thoughts", When: "read", Text: "Read my thoughts on {title} and push back: what did I miss, what would someone who disagrees with me say?"},
+	{Label: "Themes", When: "read", Text: "What are the big ideas of {title}, and how does {author} build them through the book?"},
+	{Label: "Read next", When: "read", Text: "Based on {title} and how I felt about it, what should I read next? Check my shelf first so you don't suggest what I already have or read."},
+	{Label: "About the author", When: "any", Text: "Tell me about {author}: their life, what shaped them, and where {title} sits in their work."},
 }
 
 // ThoughtTemplate is a named starting point for a book's thoughts

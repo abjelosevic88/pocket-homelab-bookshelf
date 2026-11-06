@@ -109,6 +109,17 @@ Authors are created from the books' `authors` strings and looked up on Open Libr
 | `GET` | `/authors/{id}/photos` | Pictures to choose from: `{"photos": [{url, thumb, source, label}]}` — Open Library photos, the Wikidata portrait, images from the Wikipedia article, other Open Library records with the name. Set one with `POST /authors/{id}/photo {"url"}`. |
 | `GET` · `POST` · `DELETE` | `/authors/{id}/photo` | Image / set (`multipart` field `photo`, or `{"url"}`) / remove. |
 
+## Ask about a book (Pocket AI)
+
+A book's own Pocket AI chats, through Pocket Core (Bookshelf → Pocket AI link, scope `chats:write`). Each chat knows the book, where the reader is in it (nothing past their page gets spoiled), their thoughts and quotes; it runs and is read in Pocket AI.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/books/{id}/chats` | `{available, missing?, reason?, chats: [{id, title, status, preview, model, url, created_at, updated_at}], starters: [{label, text}], model}`. `status` is `idle` / `running` / `waiting` / `error`; `url` opens the chat in Pocket AI (`?embed=1&links=1` for a frame or a web view). `starters` are your ready questions that suit the book's status, filled in. `missing` = no Pocket AI or Core here; otherwise `reason` says what to switch on. |
+| `POST` | `/books/{id}/chats` | `{"text", "name"?, "model"?: "sonnet" \| "opus" \| "haiku"}` → 201 the chat, already answering. `{page}` `{pages}` `{percent}` `{title}` `{author}` in the text are filled in; `name` (e.g. a starter's label) names the chat instead of the question. `409` with the reason when the link is off. |
+
+The ready questions and the model are personal settings: `ask_starters: [{label, text, when}]` (`when`: `want,reading,read,abandoned`, empty = every book) and `ask_model` in `GET`/`PUT /settings`.
+
 ## Characters
 
 One set per book and language: `{"status": "ok" | "none" | "unknown", "characters": [{"name", "role": "main" | "supporting", "description"}], "source", "updated_at"}`. `none` = no characters (non-fiction), `unknown` = the writer could not name them reliably. Written by `scripts/characters.py` (see the README).
@@ -158,7 +169,7 @@ A short spoiler-free "what it is about" paragraph per book and preferred languag
 | `GET` | `/auth/status` | `{needs_setup, auth_mode, authenticated, user, version, title}` |
 | `POST` | `/auth/setup` · `/auth/login` · `/auth/logout` | |
 | `GET` · `PUT` | `/auth/me` | Own profile, `{"name","email","current_password","new_password"}` |
-| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr", thought_templates: [{name, body}]}` (+ read-only `sources`, `google_books_env`). `title` is the box's and only admins change it; everything else is the caller's own. `google_books_env` (the `GOOGLE_BOOKS_API_KEY` fallback) applies to the owner only. |
+| `GET` · `PUT` | `/settings` | `{title, yearly_goal, landing, search_source, google_books_key, languages: "en,sr", thought_templates: [{name, body}], ask_starters: [{label, text, when}], ask_model}` (+ read-only `sources`, `google_books_env`). `title` is the box's and only admins change it; everything else is the caller's own. `google_books_env` (the `GOOGLE_BOOKS_API_KEY` fallback) applies to the owner only. |
 | `GET` | `/settings/system` | Version, paths, sizes, and the counts of your own shelf (`users` too for admins). |
 | `GET` · `POST` · `PUT` · `DELETE` | `/users`, `/users/{id}` | Admin only; a member's listing holds just their own account. |
 | `GET` · `POST` · `DELETE` | `/tokens` | Personal tokens. The plaintext is returned once on create. |
