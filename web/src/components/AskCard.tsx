@@ -3,6 +3,7 @@ import { api, V1 } from '../lib/api'
 import type { Book } from '../lib/types'
 import { Card, useToast } from './ui'
 import { Icon } from './icons'
+import { Select } from './Select'
 
 // "Ask about this book": ready questions that suit where the book stands (and
 // your own), each starting a Pocket AI chat about the book, which knows the
@@ -14,7 +15,7 @@ import { Icon } from './icons'
 export interface BookChat { id: string; title: string; status: string; preview: string; model: string; url: string; created_at: string; updated_at: string }
 interface ChatsBox { available: boolean; missing?: boolean; reason?: string; chats: BookChat[]; starters: { label: string; text: string }[]; model: string }
 
-const MODELS = [{ id: 'sonnet', label: 'Sonnet' }, { id: 'opus', label: 'Opus' }, { id: 'haiku', label: 'Haiku' }]
+const MODELS = [{ value: 'sonnet', label: 'Sonnet', hint: 'balanced' }, { value: 'opus', label: 'Opus', hint: 'deepest' }, { value: 'haiku', label: 'Haiku', hint: 'fastest' }]
 const STATUS: Record<string, string> = { running: 'Answering…', waiting: 'Needs you', error: 'Stopped with an error', idle: '' }
 
 /** The chat's name without the book's ("Dune · Who is Stilgar?" → "Who is Stilgar?"). */
@@ -88,9 +89,7 @@ export function AskCard({ book }: { book: Book }) {
         <textarea ref={input} rows={text.length > 90 ? 3 : 2} value={text} onChange={e => setText(e.target.value)} placeholder={`Ask anything about ${book.title}…`}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey) && !e.nativeEvent.isComposing) { e.preventDefault(); ask() } }} />
         <div className="ask-box-bar">
-          <select value={model || box.model} onChange={e => setModel(e.target.value)} aria-label="Model" className="ask-model">
-            {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
+          <Select value={model || box.model} onChange={setModel} options={MODELS} ariaLabel="Model" className="ask-model" />
           <span className="muted small grow">Enter to ask · Shift+Enter for a new line</span>
           <button className="btn primary sm" disabled={!text.trim() || busy}>{busy ? 'Starting…' : <><Icon name="sparkles" size={14} />Ask</>}</button>
         </div>

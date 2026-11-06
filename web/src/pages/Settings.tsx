@@ -736,9 +736,8 @@ function AskStarters({ list, set, model, setModel }: { list: AskStarter[]; set: 
     <Section title="Questions for Pocket AI" icon="sparkles" actions={<button type="button" className="btn sm" onClick={() => set([...list, { label: 'New question', text: '', when: '' }])}><Icon name="plus" size={14} />Add question</button>}
       sub={<>A book’s page offers these under <b>Ask about this book</b>, ready to send to Pocket AI, which also gets the book, where you are in it, your thoughts and quotes. Use <code>{'{title}'}</code> <code>{'{author}'}</code> <code>{'{page}'}</code> <code>{'{pages}'}</code> <code>{'{percent}'}</code> for the book’s details. Pick the books a question suits; none picked means every book.</>}>
       <div className="row mb-sm"><span className="muted small">Model for new chats</span>
-        <select value={model} onChange={e => setModel(e.target.value as SettingsT['ask_model'])} style={{ width: 'auto' }} aria-label="Model for new chats">
-          <option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option>
-        </select>
+        <Select value={model} onChange={v => setModel(v as SettingsT['ask_model'])} ariaLabel="Model for new chats" className="ask-model"
+          options={[{ value: 'sonnet', label: 'Sonnet', hint: 'balanced' }, { value: 'opus', label: 'Opus', hint: 'deepest' }, { value: 'haiku', label: 'Haiku', hint: 'fastest' }]} />
       </div>
       {list.length === 0 && <p className="muted">No questions. Add one above.</p>}
       <div className="grid" style={{ gap: 14 }}>
