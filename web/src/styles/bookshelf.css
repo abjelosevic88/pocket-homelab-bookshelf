@@ -592,7 +592,8 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .ask-box textarea { display: block; width: 100%; border: 0; background: transparent; resize: vertical; min-height: 52px; padding: 10px 12px 4px; font: inherit; color: var(--text); box-shadow: none; outline: none; }
 .ask-box-bar { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px 8px; }
 .ask-box-bar .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ask-model { width: auto; height: 28px; padding: 0 24px 0 8px; font-size: 12.5px; border-radius: 999px; }
+.sel.ask-model { width: 150px; flex: none; }
+.sel.ask-model .sel-btn { height: 30px; font-size: 13px; }
 .ask-sub { display: flex; align-items: center; gap: 8px; margin: 16px 0 2px; font-size: 13px; font-weight: 650; color: var(--text-2); }
 .ask-chats li { padding: 0; }
 .ask-chat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 6px; border: 0; background: none; text-align: left; font: inherit; color: var(--text); cursor: pointer; border-radius: 8px; }
