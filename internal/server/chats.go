@@ -335,3 +335,30 @@ func fillStarter(text string, b *store.Book) string {
 	}
 	return strings.NewReplacer("{title}", b.Title, "{author}", b.Authors, "{page}", page, "{pages}", pages, "{percent}", pct).Replace(text)
 }
+
+// GET /api/v1/ai → {"url"}: Pocket AI's public address for the app's chat
+// window ("" without Core or Pocket AI). Cached a minute.
+func (s *Server) handleAIInfo(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"url": s.aiPublicURL(r.Context())})
+}
+
+func (s *Server) aiPublicURL(ctx context.Context) string {
+	if !s.core.Configured() {
+		return ""
+	}
+	const key = "ai#public"
+	s.coreMu.Lock()
+	if r, ok := s.resolved[key]; ok && time.Since(r.at) < time.Minute {
+		s.coreMu.Unlock()
+		return r.url
+	}
+	s.coreMu.Unlock()
+	u := ""
+	if res, err := s.core.Resolve(ctx, "ai"); err == nil && res.Status != "missing" {
+		u = strings.TrimRight(res.PublicURL, "/")
+	}
+	s.coreMu.Lock()
+	s.resolved[key] = resolvedURL{url: u, at: time.Now()}
+	s.coreMu.Unlock()
+	return u
+}

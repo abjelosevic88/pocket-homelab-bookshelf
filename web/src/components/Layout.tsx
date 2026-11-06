@@ -5,6 +5,7 @@ import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Book } from '../lib/types'
 import { Icon } from './icons'
+import { AppChat } from './AppChat'
 import { Sidebar } from './Sidebar'
 import { CommandPalette, type PaletteCommand } from './CommandPalette'
 import { ShortcutsSheet } from './ShortcutsSheet'
@@ -120,6 +121,7 @@ export default function Layout() {
           <TopBar onMenu={toggleSidebar} onPalette={() => setPalette(true)} mobile={mobile} compact={narrow} sidebarOpen={sidebarOpen} crumb={crumb} />
           <main className="content"><div className="content-inner"><ErrorBoundary key={loc.pathname} where="page"><Outlet /></ErrorBoundary></div></main>
         </div>
+        <AppChat />
         {mobile && <button type="button" className="fab" aria-label="Add a book" title="Add a book" onClick={() => act({ kind: 'add' })}><Icon name="plus" size={26} strokeWidth={2} /></button>}
         {palette && <CommandPalette onClose={() => setPalette(false)} commands={commands} />}
         {shortcuts && <ShortcutsSheet onClose={() => setShortcuts(false)} />}
