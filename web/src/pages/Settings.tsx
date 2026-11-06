@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Book, KosyncDocument, KosyncEvent, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, User } from '../lib/types'
+import type { APIToken, Book, KosyncDocument, KosyncEvent, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, AskStarter, User } from '../lib/types'
 import { Avatar, Confirm, CopyField, Field, MenuButton, type MenuItem, Loading, Modal, NeedsCore, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
 import { KindleImport } from '../components/KindleImport'
@@ -18,7 +18,7 @@ type TabId = 'general' | 'metadata' | 'templates' | 'daily' | 'ai' | 'reader' | 
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', sub: 'Your yearly goal and start page, and the app title.' },
   { id: 'metadata', label: 'Book search', icon: 'search', sub: 'Where book details and covers come from, and which languages come first.' },
-  { id: 'templates', label: 'Templates', icon: 'text', sub: 'Starting points for “My thoughts” on a book.' },
+  { id: 'templates', label: 'Templates', icon: 'text', sub: 'Starting points for “My thoughts” on a book, and questions to ask Pocket AI about it.' },
   { id: 'daily', label: 'Daily highlights', icon: 'sun', sub: 'A few of your highlights every morning — and whether they are sent to your phone.' },
   { id: 'ai', label: 'AI', icon: 'sparkles', sub: 'Pocket AI or OpenAI, for the characters of the novels on your shelf.' },
   { id: 'reader', label: 'Reader sync', icon: 'refresh', sub: 'Reading progress from KOReader, CrossPoint and other e-readers that speak KOSync.' },
@@ -717,8 +717,45 @@ function Templates() {
           ))}
         </div>
       </Section>
+      <AskStarters list={f.ask_starters || []} set={l => setF({ ...f, ask_starters: l })} model={f.ask_model || 'sonnet'} setModel={m => setF({ ...f, ask_model: m })} />
       <div className="row"><button type="button" className="btn primary" onClick={save} disabled={busy}>Save templates</button></div>
     </div>
+  )
+}
+
+const ASK_WHEN: { id: string; label: string }[] = [{ id: 'want', label: 'Want to read' }, { id: 'reading', label: 'Reading' }, { id: 'read', label: 'Read' }, { id: 'abandoned', label: 'Stopped' }]
+
+/** Ready questions for "Ask about this book", each for books that stand where it fits. */
+function AskStarters({ list, set, model, setModel }: { list: AskStarter[]; set: (l: AskStarter[]) => void; model: string; setModel: (m: SettingsT['ask_model']) => void }) {
+  const upd = (i: number, t: Partial<AskStarter>) => set(list.map((x, j) => j === i ? { ...x, ...t } : x))
+  const toggle = (i: number, w: string) => {
+    const cur = list[i].when.split(',').filter(Boolean)
+    upd(i, { when: (cur.includes(w) ? cur.filter(x => x !== w) : [...cur, w]).join(',') })
+  }
+  return (
+    <Section title="Questions for Pocket AI" icon="sparkles" actions={<button type="button" className="btn sm" onClick={() => set([...list, { label: 'New question', text: '', when: '' }])}><Icon name="plus" size={14} />Add question</button>}
+      sub={<>A book’s page offers these under <b>Ask about this book</b>, ready to send to Pocket AI, which also gets the book, where you are in it, your thoughts and quotes. Use <code>{'{title}'}</code> <code>{'{author}'}</code> <code>{'{page}'}</code> <code>{'{pages}'}</code> <code>{'{percent}'}</code> for the book’s details. Pick the books a question suits; none picked means every book.</>}>
+      <div className="row mb-sm"><span className="muted small">Model for new chats</span>
+        <select value={model} onChange={e => setModel(e.target.value as SettingsT['ask_model'])} style={{ width: 'auto' }} aria-label="Model for new chats">
+          <option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option>
+        </select>
+      </div>
+      {list.length === 0 && <p className="muted">No questions. Add one above.</p>}
+      <div className="grid" style={{ gap: 14 }}>
+        {list.map((t, i) => (
+          <div key={i} className="template-edit">
+            <div className="row wrap">
+              <input value={t.label} onChange={e => upd(i, { label: e.target.value })} placeholder="Label (e.g. Recap so far)" style={{ maxWidth: 240 }} aria-label="Question label" />
+              <span className="chips">{ASK_WHEN.map(w => <button key={w.id} type="button" className={`chip sm ${t.when.split(',').includes(w.id) ? 'active' : ''}`} onClick={() => toggle(i, w.id)}>{w.label}</button>)}</span>
+              <span className="spacer" />
+              {i > 0 && <button type="button" className="btn ghost sm icon-only" onClick={() => { const l = [...list]; [l[i - 1], l[i]] = [l[i], l[i - 1]]; set(l) }} title="Move up" aria-label="Move up"><Icon name="arrow-up" size={15} /></button>}
+              <button type="button" className="btn ghost sm danger-text" onClick={() => set(list.filter((_, j) => j !== i))}><Icon name="trash" size={14} />Delete</button>
+            </div>
+            <textarea rows={2} value={t.text} onChange={e => upd(i, { text: e.target.value })} placeholder="The question, e.g. Give me a recap up to page {page}, nothing beyond it." aria-label="Question" />
+          </div>
+        ))}
+      </div>
+    </Section>
   )
 }
 

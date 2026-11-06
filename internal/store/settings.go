@@ -16,7 +16,7 @@ const DefaultTitle = "Pocket Bookshelf"
 // GetSettings loads the box settings plus the preferences of userID, with
 // defaults applied. userID 0 gives the box settings with default preferences.
 func (s *Store) GetSettings(ctx context.Context, userID int64) (Settings, error) {
-	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all", Languages: "en", ThoughtTemplates: DefaultThoughtTemplates}
+	st := Settings{Title: DefaultTitle, Landing: "now", SearchSource: "all", Languages: "en", ThoughtTemplates: DefaultThoughtTemplates, AskStarters: DefaultAskStarters, AskModel: "sonnet"}
 	rows, err := s.DB.QueryContext(ctx, `SELECT key, value FROM settings WHERE key IN ('title', 'setup_complete')
 		UNION ALL SELECT key, value FROM user_settings WHERE user_id = ?`, userID)
 	if err != nil {
@@ -54,6 +54,15 @@ func (s *Store) GetSettings(ctx context.Context, userID int64) (Settings, error)
 			if json.Unmarshal([]byte(v), &t) == nil {
 				st.ThoughtTemplates = t
 			}
+		case "ask_starters":
+			var t []AskStarter
+			if json.Unmarshal([]byte(v), &t) == nil {
+				st.AskStarters = t
+			}
+		case "ask_model":
+			if v == "sonnet" || v == "opus" || v == "haiku" {
+				st.AskModel = v
+			}
 		case "setup_complete":
 			st.SetupComplete = v == "1"
 		}
@@ -64,8 +73,11 @@ func (s *Store) GetSettings(ctx context.Context, userID int64) (Settings, error)
 // SaveSettings stores the personal preferences of userID (not the box title).
 func (s *Store) SaveSettings(ctx context.Context, userID int64, st Settings) error {
 	tpl, _ := json.Marshal(st.ThoughtTemplates)
+	starters, _ := json.Marshal(st.AskStarters)
 	return s.putUserSettings(ctx, userID, map[string]string{
 		"thought_templates": string(tpl),
+		"ask_starters":      string(starters),
+		"ask_model":         st.AskModel,
 		"yearly_goal":       strconv.Itoa(st.YearlyGoal),
 		"landing":           st.Landing,
 		"search_source":     st.SearchSource,

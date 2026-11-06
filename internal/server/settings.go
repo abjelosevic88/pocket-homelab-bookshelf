@@ -35,6 +35,7 @@ func (s *Server) publicSettings(ctx context.Context, uid int64, st store.Setting
 		"google_books_key": st.GoogleBooksKey, "google_books_env": s.cfg.GoogleBooksKey != "" && s.isOwner(ctx, uid),
 		"sources":   s.metaFor(ctx, uid).Sources(),
 		"languages": st.Languages, "thought_templates": st.ThoughtTemplates,
+		"ask_starters": st.AskStarters, "ask_model": st.AskModel,
 		"setup_complete": st.SetupComplete,
 	}
 }
@@ -81,6 +82,27 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	in.ThoughtTemplates = tpls
+	if in.AskStarters == nil {
+		in.AskStarters = cur.AskStarters
+	}
+	var starters []store.AskStarter
+	for _, a := range in.AskStarters {
+		a.Label, a.Text = strings.TrimSpace(a.Label), strings.TrimSpace(a.Text)
+		var when []string
+		for _, w := range strings.Split(strings.ToLower(a.When), ",") {
+			if w = strings.TrimSpace(w); (w == "want" || w == "reading" || w == "read" || w == "abandoned") && !slices.Contains(when, w) {
+				when = append(when, w)
+			}
+		}
+		a.When = strings.Join(when, ",")
+		if a.Label != "" && a.Text != "" && len(starters) < 24 && len(a.Text) < 4000 {
+			starters = append(starters, a)
+		}
+	}
+	in.AskStarters = starters
+	if in.AskModel != "opus" && in.AskModel != "haiku" && in.AskModel != "sonnet" {
+		in.AskModel = cur.AskModel
+	}
 	in.SetupComplete = cur.SetupComplete
 	if u := userFrom(r.Context()); u == nil || u.Role != "admin" {
 		in.Title = cur.Title // the title is the box's: only admins change it

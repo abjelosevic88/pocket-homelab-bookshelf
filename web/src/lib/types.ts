@@ -95,9 +95,13 @@ export interface Settings {
   sources: string[]
   languages: string
   thought_templates: ThoughtTemplate[]
+  ask_starters: AskStarter[]
+  ask_model: 'sonnet' | 'opus' | 'haiku'
 }
 
 export interface ThoughtTemplate { name: string; body: string }
+/** A ready question for "Ask about this book"; when = the statuses it suits ("" = every book). */
+export interface AskStarter { label: string; text: string; when: string }
 
 export interface BookLine { id: number; title: string; authors: string; rating?: number; pages?: number; progress?: number; date?: string }
 export interface TagCount { name: string; count: number }

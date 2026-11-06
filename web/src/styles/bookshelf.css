@@ -582,3 +582,44 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .lib-hit-text { display: grid; min-width: 0; }
 .lib-hit-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-hit-text .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Ask about this book: starters, the question box, the book's chats, and Pocket AI in a panel beside the page */
+.ask-card .card-head h2 .icon { color: var(--accent); }
+.ask-starters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ask-starters .chip:hover { border-color: var(--accent); color: var(--accent-ink); }
+.ask-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); transition: border-color .15s, box-shadow .15s; }
+.ask-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ask-box textarea { display: block; width: 100%; border: 0; background: transparent; resize: vertical; min-height: 52px; padding: 10px 12px 4px; font: inherit; color: var(--text); box-shadow: none; outline: none; }
+.ask-box-bar { display: flex; align-items: center; gap: 8px; padding: 4px 6px 6px 8px; }
+.ask-box-bar .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-model { width: auto; height: 28px; padding: 0 24px 0 8px; font-size: 12.5px; border-radius: 999px; }
+.ask-sub { display: flex; align-items: center; gap: 8px; margin: 16px 0 2px; font-size: 13px; font-weight: 650; color: var(--text-2); }
+.ask-chats li { padding: 0; }
+.ask-chat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 6px; border: 0; background: none; text-align: left; font: inherit; color: var(--text); cursor: pointer; border-radius: 8px; }
+.ask-chat:hover, .ask-chats li.on .ask-chat { background: var(--surface-2); }
+.ask-chat .grow { display: flex; flex-direction: column; gap: 2px; }
+.ask-chat .nowrap { white-space: nowrap; }
+.ask-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+.ask-dot.running { background: var(--accent); animation: ask-pulse 1.2s ease-in-out infinite; }
+.ask-dot.waiting { background: var(--warning); }
+.ask-dot.error { background: var(--danger); }
+@keyframes ask-pulse { 50% { opacity: .35; } }
+.ask-card.off .card-body { opacity: .75; }
+
+.ask-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); z-index: 60; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); animation: ask-in .18s ease-out; }
+.ask-panel-head { display: flex; align-items: center; gap: 4px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--border); }
+.ask-panel-title { display: flex; flex-direction: column; min-width: 0; }
+.ask-panel-title > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-panel iframe { flex: 1; width: 100%; border: 0; background: var(--bg, var(--surface)); }
+@keyframes ask-in { from { transform: translateX(24px); opacity: 0; } }
+/* wide screens: the page makes room for the panel instead of sitting under it */
+@media (min-width: 1280px) { html.ask-panel-open .main { margin-right: 480px; } }
+/* …and while it is there, the book page takes its narrow, one-column form (as under 900px) until there is room for both columns */
+@media (min-width: 1280px) and (max-width: 1720px) {
+  html.ask-panel-open .book-page { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  html.ask-panel-open .book-side { position: static; grid-template-columns: 120px 1fr; align-items: start; }
+  html.ask-panel-open .book-side .cover.lg { grid-row: span 3; }
+}
+.ask-chat b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 700px) { .ask-panel { width: 100vw; border-left: 0; padding-top: env(safe-area-inset-top); z-index: 250; } .ask-box-bar .muted { display: none; } }
+.ask-box-bar .btn.primary { margin-left: auto; }
