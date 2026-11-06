@@ -187,6 +187,8 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Get("/pocket-ask.js", s.core.AskWidget("bookshelf"))
+	r.Get("/app-signin", s.handleAppSignin)
+	r.Post("/app-signin", s.handleAppSigninAllow)
 	r.Get("/healthz", s.handleHealth)
 	r.Get("/readyz", s.handleReady)
 	r.Get("/api/health", s.handleHealth)
@@ -201,6 +203,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/auth/setup", s.handleSetup)
 		r.Get("/auth/status", s.handleAuthStatus)
 		r.Get("/auth/oidc/start", s.handleOIDCStart)
+		r.Post("/auth/app/exchange", s.handleAppExchange)
 		r.Get("/auth/oidc/callback", s.handleOIDCCallback)
 
 		r.Group(func(r chi.Router) {
