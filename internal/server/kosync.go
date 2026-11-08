@@ -349,7 +349,9 @@ func (s *Server) kosyncToBook(ctx context.Context, u *store.User, bookID int64, 
 	if b.Pages == 0 && d.PageCount > 0 {
 		b.Pages, changed = d.PageCount, true
 	}
-	if b.Pages > 0 {
+	// the page follows only the newest position: an older one from another
+	// device (or Pocket Library) does not move it back
+	if b.Pages > 0 && d.Timestamp >= b.ReaderSyncedAt {
 		if page := int(math.Round(pct * float64(b.Pages))); page != b.CurrentPage && page <= b.Pages {
 			b.CurrentPage, changed = page, true
 		}

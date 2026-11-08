@@ -115,6 +115,25 @@ func TestKosyncProtocol(t *testing.T) {
 		t.Fatalf("get: %d %v", code, out)
 	}
 
+	// A newer position from another way in (Pocket Library): the older
+	// document, applied again on the next pull, does not move the page back.
+	ctx := context.Background()
+	if err := h.s.store.AddProgressEvent(ctx, b.UserID, book, "library", "Kindle", 0.4, time.Now().Unix()+3600); err != nil {
+		t.Fatal(err)
+	}
+	b.CurrentPage = 200
+	if err := h.s.store.UpdateBook(ctx, &b); err != nil {
+		t.Fatal(err)
+	}
+	ana, _ := h.s.store.GetUser(ctx, b.UserID)
+	if err := h.s.applyKosync(ctx, ana, doc, ""); err != nil {
+		t.Fatal(err)
+	}
+	h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d", book), nil, &got)
+	if got.Book.CurrentPage != 200 || got.Book.ReaderDevice != "Kindle" {
+		t.Fatalf("older position moved the page: %d from %q", got.Book.CurrentPage, got.Book.ReaderDevice)
+	}
+
 	// A mirror that sends only the hash: kept, unmatched, linked by hand.
 	bare := "ffffffffffffffffffffffffffffffff"
 	if code, _ := kosync(t, base, "PUT", "/syncs/progress", "ana", key, map[string]any{"document": bare, "progress": "0.5", "percentage": 0.5, "device": "CrossPoint Sync"}); code != 200 {

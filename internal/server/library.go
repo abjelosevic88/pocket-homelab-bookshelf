@@ -369,7 +369,7 @@ func (s *Server) syncLibrary(ctx context.Context, uid int64, email string) libSt
 			s.log.Warn("library: progress event", "book", bookID, "err", err)
 		}
 		// the page follows the position, for books still being read here
-		if bk, err := s.store.GetBook(ctx, uid, bookID); err == nil && bk.Status == store.StatusReading {
+		if bk, err := s.store.GetBook(ctx, uid, bookID); err == nil && bk.Status == store.StatusReading && ts >= bk.ReaderSyncedAt {
 			pages := bk.Pages
 			if pages == 0 && b.Pages > 0 {
 				bk.Pages, pages = b.Pages, b.Pages
