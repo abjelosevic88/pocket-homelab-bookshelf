@@ -115,3 +115,100 @@ func TestReadingSessionsAreThePersonsOwn(t *testing.T) {
 		t.Errorf("link without books:read = %d, want 403", code)
 	}
 }
+
+// The reading log takes in every way reading comes in: Pocket Library's feed,
+// pages set by hand and listening in Pocket Audiobooks.
+func TestReadingLogEverySource(t *testing.T) {
+	h := newShelfHarness(t)
+	ctx := context.Background()
+	add := func(title string, pages int) int64 {
+		var c struct{ Book store.Book }
+		if code := h.json(h.anaTok, "POST", "/books", map[string]any{"title": title, "authors": "A", "status": "reading", "pages": pages}, &c); code != 201 {
+			t.Fatalf("create %s: %d", title, code)
+		}
+		return c.Book.ID
+	}
+	ebook, paper, audio := add("Library Book", 300), add("Paper Book", 400), add("Audio Book", 0)
+	now := time.Now().Unix()
+
+	// Pocket Library: two positions ten minutes apart
+	for _, e := range []struct {
+		pct float64
+		ts  int64
+	}{{0.20, now - 3000}, {0.25, now - 2400}} {
+		if err := h.st.AddProgressEvent(ctx, h.ana.ID, ebook, "library", "Kobo", e.pct, e.ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// by hand: 0 → 10 → 45, and a typo put right (450 → 45) counts nothing more
+	for _, p := range []int{10, 450, 45} {
+		if code := h.json(h.anaTok, "POST", fmt.Sprintf("/books/%d/progress", paper), map[string]any{"page": p}, nil); code != 200 {
+			t.Fatalf("progress %d: %d", p, code)
+		}
+	}
+	// Pocket Audiobooks: two sessions five minutes apart are one
+	if err := h.st.SetAudiobookLink(ctx, h.ana.ID, "li-a", audio); err != nil {
+		t.Fatal(err)
+	}
+	at := func(sec int64) string { return time.Unix(sec, 0).UTC().Format(time.RFC3339) }
+	today := time.Now().Format("2006-01-02")
+	if err := h.st.SaveListeningSessions(ctx, h.ana.ID, today, []store.ListeningSession{
+		{SessionID: "1", ItemID: "li-a", Day: today, StartedAt: at(now - 7200), UpdatedAt: at(now - 6000), Seconds: 1200, StartPos: 600, EndPos: 1800, Duration: 36000, Device: "iPhone"},
+		{SessionID: "2", ItemID: "li-a", Day: today, StartedAt: at(now - 5700), UpdatedAt: at(now - 4500), Seconds: 1200, StartPos: 1800, EndPos: 3000, Duration: 36000, Device: "iPhone"},
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var got struct {
+		Sessions []ReadingSession
+		Totals   SessionTotals
+	}
+	if code := h.json(h.anaTok, "GET", "/reading/sessions", nil, &got); code != 200 || len(got.Sessions) != 3 {
+		t.Fatalf("day = %d %+v", code, got)
+	}
+	by := map[string]ReadingSession{}
+	for _, s := range got.Sessions {
+		by[s.Source] = s
+	}
+	if l := by["library"]; l.Kind != "reading" || l.BookID != ebook || l.Pages != 15 || l.Minutes != 10 || l.Device != "Kobo" {
+		t.Errorf("library = %+v", l)
+	}
+	if m := by["manual"]; m.Kind != "logged" || m.BookID != paper || m.Pages != 45 || m.FromPage != 0 || m.ToPage != 45 || m.Minutes != 0 {
+		t.Errorf("by hand = %+v", m)
+	}
+	if a := by["audiobooks"]; a.Kind != "listening" || a.BookID != audio || a.Minutes != 40 || a.FromPos != 600 || a.ToPos != 3000 || a.Updates != 2 || a.To != 0.0833 {
+		t.Errorf("listening = %+v", a)
+	}
+	if got.Totals.ListeningMinutes != 40 || got.Totals.ReadingMinutes != 10 || got.Totals.Pages != 60 || got.Totals.PagesPerHour != 90 {
+		t.Errorf("totals = %+v", got.Totals)
+	}
+	// the book's own log
+	if code := h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d/sessions", audio), nil, &got); code != 200 || len(got.Sessions) != 1 || got.Sessions[0].Kind != "listening" {
+		t.Fatalf("audio book log = %d %+v", code, got)
+	}
+	// Stats and the day count all of it
+	var act Activity
+	if code := h.json(h.anaTok, "GET", "/reading/activity", nil, &act); code != 200 || act.Streak != 1 || act.Listen7 != 40 || act.Pages7 != 60 {
+		t.Errorf("activity = %d %+v", code, act)
+	}
+	var day struct {
+		PagesToday    int `json:"pages_today"`
+		ListenedToday int `json:"listened_today"`
+	}
+	if code := h.json(h.anaTok, "GET", "/reading/today", nil, &day); code != 200 || day.PagesToday != 60 || day.ListenedToday != 40 {
+		t.Errorf("today = %d %+v", code, day)
+	}
+	// a session forgotten in Pocket Audiobooks leaves the log
+	if err := h.st.SaveListeningSessions(ctx, h.ana.ID, today, []store.ListeningSession{
+		{SessionID: "2", ItemID: "li-a", Day: today, StartedAt: at(now - 5700), UpdatedAt: at(now - 4500), Seconds: 1200, StartPos: 1800, EndPos: 3000, Duration: 36000},
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+	if h.json(h.anaTok, "GET", fmt.Sprintf("/books/%d/sessions", audio), nil, &got); got.Totals.ListeningMinutes != 20 {
+		t.Errorf("after forgetting = %+v", got.Totals)
+	}
+	// Bob sees none of it
+	if code, body := h.do(h.bobTok, "GET", "/reading/sessions", nil); code != 200 || strings.Contains(string(body), "Audio Book") {
+		t.Errorf("bob = %d %s", code, body)
+	}
+}

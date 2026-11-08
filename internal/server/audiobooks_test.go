@@ -108,6 +108,14 @@ func TestAudiobooksSync(t *testing.T) {
 	if p, d := illPos(); p != 30 || d != 79502 {
 		t.Fatalf("Illborn position after first sync: %d of %d", p, d)
 	}
+	// and each listening session is in the reading log
+	var day struct {
+		Sessions []ReadingSession
+	}
+	h.json(h.anaTok, "GET", "/reading/sessions", nil, &day)
+	if len(day.Sessions) != 1 || day.Sessions[0].Title != "Illborn" || day.Sessions[0].Kind != "listening" || day.Sessions[0].Duration != 79502 {
+		t.Fatalf("listening log: %+v", day.Sessions)
+	}
 	illEnd = 5520
 
 	// again: nothing new, but Illborn is further along

@@ -46,9 +46,10 @@ type BookActivity struct {
 
 // ReadingDay is all the reading on one day.
 type ReadingDay struct {
-	Day   string `json:"day"`
-	Pages int    `json:"pages"`
-	Books int    `json:"books"`
+	Day           string `json:"day"`
+	Pages         int    `json:"pages"`
+	Books         int    `json:"books"`
+	ListenMinutes int    `json:"listen_minutes"` // audiobooks (filled by the API, not here)
 }
 
 // pagesOn counts a day's pages: the share of the book read times its page

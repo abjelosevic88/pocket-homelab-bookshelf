@@ -344,6 +344,7 @@ func (s *Server) handleProgress(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "get book")
 		return
 	}
+	fromPage := b.CurrentPage
 	switch {
 	case in.Page != nil:
 		b.CurrentPage = *in.Page
@@ -360,6 +361,12 @@ func (s *Server) handleProgress(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateBook(r.Context(), b); err != nil {
 		s.fail(w, err, "update book")
 		return
+	}
+	// the reading log: a page set by hand
+	if b.CurrentPage != fromPage {
+		if err := s.store.AddPageLog(r.Context(), b.UserID, b.ID, fromPage, b.CurrentPage, b.Pages, time.Now().Unix()); err != nil {
+			s.log.Warn("page log", "book", b.ID, "err", err)
+		}
 	}
 	if b.Status == store.StatusWant {
 		b, err = s.store.SetStatus(r.Context(), b.UserID, b.ID, store.StatusReading, "", s.bookStatusEvent(r.Context(), userFrom(r.Context()), ""))
