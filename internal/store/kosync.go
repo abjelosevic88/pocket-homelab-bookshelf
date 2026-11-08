@@ -234,6 +234,29 @@ func (s *Store) ListKosyncEvents(ctx context.Context, userID int64, document str
 	return out, rows.Err()
 }
 
+// ListBookKosyncEvents returns the updates of every document linked to a
+// book, newest first.
+func (s *Store) ListBookKosyncEvents(ctx context.Context, userID, bookID int64, limit int) ([]KosyncEvent, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT e.id, e.document, e.source, e.device, e.device_id, e.percentage, e.timestamp, e.body, e.received_at
+		FROM kosync_events e JOIN kosync_documents d ON d.user_id = e.user_id AND d.document = e.document
+		WHERE e.user_id = ? AND d.book_id = ? AND d.ignored = 0 AND e.source <> 'open' ORDER BY e.timestamp DESC, e.id DESC LIMIT ?`, userID, bookID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []KosyncEvent{}
+	for rows.Next() {
+		var e KosyncEvent
+		var body string
+		if err := rows.Scan(&e.ID, &e.Document, &e.Source, &e.Device, &e.DeviceID, &e.Percentage, &e.Timestamp, &body, &e.ReceivedAt); err != nil {
+			return nil, err
+		}
+		e.Body = json.RawMessage(body)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // KosyncPrefs are a person's reader sync choices and their CrossPoint Sync account.
 type KosyncPrefs struct {
 	UserID     int64  `json:"-"`

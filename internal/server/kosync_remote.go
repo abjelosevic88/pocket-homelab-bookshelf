@@ -430,3 +430,18 @@ func (s *Server) handleKosyncEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, ev)
 }
+
+// handleBookSyncs is every progress update e-readers sent for a book.
+func (s *Server) handleBookSyncs(w http.ResponseWriter, r *http.Request) {
+	b, err := s.store.GetBook(r.Context(), me(r), idParam(r, "id"))
+	if err != nil {
+		s.fail(w, err, "get book")
+		return
+	}
+	ev, err := s.store.ListBookKosyncEvents(r.Context(), b.UserID, b.ID, 1000)
+	if err != nil {
+		s.fail(w, err, "list book syncs")
+		return
+	}
+	writeJSON(w, http.StatusOK, ev)
+}

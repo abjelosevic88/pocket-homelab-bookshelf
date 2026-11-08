@@ -96,6 +96,16 @@ export function fmtMinutes(m: number): string {
   return r ? `${h} h ${r} min` : `${h} h`
 }
 
+/** Unix seconds → "today 20:05", "yesterday 20:05" or "5 Nov, 20:05". */
+export function fmtWhen(sec: number): string {
+  const d = new Date(sec * 1000)
+  const clock = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000)
+  if (days === 0) return `today ${clock}`
+  if (days === 1) return `yesterday ${clock}`
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) })}, ${clock}`
+}
+
 /** An RFC 3339 time → "20:05" in the browser's clock. */
 export function fmtClock(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })

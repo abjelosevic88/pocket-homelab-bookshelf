@@ -206,6 +206,7 @@ a.stat:hover { border-color: var(--border-strong); box-shadow: var(--shadow); te
 .reads li:last-child { border-bottom: 0; }
 .reads .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
 .reads .dot.open { background: var(--accent); } .reads .dot.ab { background: var(--muted); }
+.reads .dot.bad { background: var(--danger); }
 
 /* ---- quotes page ---- */
 .quote-list { display: grid; gap: 10px; }
@@ -519,6 +520,8 @@ details.callout-box[open] > summary::after { transform: rotate(90deg); }
 .session-day + .session-day { margin-top: 10px; }
 .session-date { text-transform: uppercase; letter-spacing: .04em; font-size: 11px; margin-bottom: 2px; }
 .session-log .reads li { display: block; padding: 8px 0; }
+.syncs .sync-when { min-width: 9.5em; color: var(--muted); }
+.reader-synced { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; }
 .session-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-bottom: 2px; }
 .session-time { font-variant-numeric: tabular-nums; color: var(--muted); }
 .reader-stats { margin-bottom: 16px; }
