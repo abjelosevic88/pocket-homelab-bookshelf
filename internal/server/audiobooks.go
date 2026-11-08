@@ -231,18 +231,11 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 		return st
 	}
 	// every session goes in the reading log (forgotten ones leave it, unless
-	// the window was too full to tell)
-	var listens []store.ListeningSession
-	for _, l := range hist.Items {
-		id := strconv.FormatInt(l.ID, 10)
-		if l.ID == 0 {
-			id = l.ItemID + "|" + l.Day + "|" + l.StartedAt
-		}
-		listens = append(listens, store.ListeningSession{SessionID: id, ItemID: l.ItemID, Day: l.Day, StartedAt: l.StartedAt, UpdatedAt: l.UpdatedAt,
-			Seconds: max(l.Seconds, 0), StartPos: max(l.StartPos, 0), EndPos: max(l.EndPos, 0), Duration: max(l.Duration, 0), Device: clip(l.Device, 100)})
-	}
-	if err := s.store.SaveListeningSessions(ctx, uid, from, listens, len(hist.Items) < 500); err != nil {
+	// the window was too full to tell); the first time, all of the history
+	if err := s.store.SaveListeningSessions(ctx, uid, from, abSessions(hist.Items), len(hist.Items) < 500); err != nil {
 		s.log.Warn("audiobooks: listening sessions", "err", err)
+	} else if s.store.UserKey(ctx, uid, "audiobooks_history_all") == "" {
+		s.abBackfill(ctx, c, uid)
 	}
 	firstDay := map[string]string{}
 	latest := map[string]abListen{}
@@ -327,6 +320,58 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 	}
 	return st
 }
+
+// abSessions turns Pocket Audiobooks' history into the reading log's sessions.
+func abSessions(items []abListen) []store.ListeningSession {
+	out := make([]store.ListeningSession, 0, len(items))
+	for _, l := range items {
+		id := strconv.FormatInt(l.ID, 10)
+		if l.ID == 0 {
+			id = l.ItemID + "|" + l.Day + "|" + l.StartedAt
+		}
+		out = append(out, store.ListeningSession{SessionID: id, ItemID: l.ItemID, Day: l.Day, StartedAt: l.StartedAt, UpdatedAt: l.UpdatedAt,
+			Seconds: max(l.Seconds, 0), StartPos: max(l.StartPos, 0), EndPos: max(l.EndPos, 0), Duration: max(l.Duration, 0), Device: abDevice(l.Device)})
+	}
+	return out
+}
+
+// abBackfill takes in the person's whole listening history once, page by page.
+func (s *Server) abBackfill(ctx context.Context, c *abClient, uid int64) {
+	const page = 500
+	for off := 0; off < 100*page; off += page {
+		var hist struct {
+			Items []abListen `json:"items"`
+		}
+		if err := c.get(ctx, "/api/v1/history", url.Values{"limit": {strconv.Itoa(page)}, "offset": {strconv.Itoa(off)}}, &hist); err != nil {
+			s.log.Warn("audiobooks: history", "err", err)
+			return // tried again next time
+		}
+		if err := s.store.SaveListeningSessions(ctx, uid, "", abSessions(hist.Items), false); err != nil {
+			s.log.Warn("audiobooks: listening sessions", "err", err)
+			return
+		}
+		if len(hist.Items) < page {
+			break
+		}
+	}
+	_ = s.store.PutUserKey(ctx, uid, "audiobooks_history_all", "done")
+}
+
+// abDevice is the device a session was played on, for people: Pocket
+// Audiobooks writes "client-id · Safari on iPhone"; the client ids go.
+func abDevice(d string) string {
+	var keep []string
+	for _, p := range strings.Split(d, "·") {
+		p = strings.TrimSpace(p)
+		if p == "" || abClientID.MatchString(p) {
+			continue
+		}
+		keep = append(keep, p)
+	}
+	return clip(strings.Join(keep, " · "), 100)
+}
+
+var abClientID = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)+$`)
 
 var (
 	abNonWord = regexp.MustCompile(`[^\p{L}\p{N}]+`)

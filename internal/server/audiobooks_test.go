@@ -150,3 +150,16 @@ func TestAudiobooksSync(t *testing.T) {
 		t.Fatalf("bob sees %d books", len(lib))
 	}
 }
+
+func TestAbDevice(t *testing.T) {
+	for in, want := range map[string]string{
+		"pocket-audiobooks-951b195cd56d · Safari on iPhone": "Safari on iPhone",
+		"homelab-app ·": "",
+		"pocket-audiobooks-c4215ff0728c · Pocket Launcher on Aleksandar’s MacBook": "Pocket Launcher on Aleksandar’s MacBook",
+		"iPhone": "iPhone",
+	} {
+		if got := abDevice(in); got != want {
+			t.Errorf("abDevice(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
