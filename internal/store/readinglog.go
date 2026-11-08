@@ -58,14 +58,14 @@ func (s *Store) SaveListeningSessions(ctx context.Context, userID int64, from st
 	return tx.Commit()
 }
 
-// ListeningSessions lists the person's listening sessions of audiobooks on
-// their shelves, oldest first; bookID 0 means every book.
+// ListeningSessions lists the person's listening sessions (half a minute or
+// more) of audiobooks on their shelves, oldest first; bookID 0 means every book.
 func (s *Store) ListeningSessions(ctx context.Context, userID, bookID int64) ([]ListeningSession, error) {
 	q := `SELECT l.session_id, l.item_id, l.day, l.started_at, l.updated_at, l.seconds, l.start_pos, l.end_pos, l.duration, l.device, b.id, b.title, b.authors
 		FROM listening_sessions l
 		JOIN audiobook_links a ON a.user_id = l.user_id AND a.item_id = l.item_id
 		JOIN books b ON b.id = a.book_id AND b.user_id = l.user_id
-		WHERE l.user_id = ? AND l.seconds > 0`
+		WHERE l.user_id = ? AND l.seconds >= 30` // a tap and stop is not a session
 	args := []any{userID}
 	if bookID > 0 {
 		q += ` AND b.id = ?`
