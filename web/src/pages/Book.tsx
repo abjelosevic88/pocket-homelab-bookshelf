@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
-import type { Book as BookT, Pace, Quote, Read, SessionLog, Status } from '../lib/types'
-import { daysBetween, fmtClock, fmtDate, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
+import type { Book as BookT, KosyncEvent, Pace, Quote, Read, SessionLog, Status } from '../lib/types'
+import { daysBetween, fmtClock, fmtDate, fmtWhen, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
@@ -107,6 +107,7 @@ export default function Book() {
         <CharactersCard bookId={b.id} />
         <QuotesCard book={b} quotes={data.quotes} onChanged={reload} />
         <ReadingLogCard book={b} />
+        <SyncsCard book={b} />
         <ReadsCard book={b} reads={data.reads} onChanged={reload} />
       </div>
 
@@ -148,7 +149,7 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
           {pace.days_left > 0 && <span>about <b>{pace.days_left}</b> {pace.days_left === 1 ? 'day' : 'days'} left <span className="muted">· {fmtDate(pace.finish_on)}</span></span>}
         </div>
       )}
-      {book.reader_percent != null && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from your e-reader · <Link to="/settings/reader">Reader sync</Link></p>}
+      {book.reader_percent != null && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from your e-reader{book.reader_synced_at > 0 && <> {fmtWhen(book.reader_synced_at)}{book.reader_device && ` · ${book.reader_device}`}</>} · <Link to="/settings/reader">Reader sync</Link></p>}
     </Card>
   )
 }
@@ -329,6 +330,37 @@ function ReadingLogCard({ book }: { book: BookT }) {
         ))}
       </div>
       {data.sessions.length > shown.length && <button type="button" className="btn ghost sm mt-sm" onClick={() => setAll(true)}>Show all {data.sessions.length}</button>}
+    </Card>
+  )
+}
+
+// SyncsCard is every progress update an e-reader sent for the book, newest
+// first, with how far each one moved.
+function SyncsCard({ book }: { book: BookT }) {
+  const { data } = useAsync(() => book.reader_percent != null ? api.get<KosyncEvent[]>(`${V1}/books/${book.id}/syncs`) : Promise.resolve([]), [book.id, book.reader_synced_at])
+  const [all, setAll] = useState(false)
+  if (!data || data.length === 0) return null
+  const shown = all ? data : data.slice(0, 15)
+  const page = (p: number) => book.pages > 0 ? Math.round(p * book.pages) : 0
+  return (
+    <Card className="mt" title="Every sync" sub={<>{data.length} {data.length === 1 ? 'update' : 'updates'} from your e-reader</>}>
+      <ul className="reads syncs">
+        {shown.map((e, i) => {
+          const prev = data[i + 1] // shown is the start of data
+          const moved = prev ? (book.pages > 0 ? page(e.percentage) - page(prev.percentage) : Math.round((e.percentage - prev.percentage) * 1000) / 10) : 0
+          return (
+            <li key={e.id}>
+              <span className="sync-when small">{fmtWhen(e.timestamp)}</span>
+              <span><b>{book.pages > 0 ? `p. ${page(e.percentage)}` : `${Math.round(e.percentage * 1000) / 10}%`}</b>
+                {book.pages > 0 && <span className="muted small"> · {Math.round(e.percentage * 1000) / 10}%</span>}
+                {moved > 0 && <span className="muted small"> · +{moved}{book.pages > 0 ? (moved === 1 ? ' page' : ' pages') : '%'}</span>}</span>
+              <span className="spacer" />
+              <span className="muted small" title={e.device_id}>{e.source === 'crosspoint' ? 'CrossPoint Sync' : e.device || 'device'}</span>
+            </li>
+          )
+        })}
+      </ul>
+      {data.length > shown.length && <button type="button" className="btn ghost sm mt-sm" onClick={() => setAll(true)}>Show all {data.length}</button>}
     </Card>
   )
 }
