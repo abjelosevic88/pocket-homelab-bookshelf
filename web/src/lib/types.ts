@@ -12,7 +12,8 @@ export interface ReadingSession { book_id: number; title: string; authors: strin
 export interface SessionTotals { sessions: number; minutes: number; pages: number; pages_per_hour: number }
 export interface SessionLog { sessions: ReadingSession[]; totals: SessionTotals; minutes_per_page: number }
 export interface ReaderActivity { days: { day: string; pages: number; books: number }[]; streak: number; longest_streak: number; reading_days_year: number; pages_7: number; pages_30: number; pages_year: number; connected: boolean }
-export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[]; prefs: KosyncPrefs }
+export interface KosyncContact { at: string; method: string; path: string; status: number; username: string; client: string }
+export interface KosyncState { url: string; account: KosyncAccount | null; documents: KosyncDocument[]; prefs: KosyncPrefs; contacts: KosyncContact[] }
 export interface APIToken { id: number; name: string; prefix: string; last_used_at: string | null; created_at: string }
 
 export type Status = 'want' | 'reading' | 'read' | 'abandoned'
@@ -54,6 +55,8 @@ export interface Book {
   read_count: number
   quote_count: number
   reader_percent: number | null // latest position from an e-reader (0..1)
+  reader_synced_at: number // when that position was synced (unix seconds), 0 = never
+  reader_device: string
   library_book_id: number // the same book in Pocket Library (0 = not linked)
   library_url: string
   original_title: string

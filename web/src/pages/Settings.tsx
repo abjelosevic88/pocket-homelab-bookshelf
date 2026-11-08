@@ -4,12 +4,13 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import type { APIToken, Book, KosyncDocument, KosyncEvent, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, AskStarter, User } from '../lib/types'
+import type { APIToken, Book, KosyncContact, KosyncDocument, KosyncEvent, KosyncState, DailySettings, Settings as SettingsT, ThoughtTemplate, AskStarter, User } from '../lib/types'
 import { Avatar, Confirm, CopyField, Field, MenuButton, type MenuItem, Loading, Modal, NeedsCore, Segmented, SettingRow, Switch, Tabs, useAsync, useIsMobile, useToast } from '../components/ui'
 import { Icon } from '../components/icons'
 import { KindleImport } from '../components/KindleImport'
 import { MarkdownEditor } from '../components/MarkdownEditor'
 import { LANGUAGES, langName } from '../lib/languages'
+import { fmtWhen } from '../lib/format'
 import { Select } from '../components/Select'
 import { Cover } from '../components/Cover'
 
@@ -511,6 +512,12 @@ function ReaderSync() {
         </div>
       </Section>}
 
+      {acc && <Section title="Device requests" icon="activity" sub="The last requests devices made to the sync server since it last started, newest first. A sync that never shows up here did not reach Bookshelf: check the server address on the device.">
+        {!data.contacts?.length
+          ? <p className="muted kosync-empty">No requests yet.</p>
+          : <ul className="reads">{data.contacts.slice(0, 30).map((c, i) => <ContactRow key={i} c={c} />)}</ul>}
+      </Section>}
+
       <Section title="CrossPoint Sync" icon="refresh" sub="Its mirror sends only a file hash. With your CrossPoint Sync account Bookshelf reads each book's title, author, cover and page count, your highlights (as quotes), and the pages you read each day (Stats). Marking a book read or stopped here tells CrossPoint Sync too. It checks right after an unknown book shows up, and every 15 minutes."
         actions={data.prefs.remote_url && <button type="button" className="btn sm" onClick={pull} disabled={pulling}><Icon name="refresh" size={14} />{pulling ? 'Syncing…' : 'Sync now'}</button>}>
         {data.prefs.remote_url ? <>
@@ -535,6 +542,29 @@ function ReaderSync() {
       {history && <SyncHistory doc={history} title={name(history) || ''} onClose={() => setHistory(null)} />}
       {off && <Confirm confirmLabel="Turn off" title="Turn reader sync off?" message="Devices can no longer log in or send progress. The books listed here and their links stay." onCancel={() => setOff(false)} onConfirm={async () => { setOff(false); try { await api.del(`${V1}/kosync/account`); setPassword(''); setEditing(false); reload() } catch (e) { toast((e as Error).message, 'err') } }} />}
     </div>
+  )
+}
+
+// What a device's request to the sync server was, in words.
+function contactText(c: KosyncContact): { text: string; bad: boolean } {
+  if (c.status === 401) return { text: c.username ? `Wrong password for “${c.username}”, or no such sync username` : 'No username or password sent', bad: true }
+  if (c.status === 429) return { text: 'Blocked after too many wrong passwords', bad: true }
+  if (c.path.endsWith('/users/create')) return { text: 'Tried to register (closed — log in instead)', bad: true }
+  if (c.status === 404 || c.status === 405) return { text: `Unknown address ${c.method} ${c.path}`, bad: true }
+  if (c.status >= 400) return { text: `Refused (${c.status}) ${c.method} ${c.path}`, bad: true }
+  if (c.method === 'PUT' && c.path.includes('/syncs/progress')) return { text: 'Progress sent', bad: false }
+  if (c.method === 'GET' && c.path.includes('/syncs/progress')) return { text: 'Progress fetched', bad: false }
+  if (c.path.endsWith('/users/auth')) return { text: 'Logged in', bad: false }
+  return { text: `${c.method} ${c.path}`, bad: false }
+}
+
+function ContactRow({ c }: { c: KosyncContact }) {
+  const t = contactText(c)
+  return (
+    <li>
+      <span className={`dot ${t.bad ? 'bad' : ''}`} />
+      <span className="grow"><span className={t.bad ? 'danger-text' : ''}>{t.text}</span><br /><span className="muted small">{fmtWhen(Date.parse(c.at) / 1000)}{c.client && ` · ${c.client}`}</span></span>
+    </li>
   )
 }
 

@@ -14,22 +14,28 @@ const bookCols = `b.id, b.user_id, b.title, b.subtitle, b.authors, b.isbn13, b.i
 	COALESCE((SELECT MAX(r.finished_on) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''), '') AS finished_on_derived,
 	(SELECT COUNT(1) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''),
 	(SELECT COUNT(1) FROM quotes q WHERE q.book_id = b.id),
-	(SELECT d.percentage FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1)`
+	(SELECT d.percentage FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
+	(SELECT d.timestamp FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
+	(SELECT d.device FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1)`
 
 func scanBook(row interface{ Scan(...any) error }) (*Book, error) {
 	var b Book
 	var fav int
 	var reader sql.NullFloat64
+	var readerAt sql.NullInt64
+	var readerDevice sql.NullString
 	err := row.Scan(&b.ID, &b.UserID, &b.Title, &b.Subtitle, &b.Authors, &b.ISBN13, &b.ISBN10, &b.Pages, &b.Published, &b.Publisher,
 		&b.Language, &b.Description, &b.Format, &b.Tags, &b.Cover, &b.Source, &b.SourceID, &b.SourceURL, &b.Status, &b.Rating,
 		&b.Review, &fav, &b.CurrentPage, &b.QueuePos, &b.PlannedFor, &b.PlanNote, &b.Series, &b.SeriesNo, &b.SeriesQID, &b.OriginalTitle, &b.CreatedAt, &b.UpdatedAt,
-		&b.StartedOn, &b.FinishedOn, &b.ReadCount, &b.QuoteCount, &reader)
+		&b.StartedOn, &b.FinishedOn, &b.ReadCount, &b.QuoteCount, &reader, &readerAt, &readerDevice)
 	if err != nil {
 		return nil, notFound(err)
 	}
 	b.Favorite = fav == 1
 	if reader.Valid {
 		b.ReaderPercent = &reader.Float64
+		b.ReaderSyncedAt = readerAt.Int64
+		b.ReaderDevice = readerDevice.String
 	}
 	return &b, nil
 }

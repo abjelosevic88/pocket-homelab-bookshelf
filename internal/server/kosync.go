@@ -72,6 +72,7 @@ func kosyncErr(w http.ResponseWriter, status, code int, msg string) {
 // kosyncRoutes is the protocol at the root of whatever it is mounted on.
 func (s *Server) kosyncRoutes() chi.Router {
 	r := chi.NewRouter()
+	r.Use(s.kosyncRecord)
 	r.Post("/users/create", s.handleKosyncCreate)
 	r.Group(func(r chi.Router) {
 		r.Use(s.kosyncRequireAuth)
@@ -497,6 +498,20 @@ func (s *Server) handleGetKosync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out["prefs"] = prefs
+	// Requests under this account's username; admins also see logins with a
+	// username no account has, which is what a typo on a device looks like.
+	u := userFrom(r.Context())
+	admin := u != nil && u.Role == "admin"
+	out["contacts"] = s.kosyncSeen.matching(func(c kosyncContact) bool {
+		if acc != nil && strings.EqualFold(c.Username, acc.Username) {
+			return true
+		}
+		if !admin {
+			return false
+		}
+		_, err := s.store.KosyncAccountByUsername(r.Context(), c.Username)
+		return err != nil
+	})
 	writeJSON(w, http.StatusOK, out)
 }
 

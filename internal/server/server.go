@@ -57,6 +57,7 @@ type Server struct {
 	kosyncKick    chan int64
 	kosyncLast    sync.Map // user id → time of the last CrossPoint Sync pull
 	kosyncRetried sync.Map // book ids sync added whose cover was looked up again this run
+	kosyncSeen    kosyncContacts
 
 	oidc   *oidcProvider // keyed on the issuer; rebuilt by provider() when it changes
 	oidcMu sync.Mutex
@@ -256,6 +257,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/books/{id}/summary", s.handleGetSummary)
 			r.Get("/books/{id}/pace", s.handleBookPace)
 			r.Get("/books/{id}/sessions", s.handleBookSessions)
+			r.Get("/books/{id}/syncs", s.handleBookSyncs)
 			r.Get("/reading/sessions", s.handleReadingSessions)
 			r.Get("/reading/activity", s.handleReadingActivity)
 			r.Get("/reading/today", s.handleReadingToday)
