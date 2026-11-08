@@ -250,6 +250,8 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 			if b.Pages > 0 {
 				where += fmt.Sprintf(" of %d (%d%%)", b.Pages, b.CurrentPage*100/b.Pages)
 			}
+		} else if b.ListenDuration > 0 && b.ListenPosition > 0 {
+			where += fmt.Sprintf(" as an audiobook, %s into %s (%d%%)", hoursMinutes(b.ListenPosition), hoursMinutes(b.ListenDuration), b.ListenPosition*100/b.ListenDuration)
 		}
 		if b.StartedOn != "" {
 			where += ", started " + b.StartedOn
@@ -266,6 +268,8 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 		sb.WriteString("They stopped reading it before the end")
 		if b.CurrentPage > 0 {
 			fmt.Fprintf(&sb, ", around page %d", b.CurrentPage)
+		} else if b.ListenDuration > 0 && b.ListenPosition > 0 {
+			fmt.Fprintf(&sb, ", %d%% into the audiobook", b.ListenPosition*100/b.ListenDuration)
 		}
 		sb.WriteString(". Ask before spoiling what comes after.\n")
 	default:
@@ -328,6 +332,11 @@ func fillStarter(text string, b *store.Book) string {
 		if b.Pages > 0 {
 			pct = strconv.Itoa(b.CurrentPage*100/b.Pages) + "%"
 		}
+	} else if b.ListenDuration > 0 && b.ListenPosition > 0 {
+		// an audiobook: "up to page {page} … beyond that page" becomes a point in time
+		pct = strconv.Itoa(b.ListenPosition*100/b.ListenDuration) + "%"
+		at := hoursMinutes(b.ListenPosition) + " of " + hoursMinutes(b.ListenDuration) + " into the audiobook (" + pct + ")"
+		text = strings.NewReplacer("page {page}", at, "{page}", at, "that page", "that point").Replace(text)
 	}
 	pages := ""
 	if b.Pages > 0 {
@@ -361,4 +370,13 @@ func (s *Server) aiPublicURL(ctx context.Context) string {
 	s.resolved[key] = resolvedURL{url: u, at: time.Now()}
 	s.coreMu.Unlock()
 	return u
+}
+
+// hoursMinutes is a length of time for people: "20h 26m", "45m".
+func hoursMinutes(seconds int) string {
+	m := seconds / 60
+	if m < 60 {
+		return strconv.Itoa(m) + "m"
+	}
+	return fmt.Sprintf("%dh %dm", m/60, m%60)
 }

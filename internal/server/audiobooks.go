@@ -295,6 +295,16 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 			st.Started++
 		}
 	}
+	// where the person is in each book they listened to, every time: the
+	// book's progress follows the listening
+	for id, l := range latest {
+		if l.Duration <= 0 {
+			continue
+		}
+		if _, found := s.store.AudiobookLink(ctx, uid, id); found {
+			_ = s.store.SetAudiobookPosition(ctx, uid, id, min(max(l.EndPos, 0), l.Duration), l.Duration, l.Day)
+		}
+	}
 	return st
 }
 

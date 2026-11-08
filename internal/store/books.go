@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
+	"strconv"
 	"strings"
 )
 
@@ -16,7 +17,9 @@ const bookCols = `b.id, b.user_id, b.title, b.subtitle, b.authors, b.isbn13, b.i
 	(SELECT COUNT(1) FROM quotes q WHERE q.book_id = b.id),
 	(SELECT d.percentage FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
 	(SELECT d.timestamp FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
-	(SELECT d.device FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1)`
+	(SELECT d.device FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
+	COALESCE((SELECT a.position || '|' || a.duration || '|' || a.listened_on FROM audiobook_links a
+		WHERE a.book_id = b.id AND a.duration > 0 AND a.item_id NOT LIKE 'library:%' ORDER BY a.listened_on DESC LIMIT 1), '')`
 
 func scanBook(row interface{ Scan(...any) error }) (*Book, error) {
 	var b Book
@@ -24,14 +27,20 @@ func scanBook(row interface{ Scan(...any) error }) (*Book, error) {
 	var reader sql.NullFloat64
 	var readerAt sql.NullInt64
 	var readerDevice sql.NullString
+	var listen string
 	err := row.Scan(&b.ID, &b.UserID, &b.Title, &b.Subtitle, &b.Authors, &b.ISBN13, &b.ISBN10, &b.Pages, &b.Published, &b.Publisher,
 		&b.Language, &b.Description, &b.Format, &b.Tags, &b.Cover, &b.Source, &b.SourceID, &b.SourceURL, &b.Status, &b.Rating,
 		&b.Review, &fav, &b.CurrentPage, &b.QueuePos, &b.PlannedFor, &b.PlanNote, &b.Series, &b.SeriesNo, &b.SeriesQID, &b.OriginalTitle, &b.CreatedAt, &b.UpdatedAt,
-		&b.StartedOn, &b.FinishedOn, &b.ReadCount, &b.QuoteCount, &reader, &readerAt, &readerDevice)
+		&b.StartedOn, &b.FinishedOn, &b.ReadCount, &b.QuoteCount, &reader, &readerAt, &readerDevice, &listen)
 	if err != nil {
 		return nil, notFound(err)
 	}
 	b.Favorite = fav == 1
+	if p := strings.SplitN(listen, "|", 3); len(p) == 3 {
+		b.ListenPosition, _ = strconv.Atoi(p[0])
+		b.ListenDuration, _ = strconv.Atoi(p[1])
+		b.ListenedOn = p[2]
+	}
 	if reader.Valid {
 		b.ReaderPercent = &reader.Float64
 		b.ReaderSyncedAt = readerAt.Int64

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import type { Book as BookT, KosyncEvent, Pace, Quote, Read, SessionLog, Status } from '../lib/types'
-import { daysBetween, fmtClock, fmtDate, fmtWhen, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
+import { daysBetween, fmtClock, fmtDate, fmtWhen, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, isListening, listenLine, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
@@ -135,10 +135,12 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
     <Card className="mt" title="Progress" actions={<button type="button" className="btn primary sm" onClick={onFinish}><Icon name="check" size={14} />Finished</button>}>
       {hasProgress(book) && <div className="bar lg mb-sm"><span className="fill" style={{ width: `${pct}%` }} /></div>}
       <div className="row wrap">
-        <label className="page-input"><span className="muted small">Page</span>
-          <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-          {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null ? <span className="muted small">{pct}% on your e-reader</span> : <span className="muted small">(add the page count under Edit details for a percentage)</span>}
-        </label>
+        {isListening(book) ? <span className="small"><b>{pct}%</b> <span className="muted">· {listenLine(book)}</span></span> : (
+          <label className="page-input"><span className="muted small">Page</span>
+            <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+            {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null ? <span className="muted small">{pct}% on your e-reader</span> : <span className="muted small">(add the page count under Edit details for a percentage)</span>}
+          </label>
+        )}
         <span className="spacer" />
         {days !== null && book.started_on && <span className="muted small">Started {fmtDate(book.started_on)} · day {days + 1}</span>}
       </div>
@@ -149,6 +151,7 @@ function ProgressCard({ book, onSaved, onFinish }: { book: BookT; onSaved: (b: B
           {pace.days_left > 0 && <span>about <b>{pace.days_left}</b> {pace.days_left === 1 ? 'day' : 'days'} left <span className="muted">· {fmtDate(pace.finish_on)}</span></span>}
         </div>
       )}
+      {isListening(book) && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from Pocket Audiobooks{book.listened_on && <> · last listened {fmtDate(book.listened_on)}</>} · <Link to="/settings/audiobooks">Audiobooks</Link></p>}
       {book.reader_percent != null && <p className="muted small mt-sm"><Icon name="refresh" size={12} className="inline-icon" /> Synced from your e-reader{book.reader_synced_at > 0 && <> {fmtWhen(book.reader_synced_at)}{book.reader_device && ` · ${book.reader_device}`}</>} · <Link to="/settings/reader">Reader sync</Link></p>}
     </Card>
   )

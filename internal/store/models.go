@@ -80,6 +80,11 @@ type Book struct {
 	// When (unix seconds) and from which device that position was synced.
 	ReaderSyncedAt int64  `json:"reader_synced_at"`
 	ReaderDevice   string `json:"reader_device"`
+	// Where the person is in the audiobook (seconds of its length) and the day
+	// they last listened, when Pocket Audiobooks syncs this book; 0 otherwise.
+	ListenPosition int    `json:"listen_position"`
+	ListenDuration int    `json:"listen_duration"`
+	ListenedOn     string `json:"listened_on"`
 	// The same book in Pocket Library, when linked (filled by the API, not stored here).
 	LibraryBookID int64  `json:"library_book_id"`
 	LibraryURL    string `json:"library_url"`
@@ -195,4 +200,19 @@ type BookLine struct {
 	Pages    int     `json:"pages,omitempty"`
 	Progress int     `json:"progress,omitempty"` // percent, when pages are known
 	Date     string  `json:"date,omitempty"`
+}
+
+// Progress is how far through the book the person is, 0..1, and whether
+// there is anything to go by: the page of the page count, else the e-reader's
+// position, else the audiobook's.
+func (b *Book) Progress() (float64, bool) {
+	switch {
+	case b.Pages > 0:
+		return min(1, float64(max(b.CurrentPage, 0))/float64(b.Pages)), true
+	case b.ReaderPercent != nil:
+		return min(max(*b.ReaderPercent, 0), 1), true
+	case b.ListenDuration > 0:
+		return min(1, float64(max(b.ListenPosition, 0))/float64(b.ListenDuration)), true
+	}
+	return 0, false
 }

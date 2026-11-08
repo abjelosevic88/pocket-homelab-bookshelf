@@ -141,3 +141,11 @@ func TestStartersFollowTheBook(t *testing.T) {
 		t.Fatalf("no page yet: %q", s)
 	}
 }
+
+func TestFillStarterAudiobook(t *testing.T) {
+	b := &store.Book{Format: "audio", ListenPosition: 5520, ListenDuration: 79080}
+	got := fillStarter("Recap up to page {page}. Nothing beyond that page. ({percent})", b)
+	if got != "Recap up to 1h 32m of 21h 58m into the audiobook (6%). Nothing beyond that point. (6%)" {
+		t.Fatalf("got %q", got)
+	}
+}

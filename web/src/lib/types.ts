@@ -57,6 +57,9 @@ export interface Book {
   reader_percent: number | null // latest position from an e-reader (0..1)
   reader_synced_at: number // when that position was synced (unix seconds), 0 = never
   reader_device: string
+  listen_position: number // where you are in the audiobook (seconds), from Pocket Audiobooks; 0 = not synced
+  listen_duration: number // the audiobook's length (seconds)
+  listened_on: string // the day you last listened
   library_book_id: number // the same book in Pocket Library (0 = not linked)
   library_url: string
   original_title: string

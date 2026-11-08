@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { Book, DailySet, Dashboard } from '../lib/types'
-import { daysBetween, fmtDate, fmtWhen, hasProgress, progress, todayISO, pageLabel } from '../lib/format'
+import { daysBetween, fmtDate, fmtWhen, hasProgress, isListening, listenLine, progress, todayISO, pageLabel } from '../lib/format'
 import { Card, Empty, Loading, PageHeader, useAsync, useToast } from '../components/ui'
 import { FormatBadge } from '../components/FormatBadge'
 import { Cover } from '../components/Cover'
@@ -129,11 +129,13 @@ function ReadingCard({ book, onChanged, onFinish }: { book: Book; onChanged: () 
         <div className="muted small reading-meta"><FormatBadge format={book.format} />{days !== null && <span>{days === 0 ? 'Started today' : `Day ${days + 1}`} · since {fmtDate(book.started_on)}</span>}</div>
         <div className="progress-row">
           {hasProgress(book) && <div className="bar lg"><span className="fill" style={{ width: `${pct}%` }} /></div>}
-          <label className="page-input">
-            <span className="muted small">Page</span>
-            <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-            {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null && <span className="muted small">{pct}% on your e-reader</span>}
-          </label>
+          {isListening(book) ? <span className="small"><b>{pct}%</b> <span className="muted">· {listenLine(book)}</span></span> : (
+            <label className="page-input">
+              <span className="muted small">Page</span>
+              <input type="number" min={0} max={book.pages || undefined} value={page} onChange={e => setPage(e.target.value)} onBlur={save} onKeyDown={e => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+              {book.pages > 0 ? <span className="muted small">of {book.pages} · {pct}%</span> : book.reader_percent != null && <span className="muted small">{pct}% on your e-reader</span>}
+            </label>
+          )}
         </div>
         {book.reader_synced_at > 0 && <Link to={`/books/${book.id}`} className="muted small reader-synced"><Icon name="refresh" size={12} className="inline-icon" /> Last sync {fmtWhen(book.reader_synced_at)}{book.reader_device && ` · ${book.reader_device}`}</Link>}
         {book.reader_percent != null && book.reader_percent >= 0.98 && <div className="callout info mt-sm finish-ask"><Icon name="check-circle" size={15} /><span>Your e-reader is at <b>{Math.round(book.reader_percent * 100)}%</b>. Finished it?</span></div>}

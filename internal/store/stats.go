@@ -193,13 +193,6 @@ func sortedCounts(counts map[string]int, names map[string]string, limit int) []T
 	return out
 }
 
-func progressPct(cur, pages int) int {
-	if pages <= 0 || cur <= 0 {
-		return 0
-	}
-	return min(100, cur*100/pages)
-}
-
 // GetDashboard returns the compact status for widgets.
 func (s *Store) GetDashboard(ctx context.Context, userID int64, goal int) (*Dashboard, error) {
 	d := &Dashboard{YearlyGoal: goal, CurrentlyRead: []BookLine{}}
@@ -223,7 +216,8 @@ func (s *Store) GetDashboard(ctx context.Context, userID int64, goal int) (*Dash
 		return nil, err
 	}
 	for _, b := range reading {
-		d.CurrentlyRead = append(d.CurrentlyRead, BookLine{ID: b.ID, Title: b.Title, Authors: b.Authors, Progress: progressPct(b.CurrentPage, b.Pages), Date: b.StartedOn})
+		p, _ := b.Progress()
+		d.CurrentlyRead = append(d.CurrentlyRead, BookLine{ID: b.ID, Title: b.Title, Authors: b.Authors, Progress: int(p * 100), Date: b.StartedOn})
 	}
 	if last, _ := s.ListBooks(ctx, BookFilter{UserID: userID, Status: StatusRead, Sort: "finished", Limit: 1}); len(last) > 0 && last[0].FinishedOn != "" {
 		b := last[0]

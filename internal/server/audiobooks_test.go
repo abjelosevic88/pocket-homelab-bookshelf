@@ -21,6 +21,7 @@ func TestAudiobooksSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	today := time.Now().Format("2006-01-02")
+	illEnd := 30
 	ab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer pcx_ab_ana" {
 			http.Error(w, `{"error":"no"}`, http.StatusUnauthorized)
@@ -36,7 +37,7 @@ func TestAudiobooksSync(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
 				{"item_id": "li-drac", "title": "Dracula", "author": "Bram Stoker", "day": today, "duration": 55000, "end_pos": 9000},
 				// a long book just started: half a minute in, far under 2 %
-				{"item_id": "li-ill", "title": "Illborn", "author": "Tyler Whitesides", "day": today, "duration": 79502, "end_pos": 30, "seconds": 32},
+				{"item_id": "li-ill", "title": "Illborn", "author": "Tyler Whitesides", "day": today, "duration": 79502, "end_pos": illEnd, "seconds": 32},
 				// tapped and stopped: not started
 				{"item_id": "li-tap", "title": "Tapped", "author": "X", "day": today, "duration": 30000, "end_pos": 5, "seconds": 5},
 				{"item_id": "li-dune", "title": "Dune", "author": "Frank Herbert", "day": "2026-01-03", "duration": 70000, "end_pos": 70000},
@@ -89,10 +90,33 @@ func TestAudiobooksSync(t *testing.T) {
 		t.Fatalf("shelves: %v", got)
 	}
 
-	// again: nothing new
+	// the listening position is the book's progress, and follows later listening
+	illPos := func() (int, int) {
+		var all []struct {
+			Title    string `json:"title"`
+			Position int    `json:"listen_position"`
+			Duration int    `json:"listen_duration"`
+		}
+		h.json(h.anaTok, "GET", "/books", nil, &all)
+		for _, b := range all {
+			if b.Title == "Illborn" {
+				return b.Position, b.Duration
+			}
+		}
+		return -1, -1
+	}
+	if p, d := illPos(); p != 30 || d != 79502 {
+		t.Fatalf("Illborn position after first sync: %d of %d", p, d)
+	}
+	illEnd = 5520
+
+	// again: nothing new, but Illborn is further along
 	h.json(h.anaTok, "POST", "/audiobooks/sync", nil, &st)
 	if st.Added != 0 || st.Finished != 0 || st.Started != 0 {
 		t.Fatalf("second sync: %+v", st)
+	}
+	if p, _ := illPos(); p != 5520 {
+		t.Fatalf("Illborn position after second sync: %d", p)
 	}
 	// Ana removes Dracula: it stays gone
 	for _, b := range lib {

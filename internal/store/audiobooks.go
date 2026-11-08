@@ -23,6 +23,14 @@ func (s *Store) SetAudiobookLink(ctx context.Context, userID int64, itemID strin
 	return err
 }
 
+// SetAudiobookPosition remembers where the person is in an audiobook
+// (seconds into it, of its length) and the day they last listened.
+func (s *Store) SetAudiobookPosition(ctx context.Context, userID int64, itemID string, position, duration int, day string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE audiobook_links SET position = ?, duration = ?, listened_on = ? WHERE user_id = ? AND item_id = ?`,
+		position, duration, day, userID, itemID)
+	return err
+}
+
 // AudiobookEventSeen reports whether a finish or start was already taken in.
 func (s *Store) AudiobookEventSeen(ctx context.Context, userID int64, itemID, kind, day string) bool {
 	var n int

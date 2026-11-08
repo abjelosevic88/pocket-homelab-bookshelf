@@ -59,15 +59,38 @@ export const FORMAT_LABEL: Record<string, string> = { paper: 'Paper', ebook: 'E-
 
 export function coverSrc(b: { id: number; cover: string }): string { return `/api/v1/books/${b.id}/cover?v=${encodeURIComponent(b.cover)}` }
 
-export function progress(b: Pick<Book, 'current_page' | 'pages'> & { reader_percent?: number | null }): number {
-  if (!b.pages) return b.reader_percent != null ? Math.round(b.reader_percent * 100) : 0
+type ProgressOf = Pick<Book, 'current_page' | 'pages'> & { reader_percent?: number | null; listen_position?: number; listen_duration?: number }
+
+export function progress(b: ProgressOf): number {
+  if (!b.pages) {
+    if (b.reader_percent != null) return Math.round(b.reader_percent * 100)
+    if (b.listen_duration) return Math.min(100, Math.round(((b.listen_position || 0) * 100) / b.listen_duration))
+    return 0
+  }
   if (!b.current_page) return 0
   return Math.min(100, Math.round((b.current_page * 100) / b.pages))
 }
 
-/** Whether there is a percentage to show: a page count, or an e-reader that syncs the book. */
-export function hasProgress(b: Pick<Book, 'pages'> & { reader_percent?: number | null }): boolean {
-  return b.pages > 0 || b.reader_percent != null
+/** Whether there is a percentage to show: a page count, an e-reader that syncs the book, or the audiobook's listening. */
+export function hasProgress(b: Omit<ProgressOf, 'current_page'>): boolean {
+  return b.pages > 0 || b.reader_percent != null || !!b.listen_duration
+}
+
+/** Progress comes from listening in Pocket Audiobooks (no page count, no e-reader). */
+export function isListening(b: Omit<ProgressOf, 'current_page'>): boolean {
+  return !b.pages && b.reader_percent == null && !!b.listen_duration
+}
+
+/** 73560 → "20h 26m"; 2700 → "45m". */
+export function fmtHM(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+/** "1h 32m of 21h 58m · 20h 26m left". */
+export function listenLine(b: { listen_position: number; listen_duration: number }): string {
+  const left = Math.max(0, b.listen_duration - b.listen_position)
+  return `${fmtHM(b.listen_position)} of ${fmtHM(b.listen_duration)} · ${fmtHM(left)} left`
 }
 
 export function ratingText(r: number): string { return r ? `${r % 1 ? r.toFixed(1) : r}★` : '' }

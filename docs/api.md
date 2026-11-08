@@ -51,6 +51,8 @@ Anything else answers `403` ("this Pocket Core link does not cover …"). Links 
   "status": "read",                        // want (default) | reading | read | abandoned
   "rating": 5, "review": "Slow start, then…", "favorite": true,
   "current_page": 0,
+  // read-only, from Pocket Audiobooks: where you are in the audiobook (seconds), its length, the day you last listened
+  "listen_position": 5520, "listen_duration": 79080, "listened_on": "2026-11-08",
   "planned_for": "2026-11", "plan_note": "Recommended by Marko",
   "source": "openlibrary", "source_id": "/works/OL59800W", "source_url": "https://openlibrary.org/works/OL59800W",
   "cover_url": "https://covers.openlibrary.org/b/id/10618463-L.jpg",   // create/update only: downloaded
