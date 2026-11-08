@@ -234,12 +234,30 @@ func (s *Store) ListKosyncEvents(ctx context.Context, userID int64, document str
 	return out, rows.Err()
 }
 
-// ListBookKosyncEvents returns the updates of every document linked to a
-// book, newest first.
+// AddProgressEvent keeps a position that came from somewhere other than this
+// server's KOSync (source "library"), once per moment, and not when the same
+// position already arrived here over KOSync (a device syncing to both).
+func (s *Store) AddProgressEvent(ctx context.Context, userID, bookID int64, source, device string, pct float64, ts int64) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT OR IGNORE INTO progress_events (user_id, book_id, source, device, percentage, timestamp, received_at)
+		SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+			SELECT 1 FROM kosync_events e JOIN kosync_documents d ON d.user_id = e.user_id AND d.document = e.document
+			WHERE e.user_id = ? AND d.book_id = ? AND ABS(e.timestamp - ?) <= 900 AND ABS(e.percentage - ?) < 0.005)`,
+		userID, bookID, source, device, pct, ts, Now(), userID, bookID, ts, pct)
+	return err
+}
+
+// ListBookKosyncEvents returns every position update of a book, newest first:
+// those of each document linked to it and those from Pocket Library (source
+// "library", a negative id, no document and no body).
 func (s *Store) ListBookKosyncEvents(ctx context.Context, userID, bookID int64, limit int) ([]KosyncEvent, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT e.id, e.document, e.source, e.device, e.device_id, e.percentage, e.timestamp, e.body, e.received_at
+	rows, err := s.DB.QueryContext(ctx, `SELECT * FROM (
+		SELECT e.id, e.document, e.source, e.device, e.device_id, e.percentage, e.timestamp, e.body, e.received_at
 		FROM kosync_events e JOIN kosync_documents d ON d.user_id = e.user_id AND d.document = e.document
-		WHERE e.user_id = ? AND d.book_id = ? AND d.ignored = 0 AND e.source <> 'open' ORDER BY e.timestamp DESC, e.id DESC LIMIT ?`, userID, bookID, limit)
+		WHERE e.user_id = ? AND d.book_id = ? AND d.ignored = 0 AND e.source <> 'open'
+		UNION ALL
+		SELECT -p.id, '', p.source, p.device, '', p.percentage, p.timestamp, 'null', p.received_at
+		FROM progress_events p WHERE p.user_id = ? AND p.book_id = ?
+	) ORDER BY timestamp DESC, id DESC LIMIT ?`, userID, bookID, userID, bookID, limit)
 	if err != nil {
 		return nil, err
 	}

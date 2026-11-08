@@ -8,18 +8,27 @@ import (
 	"strings"
 )
 
-const bookCols = `b.id, b.user_id, b.title, b.subtitle, b.authors, b.isbn13, b.isbn10, b.pages, b.published, b.publisher,
+var bookCols = `b.id, b.user_id, b.title, b.subtitle, b.authors, b.isbn13, b.isbn10, b.pages, b.published, b.publisher,
 	b.language, b.description, b.format, b.tags, b.cover, b.source, b.source_id, b.source_url, b.status, b.rating,
 	b.review, b.favorite, b.current_page, b.queue_pos, b.planned_for, b.plan_note, b.series, b.series_no, b.series_qid, b.original_title, b.created_at, b.updated_at,
 	COALESCE((SELECT r.started_on FROM reads r WHERE r.book_id = b.id ORDER BY (r.finished_on = '') DESC, r.id DESC LIMIT 1), ''),
 	COALESCE((SELECT MAX(r.finished_on) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''), '') AS finished_on_derived,
 	(SELECT COUNT(1) FROM reads r WHERE r.book_id = b.id AND r.abandoned = 0 AND r.finished_on <> ''),
 	(SELECT COUNT(1) FROM quotes q WHERE q.book_id = b.id),
-	(SELECT d.percentage FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
-	(SELECT d.timestamp FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
-	(SELECT d.device FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0 ORDER BY d.timestamp DESC LIMIT 1),
+	` + readerLatest("percentage") + `,
+	` + readerLatest("timestamp") + `,
+	` + readerLatest("device") + `,
 	COALESCE((SELECT a.position || '|' || a.duration || '|' || a.listened_on FROM audiobook_links a
 		WHERE a.book_id = b.id AND a.duration > 0 AND a.item_id NOT LIKE 'library:%' ORDER BY a.listened_on DESC LIMIT 1), '')`
+
+// readerLatest is a column of the newest e-reader position of b: from this
+// server's KOSync or from Pocket Library's feed, whichever is later.
+func readerLatest(col string) string {
+	return `(SELECT ` + col + ` FROM (
+		SELECT d.percentage, d.timestamp, d.device FROM kosync_documents d WHERE d.book_id = b.id AND d.ignored = 0
+		UNION ALL SELECT p.percentage, p.timestamp, p.device FROM progress_events p WHERE p.book_id = b.id
+	) ORDER BY timestamp DESC LIMIT 1)`
+}
 
 func scanBook(row interface{ Scan(...any) error }) (*Book, error) {
 	var b Book

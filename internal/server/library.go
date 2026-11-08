@@ -223,6 +223,8 @@ type libBookInfo struct {
 	Kind        string            `json:"kind"`
 	Status      string            `json:"status"`
 	Percentage  float64           `json:"percentage"`
+	LastReadAt  string            `json:"last_read_at"`
+	Device      string            `json:"device"`
 	StartedAt   string            `json:"started_at"`
 	FinishedAt  string            `json:"finished_at"`
 }
@@ -357,6 +359,14 @@ func (s *Server) syncLibrary(ctx context.Context, uid int64, email string) libSt
 					st.Started++
 				}
 			}
+		}
+		// every position the feed brings is kept, for the book's list of syncs
+		ts := time.Now().Unix()
+		if t, err := time.Parse(time.RFC3339Nano, b.LastReadAt); err == nil {
+			ts = t.Unix()
+		}
+		if err := s.store.AddProgressEvent(ctx, uid, bookID, "library", clip(b.Device, 100), min(max(b.Percentage, 0), 1), ts); err != nil {
+			s.log.Warn("library: progress event", "book", bookID, "err", err)
 		}
 		// the page follows the position, for books still being read here
 		if bk, err := s.store.GetBook(ctx, uid, bookID); err == nil && bk.Status == store.StatusReading {

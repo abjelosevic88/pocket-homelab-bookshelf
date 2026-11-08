@@ -6,7 +6,7 @@ export interface KosyncDocument {
   book_title: string; book_authors: string
 }
 export interface KosyncPrefs { add_missing: boolean; remote_url: string; remote_user: string; last_pull: string; last_error: string }
-export interface KosyncEvent { id: number; document: string; source: 'device' | 'crosspoint'; device: string; device_id: string; percentage: number; timestamp: number; body: unknown; received_at: string }
+export interface KosyncEvent { id: number; document: string; source: 'device' | 'crosspoint' | 'library'; device: string; device_id: string; percentage: number; timestamp: number; body: unknown; received_at: string }
 export interface Pace { days: { day: string; pages: number }[]; reading_days: number; pages_per_day: number; pages_today: number; pages_left: number; days_left: number; finish_on: string }
 export interface ReadingSession { book_id: number; title: string; authors: string; day: string; start: string; end: string; minutes: number; pages: number; from: number; to: number; from_page?: number; to_page?: number; device: string; estimated: boolean; updates: number }
 export interface SessionTotals { sessions: number; minutes: number; pages: number; pages_per_hour: number }

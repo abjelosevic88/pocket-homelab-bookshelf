@@ -346,7 +346,7 @@ function SyncsCard({ book }: { book: BookT }) {
   const shown = all ? data : data.slice(0, 15)
   const page = (p: number) => book.pages > 0 ? Math.round(p * book.pages) : 0
   return (
-    <Card className="mt" title="Every sync" sub={<>{data.length} {data.length === 1 ? 'update' : 'updates'} from your e-reader</>}>
+    <Card className="mt" title="Every sync" sub={<>{data.length} {data.length === 1 ? 'update' : 'updates'} from your e-readers</>}>
       <ul className="reads syncs">
         {shown.map((e, i) => {
           const prev = data[i + 1] // shown is the start of data
@@ -358,7 +358,7 @@ function SyncsCard({ book }: { book: BookT }) {
                 {book.pages > 0 && <span className="muted small"> · {Math.round(e.percentage * 1000) / 10}%</span>}
                 {moved > 0 && <span className="muted small"> · +{moved}{book.pages > 0 ? (moved === 1 ? ' page' : ' pages') : '%'}</span>}</span>
               <span className="spacer" />
-              <span className="muted small" title={e.device_id}>{e.source === 'crosspoint' ? 'CrossPoint Sync' : e.device || 'device'}</span>
+              <span className="muted small" title={e.source === 'library' ? 'Through Pocket Library' : e.device_id}>{e.source === 'crosspoint' ? 'CrossPoint Sync' : e.source === 'library' ? `${e.device || 'Pocket Library'} · Library` : e.device || 'device'}</span>
             </li>
           )
         })}
