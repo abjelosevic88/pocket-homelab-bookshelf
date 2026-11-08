@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"math"
 	"net/http"
@@ -24,8 +25,12 @@ const (
 	sessionDefaultPg = 1.5              // minutes a page before the person's own pace is known
 )
 
-// ReadingSession is one sitting with a book on an e-reader.
+// ReadingSession is one sitting with a book: reading on an e-reader (this
+// server's KOSync or Pocket Library), listening in Pocket Audiobooks, or pages
+// logged by hand.
 type ReadingSession struct {
+	Kind      string  `json:"kind"`   // reading | listening | logged
+	Source    string  `json:"source"` // ereader | library | audiobooks | manual
 	BookID    int64   `json:"book_id"`
 	Title     string  `json:"title"`
 	Authors   string  `json:"authors"`
@@ -41,6 +46,10 @@ type ReadingSession struct {
 	Device    string  `json:"device"`
 	Estimated bool    `json:"estimated"` // minutes guessed from the pace for part of it
 	Updates   int     `json:"updates"`
+	// listening: seconds into the audiobook and its length
+	FromPos  int `json:"from_pos,omitempty"`
+	ToPos    int `json:"to_pos,omitempty"`
+	Duration int `json:"duration,omitempty"`
 
 	start, end int64
 	pages      float64
@@ -148,7 +157,7 @@ func buildSessions(events []store.ReaderEvent, loc *time.Location) ([]ReadingSes
 			s.Updates++
 			continue
 		}
-		out = append(out, ReadingSession{BookID: sg.e.BookID, Title: sg.e.BookTitle, Authors: sg.e.BookAuth, From: sg.from, To: sg.to,
+		out = append(out, ReadingSession{Kind: "reading", Source: readingSource(sg.e.Source), BookID: sg.e.BookID, Title: sg.e.BookTitle, Authors: sg.e.BookAuth, From: sg.from, To: sg.to,
 			Device: sg.e.Device, Estimated: sg.estimated, Updates: 1, start: sg.start, end: sg.end, pages: sg.pages, minutes: sg.minutes})
 		open[sg.doc] = len(out) - 1
 	}
@@ -179,6 +188,105 @@ func sessionPages(ss []ReadingSession, events []store.ReaderEvent) {
 	}
 }
 
+// readingSource names where e-reader positions came from.
+func readingSource(src string) string {
+	if src == "library" {
+		return "library"
+	}
+	return "ereader"
+}
+
+// listeningSessions turns Pocket Audiobooks' sessions (oldest first) into
+// the log's: sessions of one book close together are one.
+func listeningSessions(ls []store.ListeningSession, loc *time.Location) []ReadingSession {
+	var out []ReadingSession
+	last := map[int64]int{} // book → index in out of its latest session
+	for _, l := range ls {
+		st, err := time.Parse(time.RFC3339Nano, l.StartedAt)
+		if err != nil {
+			if st, err = time.ParseInLocation("2006-01-02", l.Day, loc); err != nil {
+				continue
+			}
+			st = st.Add(12 * time.Hour)
+		}
+		en, err := time.Parse(time.RFC3339Nano, l.UpdatedAt)
+		if err != nil || en.Before(st) {
+			en = st.Add(time.Duration(l.Seconds) * time.Second)
+		}
+		if i, ok := last[l.BookID]; ok && st.Unix() <= out[i].end+int64(sessionJoin/time.Second) {
+			x := &out[i]
+			x.end = max(x.end, en.Unix())
+			x.minutes += float64(l.Seconds) / 60
+			x.ToPos = l.EndPos
+			x.Duration = max(x.Duration, l.Duration)
+			x.Updates++
+			continue
+		}
+		out = append(out, ReadingSession{Kind: "listening", Source: "audiobooks", BookID: l.BookID, Title: l.BookTitle, Authors: l.BookAuth,
+			Device: cmp.Or(l.Device, "Pocket Audiobooks"), Updates: 1, FromPos: l.StartPos, ToPos: l.EndPos, Duration: l.Duration,
+			start: st.Unix(), end: en.Unix(), minutes: float64(l.Seconds) / 60})
+		last[l.BookID] = len(out) - 1
+	}
+	for i := range out {
+		x := &out[i]
+		if x.Duration > 0 {
+			x.From = math.Round(float64(min(x.FromPos, x.Duration))/float64(x.Duration)*10000) / 10000
+			x.To = math.Round(float64(min(max(x.ToPos, x.FromPos), x.Duration))/float64(x.Duration)*10000) / 10000
+		}
+		finish(x, loc)
+	}
+	return out
+}
+
+// loggedSessions turns pages set by hand (oldest first) into the log's: a
+// book's on one day are one entry, counted from where the day started to
+// where it ended (so a typo put right counts nothing). The time it took is
+// not known.
+func loggedSessions(logs []store.PageLog, loc *time.Location) []ReadingSession {
+	var out []ReadingSession
+	last := map[int64]int{}
+	for _, p := range logs {
+		at := time.Unix(p.At, 0).In(loc)
+		day := at.Format("2006-01-02")
+		if i, ok := last[p.BookID]; ok && out[i].Day == day {
+			x := &out[i]
+			x.end, x.ToPage, x.Updates = p.At, p.Page, x.Updates+1
+			if p.Pages > 0 {
+				x.To = float64(p.Page) / float64(p.Pages)
+			}
+			continue
+		}
+		x := ReadingSession{Kind: "logged", Source: "manual", BookID: p.BookID, Title: p.BookTitle, Authors: p.BookAuth, Day: day,
+			Device: "Logged by hand", Updates: 1, FromPage: p.FromPage, ToPage: p.Page, start: p.At, end: p.At}
+		if p.Pages > 0 {
+			x.From, x.To = float64(p.FromPage)/float64(p.Pages), float64(p.Page)/float64(p.Pages)
+		}
+		out = append(out, x)
+		last[p.BookID] = len(out) - 1
+	}
+	kept := out[:0]
+	for _, x := range out {
+		if x.ToPage <= x.FromPage {
+			continue // back, or where it started: nothing read
+		}
+		x.Pages = x.ToPage - x.FromPage
+		x.From, x.To = math.Round(min(x.From, 1)*10000)/10000, math.Round(min(x.To, 1)*10000)/10000
+		st, en := time.Unix(x.start, 0).In(loc), time.Unix(x.end, 0).In(loc)
+		x.Start, x.End = st.Format(time.RFC3339), en.Format(time.RFC3339)
+		kept = append(kept, x)
+	}
+	return kept
+}
+
+// finish fills the day, times and rounded minutes of a session.
+func finish(x *ReadingSession, loc *time.Location) {
+	st, en := time.Unix(x.start, 0).In(loc), time.Unix(x.end, 0).In(loc)
+	x.Day, x.Start, x.End = st.Format("2006-01-02"), st.Format(time.RFC3339), en.Format(time.RFC3339)
+	x.Minutes = max(1, int(math.Round(x.minutes)))
+}
+
+// readingSessions is the person's whole reading log, oldest first, and the
+// minutes a page used for estimates.
 func (s *Server) readingSessions(ctx context.Context, uid int64) ([]ReadingSession, float64, error) {
 	events, err := s.store.ReaderEvents(ctx, uid, 0)
 	if err != nil {
@@ -186,25 +294,47 @@ func (s *Server) readingSessions(ctx context.Context, uid int64) ([]ReadingSessi
 	}
 	ss, perPage := buildSessions(events, time.Local)
 	sessionPages(ss, events)
+	listens, err := s.store.ListeningSessions(ctx, uid, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	logs, err := s.store.PageLogs(ctx, uid, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	ss = append(ss, listeningSessions(listens, time.Local)...)
+	ss = append(ss, loggedSessions(logs, time.Local)...)
+	sort.SliceStable(ss, func(i, j int) bool { return ss[i].start < ss[j].start })
 	return ss, perPage, nil
 }
 
-// SessionTotals add up a list of sessions.
+// SessionTotals add up a list of sessions. Pages an hour is worked out from
+// reading on an e-reader only, where both are known.
 type SessionTotals struct {
-	Sessions     int     `json:"sessions"`
-	Minutes      int     `json:"minutes"`
-	Pages        int     `json:"pages"`
-	PagesPerHour float64 `json:"pages_per_hour"`
+	Sessions         int     `json:"sessions"`
+	Minutes          int     `json:"minutes"` // reading and listening
+	ReadingMinutes   int     `json:"reading_minutes"`
+	ListeningMinutes int     `json:"listening_minutes"`
+	Pages            int     `json:"pages"` // read on an e-reader and logged by hand
+	PagesPerHour     float64 `json:"pages_per_hour"`
 }
 
 func totals(ss []ReadingSession) SessionTotals {
 	t := SessionTotals{Sessions: len(ss)}
+	readPages := 0
 	for _, s := range ss {
 		t.Minutes += s.Minutes
 		t.Pages += s.Pages
+		switch s.Kind {
+		case "listening":
+			t.ListeningMinutes += s.Minutes
+		case "reading":
+			t.ReadingMinutes += s.Minutes
+			readPages += s.Pages
+		}
 	}
-	if t.Minutes > 0 && t.Pages > 0 {
-		t.PagesPerHour = math.Round(float64(t.Pages)/float64(t.Minutes)*600) / 10
+	if t.ReadingMinutes > 0 && readPages > 0 {
+		t.PagesPerHour = math.Round(float64(readPages)/float64(t.ReadingMinutes)*600) / 10
 	}
 	return t
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import type { Book as BookT, KosyncEvent, Pace, Quote, Read, SessionLog, Status } from '../lib/types'
-import { daysBetween, fmtClock, fmtDate, fmtWhen, fmtMinutes, fmtMonth, FORMAT_LABEL, hasProgress, isListening, listenLine, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
+import { daysBetween, fmtClock, fmtDate, fmtWhen, fmtMinutes, fmtMonth, FORMAT_LABEL, fmtHM, hasProgress, isListening, listenLine, progress, splitTags, STATUS_LABEL, todayISO, pageLabel } from '../lib/format'
 import { Card, Confirm, Field, Loading, Modal, Segmented, useAsync, useToast } from '../components/ui'
 import { Cover } from '../components/Cover'
 import { AuthorLink } from '../components/AuthorBits'
@@ -296,8 +296,9 @@ export function QuoteModal({ bookId, quote, onClose, onSaved }: { bookId: number
   )
 }
 
-// ReadingLogCard is every sitting with the book on an e-reader: when, how
-// many pages and how long, worked out from the device's syncs.
+// ReadingLogCard is every sitting with the book: on an e-reader or in Pocket
+// Library (when, how many pages, how long, worked out from the syncs),
+// listening in Pocket Audiobooks, and pages logged by hand.
 function ReadingLogCard({ book }: { book: BookT }) {
   const { data } = useAsync(() => api.get<SessionLog>(`${V1}/books/${book.id}/sessions`), [book.id, book.current_page])
   const [all, setAll] = useState(false)
@@ -310,22 +311,36 @@ function ReadingLogCard({ book }: { book: BookT }) {
     days[days.length - 1].items.push(s)
   }
   return (
-    <Card className="mt" title="Reading log" sub={<>{t.sessions} {t.sessions === 1 ? 'session' : 'sessions'} · {fmtMinutes(t.minutes)}{t.pages > 0 && <> · {t.pages} pages</>}{t.pages_per_hour > 0 && <> · {t.pages_per_hour} pages an hour</>}</>}>
+    <Card className="mt" title="Reading log" sub={<>{t.sessions} {t.sessions === 1 ? 'session' : 'sessions'}{t.reading_minutes > 0 && <> · {fmtMinutes(t.reading_minutes)} reading</>}{t.listening_minutes > 0 && <> · {fmtMinutes(t.listening_minutes)} listening</>}{t.pages > 0 && <> · {t.pages} pages</>}{t.pages_per_hour > 0 && <> · {t.pages_per_hour} pages an hour</>}</>}>
       <div className="session-log">
         {days.map(d => (
           <div key={d.day} className="session-day">
             <div className="session-date muted small">{fmtDate(d.day)}</div>
             <ul className="reads">
               {d.items.map(s => (
-                <li key={s.start}>
+                <li key={s.kind + s.start}>
+                  {s.kind === 'listening' ? <>
+                    <div className="session-head small">
+                      <span className="session-time"><Icon name="headphones" size={12} className="inline-icon" /> {fmtClock(s.start)}–{fmtClock(s.end)}</span>
+                      <span className="muted">{s.device}</span>
+                    </div>
+                    <div><b>{fmtMinutes(s.minutes)}</b> listened<span className="muted small"> · {fmtHM(s.from_pos || 0)} → {fmtHM(s.to_pos || 0)}{s.duration ? ` of ${fmtHM(s.duration)}` : ''}</span></div>
+                  </> : s.kind === 'logged' ? <>
+                    <div className="session-head small">
+                      <span className="session-time">{fmtClock(s.end)}</span>
+                      <span className="muted">{s.device}</span>
+                    </div>
+                    <div><b>{s.pages}</b> {s.pages === 1 ? 'page' : 'pages'}<span className="muted small"> · p. {s.from_page || 0}–{s.to_page}</span></div>
+                  </> : <>
                   <div className="session-head small">
                     <span className="session-time">{fmtClock(s.start)}–{fmtClock(s.end)}</span>
-                    <span className="muted" title={s.estimated ? `Part of the time was not synced; estimated at your pace of ${data.minutes_per_page} min a page` : `${s.updates} ${s.updates === 1 ? 'sync' : 'syncs'}`}>{s.device}{s.estimated && ' · estimated'}</span>
+                    <span className="muted" title={s.estimated ? `Part of the time was not synced; estimated at your pace of ${data.minutes_per_page} min a page` : `${s.updates} ${s.updates === 1 ? 'sync' : 'syncs'}`}>{s.device || (s.source === 'library' ? 'Pocket Library' : 'E-reader')}{s.estimated && ' · estimated'}</span>
                   </div>
                   <div>
                     {s.pages > 0 ? <><b>{s.pages}</b> {s.pages === 1 ? 'page' : 'pages'}</> : <><b>{Math.max(1, Math.round((s.to - s.from) * 100))}%</b> of the book</>} in <b>{s.estimated && '~'}{fmtMinutes(s.minutes)}</b>
                     {s.to_page ? <span className="muted small"> · p. {s.from_page}–{s.to_page}</span> : <span className="muted small"> · {Math.round(s.from * 100)}–{Math.round(s.to * 100)}%</span>}
                   </div>
+                  </>}
                 </li>
               ))}
             </ul>

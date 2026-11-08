@@ -260,21 +260,29 @@ func (s *Server) handleBookPace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
-// Activity is the reading on e-readers, for Stats.
+// Activity is the reading for Stats: on e-readers (this server's KOSync and
+// Pocket Library), pages logged by hand, and listening in Pocket Audiobooks.
 type Activity struct {
-	Days           []store.ReadingDay `json:"days"` // the last 365 days with reading
+	Days           []store.ReadingDay `json:"days"` // the last 365 days with reading or listening
 	Streak         int                `json:"streak"`
 	LongestStreak  int                `json:"longest_streak"`
 	ReadingDaysYTD int                `json:"reading_days_year"`
 	Pages7         int                `json:"pages_7"`
 	Pages30        int                `json:"pages_30"`
 	PagesYTD       int                `json:"pages_year"`
+	Listen7        int                `json:"listen_minutes_7"`
+	Listen30       int                `json:"listen_minutes_30"`
+	ListenYTD      int                `json:"listen_minutes_year"`
 	Connected      bool               `json:"connected"`
 }
 
 func (s *Server) readingActivity(ctx context.Context, uid int64) (*Activity, error) {
 	now := time.Now()
 	days, err := s.store.ReadingDays(ctx, uid, now.AddDate(-1, 0, 0).Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	days, err = s.withOtherReading(ctx, uid, days, now.AddDate(-1, 0, 0).Format("2006-01-02"))
 	if err != nil {
 		return nil, err
 	}
@@ -293,9 +301,14 @@ func (s *Server) readingActivity(ctx context.Context, uid int64) (*Activity, err
 		}
 		if d.Day >= d7 {
 			a.Pages7 += d.Pages
+			a.Listen7 += d.ListenMinutes
 		}
 		if d.Day >= d30 {
 			a.Pages30 += d.Pages
+			a.Listen30 += d.ListenMinutes
+		}
+		if strings.HasPrefix(d.Day, year) {
+			a.ListenYTD += d.ListenMinutes
 		}
 	}
 	// The streak runs up to today, or up to yesterday while today is still open.
@@ -327,6 +340,48 @@ func (s *Server) readingActivity(ctx context.Context, uid int64) (*Activity, err
 	return a, nil
 }
 
+// withOtherReading adds to the e-reader's days (KOSync's statistics) what
+// the reading log knows beyond them since day from: Pocket Library's reading,
+// pages logged by hand and minutes listened.
+func (s *Server) withOtherReading(ctx context.Context, uid int64, days []store.ReadingDay, from string) ([]store.ReadingDay, error) {
+	ss, _, err := s.readingSessions(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	byDay := map[string]*store.ReadingDay{}
+	for i := range days {
+		byDay[days[i].Day] = &days[i]
+	}
+	extra := map[string]map[int64]bool{}
+	for _, x := range ss {
+		if x.Source == "ereader" || x.Day < from {
+			continue
+		}
+		d := byDay[x.Day]
+		if d == nil {
+			days = append(days, store.ReadingDay{Day: x.Day})
+			d = &days[len(days)-1]
+			for i := range days { // the slice may have moved
+				byDay[days[i].Day] = &days[i]
+			}
+		}
+		if x.Kind == "listening" {
+			d.ListenMinutes += x.Minutes
+		} else {
+			d.Pages += x.Pages
+		}
+		if extra[x.Day] == nil {
+			extra[x.Day] = map[int64]bool{}
+		}
+		if !extra[x.Day][x.BookID] {
+			extra[x.Day][x.BookID] = true
+			d.Books++
+		}
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i].Day < days[j].Day })
+	return days, nil
+}
+
 func (s *Server) handleReadingActivity(w http.ResponseWriter, r *http.Request) {
 	a, err := s.readingActivity(r.Context(), me(r))
 	if err != nil {
@@ -346,18 +401,38 @@ func (s *Server) handleReadingToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type line struct {
-		ID         int64   `json:"id"`
-		Title      string  `json:"title"`
-		Authors    string  `json:"authors"`
-		Percent    int     `json:"percent"`
-		Page       int     `json:"page,omitempty"`
-		Pages      int     `json:"pages,omitempty"`
-		PagesToday int     `json:"pages_today"`
-		PerDay     float64 `json:"pages_per_day,omitempty"`
-		DaysLeft   int     `json:"days_left,omitempty"`
-		FinishOn   string  `json:"finish_on,omitempty"`
-		Finished   bool    `json:"device_says_finished,omitempty"`
-		URL        string  `json:"item_url"`
+		ID         int64  `json:"id"`
+		Title      string `json:"title"`
+		Authors    string `json:"authors"`
+		Percent    int    `json:"percent"`
+		Page       int    `json:"page,omitempty"`
+		Pages      int    `json:"pages,omitempty"`
+		PagesToday int    `json:"pages_today"`
+		// minutes listened today (audiobooks)
+		ListenedToday int     `json:"listened_today"`
+		PerDay        float64 `json:"pages_per_day,omitempty"`
+		DaysLeft      int     `json:"days_left,omitempty"`
+		FinishOn      string  `json:"finish_on,omitempty"`
+		Finished      bool    `json:"device_says_finished,omitempty"`
+		URL           string  `json:"item_url"`
+	}
+	// today in the reading log beyond the e-reader's statistics: Pocket
+	// Library's reading, pages logged by hand, listening
+	today := time.Now().Format("2006-01-02")
+	listenedToday, otherPagesToday := map[int64]int{}, map[int64]int{}
+	listenTotal := 0
+	if ss, _, err := s.readingSessions(ctx, uid); err == nil {
+		for _, x := range ss {
+			if x.Day != today || x.Source == "ereader" {
+				continue
+			}
+			if x.Kind == "listening" {
+				listenedToday[x.BookID] += x.Minutes
+				listenTotal += x.Minutes
+			} else {
+				otherPagesToday[x.BookID] += x.Pages
+			}
+		}
 	}
 	out := []line{}
 	total := 0
@@ -370,15 +445,21 @@ func (s *Server) handleReadingToday(w http.ResponseWriter, r *http.Request) {
 			l.Percent = min(100, b.CurrentPage*100/b.Pages)
 		case b.ReaderPercent != nil:
 			l.Percent = int(math.Round(*b.ReaderPercent * 100))
+		case b.ListenDuration > 0:
+			l.Percent = min(100, b.ListenPosition*100/b.ListenDuration)
 		}
+		l.ListenedToday = listenedToday[b.ID]
+		l.PagesToday = otherPagesToday[b.ID]
+		total += l.PagesToday
 		l.Finished = b.ReaderPercent != nil && *b.ReaderPercent >= finishAt
 		if p, err := s.bookPace(ctx, uid, b); err == nil {
-			l.PagesToday, l.PerDay, l.DaysLeft, l.FinishOn = p.PagesToday, p.PagesPerDay, p.DaysLeft, p.FinishOn
+			l.PagesToday += p.PagesToday
+			l.PerDay, l.DaysLeft, l.FinishOn = p.PagesPerDay, p.DaysLeft, p.FinishOn
 			total += p.PagesToday
 		}
 		out = append(out, l)
 	}
-	resp := map[string]any{"date": time.Now().Format("2006-01-02"), "reading": out, "pages_today": total}
+	resp := map[string]any{"date": today, "reading": out, "pages_today": total, "listened_today": listenTotal}
 	if a, err := s.readingActivity(ctx, uid); err == nil {
 		resp["streak"], resp["pages_7"] = a.Streak, a.Pages7
 	}

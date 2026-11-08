@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -175,13 +176,18 @@ type abFinish struct {
 }
 
 type abListen struct {
-	ItemID   string `json:"item_id"`
-	Title    string `json:"title"`
-	Author   string `json:"author"`
-	Day      string `json:"day"`
-	Duration int    `json:"duration"`
-	EndPos   int    `json:"end_pos"`
-	Seconds  int    `json:"seconds"`
+	ID        int64  `json:"id"`
+	StartedAt string `json:"started_at"`
+	UpdatedAt string `json:"updated_at"`
+	StartPos  int    `json:"start_pos"`
+	Device    string `json:"device"`
+	ItemID    string `json:"item_id"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Day       string `json:"day"`
+	Duration  int    `json:"duration"`
+	EndPos    int    `json:"end_pos"`
+	Seconds   int    `json:"seconds"`
 }
 
 // syncAudiobooks takes in one person's finished and in-progress audiobooks.
@@ -223,6 +229,20 @@ func (s *Server) syncAudiobooks(ctx context.Context, uid int64, email string) ab
 	if err := c.get(ctx, "/api/v1/history", url.Values{"from": {from}, "limit": {"500"}}, &hist); err != nil {
 		st.Error = err.Error()
 		return st
+	}
+	// every session goes in the reading log (forgotten ones leave it, unless
+	// the window was too full to tell)
+	var listens []store.ListeningSession
+	for _, l := range hist.Items {
+		id := strconv.FormatInt(l.ID, 10)
+		if l.ID == 0 {
+			id = l.ItemID + "|" + l.Day + "|" + l.StartedAt
+		}
+		listens = append(listens, store.ListeningSession{SessionID: id, ItemID: l.ItemID, Day: l.Day, StartedAt: l.StartedAt, UpdatedAt: l.UpdatedAt,
+			Seconds: max(l.Seconds, 0), StartPos: max(l.StartPos, 0), EndPos: max(l.EndPos, 0), Duration: max(l.Duration, 0), Device: clip(l.Device, 100)})
+	}
+	if err := s.store.SaveListeningSessions(ctx, uid, from, listens, len(hist.Items) < 500); err != nil {
+		s.log.Warn("audiobooks: listening sessions", "err", err)
 	}
 	firstDay := map[string]string{}
 	latest := map[string]abListen{}
