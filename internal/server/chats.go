@@ -203,10 +203,14 @@ func (s *Server) handleStartBookChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	quotes, _ := s.store.ListQuotes(ctx, store.QuoteFilter{UserID: b.UserID, BookID: b.ID, Limit: 25})
+	var series []store.Book
+	if strings.TrimSpace(b.Series) != "" {
+		series, _ = s.store.ListBooks(ctx, store.BookFilter{UserID: b.UserID, Series: b.Series, Sort: "series", Limit: 100})
+	}
 	var chat bookChat
 	err = c.do(ctx, http.MethodPost, "/api/v1/link/chats", map[string]any{
 		"text": fillStarter(strings.TrimSpace(in.Text), b), "title": b.Title, "url": s.bookItemURL(b),
-		"context": bookContext(b, quotes, s.bookItemURL(b)), "model": model, "name": clipText(strings.TrimSpace(in.Name), 100),
+		"context": bookContext(b, quotes, series, s.bookItemURL(b)), "model": model, "name": clipText(strings.TrimSpace(in.Name), 100),
 	}, &chat)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -216,8 +220,9 @@ func (s *Server) handleStartBookChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // bookContext is what the agent learns about the book and the reader's place
-// in it (≤ 16 KB, Pocket AI's limit).
-func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
+// in it (≤ 16 KB, Pocket AI's limit). series is the reader's shelf for the
+// book's series (it may include b itself).
+func bookContext(b *store.Book, quotes []store.Quote, series []store.Book, itemURL string) string {
 	var sb strings.Builder
 	line := func(k, v string) {
 		if v = strings.TrimSpace(v); v != "" {
@@ -277,6 +282,9 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 	default:
 		sb.WriteString("They have not started it yet (it is on their want-to-read list). Do not spoil it.\n")
 	}
+	if b.Series != "" {
+		sb.WriteString(seriesNote(b, series))
+	}
 	if b.Rating > 0 {
 		fmt.Fprintf(&sb, "Their rating: %s / 5\n", strconv.FormatFloat(b.Rating, 'f', -1, 64))
 	}
@@ -304,6 +312,47 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 	}
 	sb.WriteString("\nTheir other books, quotes and reading history are reachable with the pocket_bookshelf tools.\n")
 	return clipText(sb.String(), 16000)
+}
+
+// seriesNote tells the agent which books of the series the reader knows: the
+// earlier ones are read (spoilers fine), later ones only as far as the shelf says.
+func seriesNote(b *store.Book, series []store.Book) string {
+	var sb strings.Builder
+	no := b.SeriesNo
+	if no != "" {
+		no = " (#" + no + ")"
+	}
+	fmt.Fprintf(&sb, "\nSeries: this is a book in %s%s. They have read the earlier books of the series — talk about them freely, their endings included, and use them to explain people, places and terms. ", b.Series, no)
+	sb.WriteString("Do not spoil the later books unless the list below says they have read them.\n")
+	var lines []string
+	for _, o := range series {
+		if o.ID == b.ID {
+			continue
+		}
+		t := "- "
+		if o.SeriesNo != "" {
+			t += "#" + o.SeriesNo + " "
+		}
+		t += o.Title + " — "
+		switch o.Status {
+		case "read":
+			t += "read"
+			if o.FinishedOn != "" {
+				t += " (" + o.FinishedOn + ")"
+			}
+		case "reading":
+			t += "reading now"
+		case "abandoned":
+			t += "stopped partway"
+		default:
+			t += "not read yet"
+		}
+		lines = append(lines, t)
+	}
+	if len(lines) > 0 {
+		sb.WriteString("The series on their shelf:\n" + strings.Join(lines, "\n") + "\n")
+	}
+	return sb.String()
 }
 
 // readingGuide keeps the agent useful while it guards the ending: without it,
