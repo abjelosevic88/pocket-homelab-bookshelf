@@ -258,6 +258,7 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 		}
 		sb.WriteString(where + ".\n")
 		sb.WriteString("Spoilers: they have not finished it. Do not reveal plot, twists, deaths or the ending beyond where they are. If a question can't be answered without it, say so and ask before spoiling.\n")
+		sb.WriteString(readingGuide)
 	case "read":
 		sb.WriteString("They have finished it")
 		if b.FinishedOn != "" {
@@ -272,6 +273,7 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 			fmt.Fprintf(&sb, ", %d%% into the audiobook", b.ListenPosition*100/b.ListenDuration)
 		}
 		sb.WriteString(". Ask before spoiling what comes after.\n")
+		sb.WriteString(readingGuide)
 	default:
 		sb.WriteString("They have not started it yet (it is on their want-to-read list). Do not spoil it.\n")
 	}
@@ -303,6 +305,17 @@ func bookContext(b *store.Book, quotes []store.Quote, itemURL string) string {
 	sb.WriteString("\nTheir other books, quotes and reading history are reachable with the pocket_bookshelf tools.\n")
 	return clipText(sb.String(), 16000)
 }
+
+// readingGuide keeps the agent useful while it guards the ending: without it,
+// agents answered "who is in this tent?" with "I don't have the book's text".
+const readingGuide = `How to help while they read:
+- You are not given the book's text. Answer from what you know of this book and its series, the way a friend who has read it would. Do not refuse or deflect because you lack the text.
+- Their page is in their edition (maybe a translation); page numbers differ between editions, so place them by percentage, chapter and the scene they describe.
+- Everything up to their point is fair game: who a character, people, place or term is, what happened so far, what they just read. Earlier books in the series (and earlier parts of this one) are known to them — use them freely.
+- When they ask about the current scene ("who is in this tent?"), work out the scene from where they are and what they say, and answer as of that moment — the names they have just met and what the book has shown about them so far, nothing about what those people will do later.
+- Only if you can't tell which scene they mean, ask one short question (chapter, or what just happened) — then answer.
+- Leave out what comes later: future roles, betrayals, deaths, reveals, who someone "really" is. Don't hint at it either.
+`
 
 // clipText shortens s to n runes, keeping its lines (clip in daily.go joins them).
 func clipText(s string, n int) string {
