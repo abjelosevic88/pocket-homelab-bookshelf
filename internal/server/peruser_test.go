@@ -71,6 +71,16 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf", "user": user,
 				"app": map[string]any{"id": 4, "slug": "day", "name": "Pocket Day"}}
 		}
+		if strings.HasPrefix(in.Token, "pcx_move_") { // Pocket Move: pcx_move_<who>_<in|out>
+			parts := strings.Split(in.Token, "_")
+			user := map[string]any{"id": 7, "email": "bob@example.com", "name": "Bob", "role": "member"}
+			if parts[2] == "ana" {
+				user = map[string]any{"id": 1, "email": "ana@example.com", "name": "Ana", "role": "admin"}
+			}
+			scope := map[string]string{"in": "move:import", "out": "move:export"}[parts[3]]
+			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf", "user": user,
+				"app": map[string]any{"id": 6, "slug": "move", "name": "Pocket Move"}}
+		}
 		if in.Token == "pcx_bob_libwrite" || in.Token == "pcx_bob_libread" { // Pocket Library acting for Bob
 			scope := "books:read books:write"
 			if in.Token == "pcx_bob_libread" {

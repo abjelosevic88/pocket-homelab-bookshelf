@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/metadata"
 	"github.com/abjelosevic88/pocket-homelab-bookshelf/internal/store"
@@ -132,7 +133,16 @@ func (s *Server) findDuplicate(r *http.Request, b *store.Book) *store.Book {
 			return &found[0]
 		}
 	}
-	found, _ := s.store.ListBooks(r.Context(), store.BookFilter{UserID: b.UserID, Query: b.Title})
+	filter := store.BookFilter{UserID: b.UserID, Query: b.Title}
+	for _, c := range b.Title {
+		if c > unicode.MaxASCII {
+			// SQLite's LOWER leaves "Č" as it is, so the search would miss
+			// "Čarobnjak iz Oza": compare against the whole shelf instead
+			filter.Query = ""
+			break
+		}
+	}
+	found, _ := s.store.ListBooks(r.Context(), filter)
 	for i := range found {
 		if strings.EqualFold(found[i].Title, b.Title) && strings.EqualFold(found[i].Authors, b.Authors) {
 			return &found[i]
