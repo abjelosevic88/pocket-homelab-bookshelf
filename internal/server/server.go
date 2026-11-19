@@ -333,6 +333,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/export.csv", s.handleExportCSV)
 			r.Post("/import", s.handleImportJSON)
 			r.Post("/import/goodreads", s.handleImportGoodreads)
+			r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
 			r.Post("/import/kindle/preview", s.handleKindlePreview)
 			r.Post("/import/kindle", s.handleKindleImport)
 		})
@@ -458,6 +459,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Publishes: []string{"bookshelf.started", "bookshelf.finished", "bookshelf.abandoned", "bookshelf.rated"},
 		Offers:    linkOffers,
 		Uses:      []core.Use{notesUse, audiobooksUse, libraryUse, requestsUse, aiUse, core.InferenceUse()},
+		Portable:  portable,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration

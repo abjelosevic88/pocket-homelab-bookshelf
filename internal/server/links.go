@@ -20,6 +20,20 @@ var linkOffers = []core.Offer{
 	{Scope: "books:write", Name: "Update your books", Description: "Set a book's status and rating, add it to your shelves, and link it to the same book in another app."},
 }
 
+// portable is what Pocket Move may copy out and bring in (docs/move.md in
+// pocket-homelab-core). Imports add; books already on the shelf (same ISBN,
+// or same title and authors) are skipped, so a second run adds nothing.
+var portable = &core.Portable{
+	Exports: []core.PortableExport{
+		{Path: "/api/v1/export.json", File: "bookshelf.json", Kind: core.KindPocket, Title: "Every book with its reads, quotes and followed authors"},
+		{Path: "/api/v1/export.csv", File: "books.csv", Kind: core.KindCSV, Title: "Every book as a table (Goodreads-style columns)"},
+	},
+	Imports: []core.PortableImport{
+		{Path: "/api/v1/import", Kind: core.KindPocket, ContentType: "application/json", MaxBytes: 8 << 20, Title: "Adds the books from another box; books already on the shelf are left alone"},
+		{Path: "/api/v1/import/goodreads", Kind: core.KindGoodreads, Form: "file", MaxBytes: 32 << 20, Title: "Adds the books from a Goodreads or StoryGraph export; books already on the shelf are skipped"},
+	},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -41,6 +55,9 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
+	if portable.LinkAllows(scopes, r) {
+		return true
+	}
 	for _, lr := range linkRoutes {
 		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(r.URL.Path) {
 			continue

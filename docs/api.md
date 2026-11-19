@@ -181,6 +181,7 @@ A short spoiler-free "what it is about" paragraph per book and preferred languag
 | `POST` | `/import/kindle/preview` | Kindle `My Clippings.txt` (body or `multipart` field `file`) → `{"clippings", "books": [{title, author, entries: [{text, note, page, loc_start, loc_end, added, note_only}], highlights, notes, known, match: {book_id, title, by: "title"\|"openlibrary"}, candidate}]}`. Nothing is saved. |
 | `POST` | `/import/kindle` | `{"books": [{"target": "book", "book_id": 17, "entries": […]}, {"target": "new", "status": "read", "title", "author", "candidate", "entries": […]}, {"target": "skip"}]}` → `{books_created, books_updated, added, updated, skipped}`. Idempotent: known highlights are skipped, longer versions replace shorter ones, a "new" book already on the shelf is reused. |
 | `POST` | `/import/goodreads` | Goodreads or StoryGraph export, or this app's CSV — body or `multipart` field `file`. |
+| `GET` | `/pocket/portable` | What Pocket Move may copy out and bring in (the two exports, `/import` and `/import/goodreads`). A `pcx_` link with `move:export` reaches only it and the exports (GET); `move:import` only it and those two imports (POST). |
 
 Unauthenticated: `/healthz`, `/readyz`, `/metrics` (Prometheus; disable with `METRICS_ENABLED=false` or block at the proxy).
 
