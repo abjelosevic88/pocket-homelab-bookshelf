@@ -334,6 +334,11 @@ func (s *Server) Router() http.Handler {
 			r.Post("/import", s.handleImportJSON)
 			r.Post("/import/goodreads", s.handleImportGoodreads)
 			r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
+			// what Pocket Search, Pocket Day and Pocket Hub ask (capabilities.go)
+			r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+			r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+			r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
+			r.Post("/pocket/capture", capabilities.Capture.CaptureHandler(s.pocketCapture))
 			r.Post("/import/kindle/preview", s.handleKindlePreview)
 			r.Post("/import/kindle", s.handleKindleImport)
 		})
@@ -452,7 +457,7 @@ func (s *Server) coreLoop(ctx context.Context) {
 
 func (s *Server) registerWithCore(ctx context.Context) error {
 	m := core.Manifest{
-		Slug: "bookshelf", Name: "Pocket Bookshelf",
+		Slug: "bookshelf", Name: "Pocket Bookshelf", Category: "Media",
 		Description: "A small self-hosted reading log: what you read, what you thought of it, the lines worth keeping, and what to read next.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "BOOKSHELF",
@@ -460,6 +465,8 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Offers:    linkOffers,
 		Uses:      []core.Use{notesUse, audiobooksUse, libraryUse, requestsUse, aiUse, core.InferenceUse()},
 		Portable:  portable,
+		// what Pocket Search, Pocket Day and Pocket Hub find here on their own
+		Capabilities: capabilities,
 	}
 	if s.cfg.BaseURL != "" {
 		// ask for a relying-party client so "Sign in with Pocket Core" needs no configuration

@@ -32,12 +32,25 @@ type shelfHarness struct {
 	bobTok   string
 	// linkToken, when set, answers the fake Core's POST /api/v1/links/token.
 	linkToken http.HandlerFunc
+	// manifest answers with what the app last registered with the fake Core.
+	manifest func() map[string]any
 }
 
 func newShelfHarness(t *testing.T) *shelfHarness {
 	t.Helper()
 	h := &shelfHarness{}
+	var mu sync.Mutex
+	registered := map[string]any{}
 	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/apps/register" {
+			mu.Lock()
+			registered = map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&registered)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{}`))
+			return
+		}
 		if r.URL.Path == "/api/v1/links/status" && r.URL.Query().Get("app") == "ai" {
 			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`[]`))
@@ -81,6 +94,15 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 			out = map[string]any{"active": true, "kind": "delegated", "scope": scope, "audience": "bookshelf", "user": user,
 				"app": map[string]any{"id": 6, "slug": "move", "name": "Pocket Move"}}
 		}
+		if strings.HasPrefix(in.Token, "pcx_cap_") { // Pocket Hub with one capability scope: pcx_cap_<who>_<search|day|widget|capture>
+			parts := strings.Split(in.Token, "_")
+			user := map[string]any{"id": 7, "email": "bob@example.com", "name": "Bob", "role": "member"}
+			if parts[2] == "ana" {
+				user = map[string]any{"id": 1, "email": "ana@example.com", "name": "Ana", "role": "admin"}
+			}
+			out = map[string]any{"active": true, "kind": "delegated", "scope": "pocket:" + parts[3], "audience": "bookshelf", "user": user,
+				"app": map[string]any{"id": 8, "slug": "hub", "name": "Pocket Hub"}}
+		}
 		if in.Token == "pcx_bob_libwrite" || in.Token == "pcx_bob_libread" { // Pocket Library acting for Bob
 			scope := "books:read books:write"
 			if in.Token == "pcx_bob_libread" {
@@ -118,7 +140,11 @@ func newShelfHarness(t *testing.T) *shelfHarness {
 	}
 	ts := httptest.NewServer(s.Router())
 	t.Cleanup(ts.Close)
-	*h = shelfHarness{t: t, ts: ts, st: st, s: s, cfg: cfg, ana: ana, bob: bob, anaTok: anaTok, bobTok: bobTok}
+	*h = shelfHarness{t: t, ts: ts, st: st, s: s, cfg: cfg, ana: ana, bob: bob, anaTok: anaTok, bobTok: bobTok, manifest: func() map[string]any {
+		mu.Lock()
+		defer mu.Unlock()
+		return registered
+	}}
 	return h
 }
 

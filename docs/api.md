@@ -17,8 +17,23 @@ With Pocket Core on the box, another Pocket app can act for a person with a five
 | (any link) | | `GET /auth/me` |
 | `books:read` | See your books | `GET /books` (all its filters), `GET /books/{id}`, `GET /reading/sessions`, `GET /library/links/{libID}` |
 | `books:write` | Update your books | `PUT` · `DELETE /library/links/{libID}`, `POST /library/links/{libID}/apply` |
+| `pocket:search` | Find your things | `GET /pocket/search` |
+| `pocket:day` | See what happened on a day | `GET /pocket/day/{date}` |
+| `pocket:widget` | Show a summary | `GET /pocket/widget` |
+| `pocket:capture` | Keep a quick line | `POST /pocket/capture` |
 
 Anything else answers `403` ("this Pocket Core link does not cover …"). Links are switched on and off in Core → **Links** (box-wide) and **Settings → Apps acting for me** (per person).
+
+### What Pocket Search, Pocket Day and Pocket Hub ask
+
+Bookshelf says in its manifest (category `Media`) that it can be searched, has a day, a widget and takes a quick line, and answers on the four routes every Pocket app uses for that (`docs/capabilities.md` in pocket-homelab-core). Each `pocket:*` scope opens its one route; `books:read` and `books:write` do not. The routes also answer the person's own session or token, and work without Pocket Core.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/pocket/search?q=&limit=` | `{items: [{id, title, snippet, kind: "book", date, url: "/books/{id}", score}]}`. The books `GET /books?q=` finds, and the ones in a series of that name. `snippet` is the author and where the book stands ("Frank Herbert · reading, page 120 of 340", "read, 4 stars", "want to read"); `date` is the day it was finished, else when it last changed. A title that has the words comes first, then an author or a series. `limit` 1–50, 8 by default. Bangs in Pocket Search: `!books`, `!book`. |
+| `GET` | `/pocket/day/{YYYY-MM-DD}?tz=` | `{date, summary, items: [{id, time, end, title, sub, kind, minutes, qty, done, url}], metrics}`. One item for each book read or listened to that day (from the reading log, as `/reading/sessions`): `minutes`, `qty` = pages, `sub` = the author, `time`/`end` when the log knows them. `kind` is `read`, `listened`, `started`, `finished` (`done: true`) or `abandoned`; a book shows once. `summary`: "Read 42 pages of Dune and finished it". With `tz` the log's days and times are that time zone's, else the server's. A day with nothing has no items and no summary. |
+| `GET` | `/pocket/widget` | `{line, metrics, items: [{id, title, detail, url}], url: "/now"}`. The books being read, the one touched last first, `detail` "page 120 of 340 · 35%"; `line` "Reading Dune, 35%" (empty when nothing is being read); `metrics`: "Read this year" ("7" or "7 of 24" with a yearly goal) and "Want to read". An empty shelf answers no line, items or metrics. |
+| `POST` | `/pocket/capture` | `{request_id, kind: "book", title?, text?}` → 201 `{id, title, url}`: a new book on Want to read from the title (else the first line of `text`; the rest is kept as "Why read it?"). Nothing is looked up. The same `request_id` (16–80 of `A-Z a-z 0-9 _ -`) again answers the same book and adds nothing. `400 {error}` when a book with that title is already on the shelf. With "ask Pocket Requests right away" chosen in Settings → Requests, the book is asked for after the answer. |
 
 ## Books
 

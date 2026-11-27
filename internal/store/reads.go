@@ -24,6 +24,38 @@ func (s *Store) ListReads(ctx context.Context, userID, bookID int64) ([]Read, er
 	return out, rows.Err()
 }
 
+// ReadMark is a book the person started, finished or gave up on a day.
+type ReadMark struct {
+	BookID    int64
+	Title     string
+	Authors   string
+	Started   bool
+	Finished  bool // read to the end
+	Abandoned bool
+}
+
+// ReadsOn lists the person's reads that started or ended on a day
+// (YYYY-MM-DD), oldest first.
+func (s *Store) ReadsOn(ctx context.Context, userID int64, day string) ([]ReadMark, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT b.id, b.title, b.authors, r.started_on = ?, r.finished_on = ?, r.abandoned FROM reads r
+		JOIN books b ON b.id = r.book_id WHERE b.user_id = ? AND (r.started_on = ? OR r.finished_on = ?) ORDER BY r.id`, day, day, userID, day, day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ReadMark
+	for rows.Next() {
+		var m ReadMark
+		var ended, gaveUp bool
+		if err := rows.Scan(&m.BookID, &m.Title, &m.Authors, &m.Started, &ended, &gaveUp); err != nil {
+			return nil, err
+		}
+		m.Finished, m.Abandoned = ended && !gaveUp, ended && gaveUp
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // readOwned checks that a read belongs to one of the user's books.
 func (s *Store) readOwned(ctx context.Context, userID, readID int64) (int64, error) {
 	var bookID int64

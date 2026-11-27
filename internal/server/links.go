@@ -34,6 +34,17 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities is what Pocket Search, Pocket Day and Pocket Hub may do here
+// (docs/capabilities.md in pocket-homelab-core): one fixed route each, in
+// capabilities.go. Register adds the pocket:* offers.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "The books on your shelf, by title, author, series and tag", Kinds: []string{"book"}, Bangs: []string{"books", "book"}},
+	// the number of a day is its pages, as on the Stats page ("pages this week")
+	Day:     &core.DayFeed{Label: "Reading", One: "book", Many: "books", Unit: "qty", What: "The books you read or listened to that day, and the ones you started or finished. The day's number is the pages you read."},
+	Widget:  &core.Widget{Title: "Reading now", What: "The books you are reading with how far you are, and how many you have read this year"},
+	Capture: &core.QuickCapture{Kinds: []core.CaptureKind{{Kind: "book", Label: "Book", What: "A new book on Want to read, from its title", Fields: []string{"title"}}}},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -55,7 +66,7 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	for _, lr := range linkRoutes {
@@ -74,17 +85,31 @@ func linkAllows(scopes []string, r *http.Request) bool {
 	return false
 }
 
-// linkUser validates a pcx_ token and maps it to the person it acts for.
-func (s *Server) linkUser(ctx context.Context, tok string, r *http.Request) (*store.User, error) {
+// linkUser validates a pcx_ token and maps it to the person it acts for. The
+// second value is the acting app's slug.
+func (s *Server) linkUser(ctx context.Context, tok string, r *http.Request) (*store.User, string, error) {
 	in, err := s.core.Introspect(ctx, tok)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !in.Active || !in.Delegated() || in.User == nil || in.User.Email == "" {
-		return nil, http.ErrNoCookie
+		return nil, "", http.ErrNoCookie
 	}
 	if !linkAllows(strings.Fields(in.Scope), r) {
-		return nil, errLinkScope
+		return nil, "", errLinkScope
 	}
-	return s.coreIdentityUser(ctx, in)
+	app := ""
+	if in.App != nil {
+		app = in.App.Slug
+	}
+	u, err := s.coreIdentityUser(ctx, in)
+	return u, app, err
+}
+
+const linkAppKey ctxKey = 2
+
+// linkApp is the acting app's slug when the request came in on a link token.
+func linkApp(ctx context.Context) string {
+	a, _ := ctx.Value(linkAppKey).(string)
+	return a
 }

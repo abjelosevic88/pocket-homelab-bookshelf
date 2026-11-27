@@ -63,6 +63,7 @@ type BookFilter struct {
 	UserID   int64
 	Status   string // one status, or "" for all
 	Query    string
+	InSeries bool // Query also looks in the series' name
 	Tag      string
 	Author   string
 	Year     int  // finished (not abandoned) in this year
@@ -86,9 +87,16 @@ func (s *Store) ListBooks(ctx context.Context, f BookFilter) ([]Book, error) {
 	}
 	if q := strings.TrimSpace(f.Query); q != "" {
 		like := "%" + strings.ToLower(q) + "%"
+		series := ""
+		if f.InSeries {
+			series = ` OR LOWER(b.series) LIKE ?`
+		}
 		where = append(where, `(LOWER(b.title) LIKE ? OR LOWER(b.subtitle) LIKE ? OR LOWER(b.authors) LIKE ? OR LOWER(b.tags) LIKE ?
-			OR LOWER(b.review) LIKE ? OR b.isbn13 LIKE ? OR b.isbn10 LIKE ?)`)
+			OR LOWER(b.review) LIKE ? OR b.isbn13 LIKE ? OR b.isbn10 LIKE ?`+series+`)`)
 		args = append(args, like, like, like, like, like, like, like)
+		if f.InSeries {
+			args = append(args, like)
+		}
 	}
 	if f.Tag != "" {
 		where = append(where, tagMatch)
@@ -181,8 +189,9 @@ func NormalizeTags(s string) string {
 }
 
 // CreateBook inserts a book and opens/records a read to match its status.
-// startedOn / finishedOn are optional dates for that read (YYYY-MM-DD).
-func (s *Store) CreateBook(ctx context.Context, b *Book, startedOn, finishedOn string) error {
+// startedOn / finishedOn are optional dates for that read (YYYY-MM-DD). The
+// hooks run in the same transaction, once the book has its id.
+func (s *Store) CreateBook(ctx context.Context, b *Book, startedOn, finishedOn string, after ...core.CommitHook) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -223,6 +232,13 @@ func (s *Store) CreateBook(ctx context.Context, b *Book, startedOn, finishedOn s
 	}
 	if err != nil {
 		return err
+	}
+	for _, hook := range after {
+		if hook != nil {
+			if err := hook(tx); err != nil {
+				return err
+			}
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return err

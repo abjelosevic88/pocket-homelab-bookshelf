@@ -288,11 +288,16 @@ func finish(x *ReadingSession, loc *time.Location) {
 // readingSessions is the person's whole reading log, oldest first, and the
 // minutes a page used for estimates.
 func (s *Server) readingSessions(ctx context.Context, uid int64) ([]ReadingSession, float64, error) {
+	return s.readingSessionsIn(ctx, uid, time.Local)
+}
+
+// readingSessionsIn is readingSessions with the days and times of a time zone.
+func (s *Server) readingSessionsIn(ctx context.Context, uid int64, loc *time.Location) ([]ReadingSession, float64, error) {
 	events, err := s.store.ReaderEvents(ctx, uid, 0)
 	if err != nil {
 		return nil, 0, err
 	}
-	ss, perPage := buildSessions(events, time.Local)
+	ss, perPage := buildSessions(events, loc)
 	sessionPages(ss, events)
 	listens, err := s.store.ListeningSessions(ctx, uid, 0)
 	if err != nil {
@@ -302,8 +307,8 @@ func (s *Server) readingSessions(ctx context.Context, uid int64) ([]ReadingSessi
 	if err != nil {
 		return nil, 0, err
 	}
-	ss = append(ss, listeningSessions(listens, time.Local)...)
-	ss = append(ss, loggedSessions(logs, time.Local)...)
+	ss = append(ss, listeningSessions(listens, loc)...)
+	ss = append(ss, loggedSessions(logs, loc)...)
 	sort.SliceStable(ss, func(i, j int) bool { return ss[i].start < ss[j].start })
 	return ss, perPage, nil
 }

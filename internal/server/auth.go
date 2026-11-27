@@ -35,7 +35,7 @@ func actorID(ctx context.Context) int64 {
 // or trusted proxy header depending on AUTH_MODE.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, err := s.resolveUser(r)
+		u, app, err := s.resolveAuth(r)
 		if errors.Is(err, errLinkScope) {
 			writeErr(w, http.StatusForbidden, "this Pocket Core link does not cover "+r.Method+" "+r.URL.Path)
 			return
@@ -44,11 +44,22 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+		ctx := context.WithValue(r.Context(), userKey, u)
+		if app != "" {
+			ctx = context.WithValue(ctx, linkAppKey, app)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
+	u, _, err := s.resolveAuth(r)
+	return u, err
+}
+
+// resolveAuth is resolveUser plus, for a Pocket Core link token, the slug of
+// the app that acts for the person.
+func (s *Server) resolveAuth(r *http.Request) (*store.User, string, error) {
 	ctx := r.Context()
 	tok := ""
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(h), "bearer ") {
@@ -56,10 +67,18 @@ func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
 	} else if t := r.Header.Get("X-API-Key"); t != "" {
 		tok = t
 	}
+	if tok != "" && s.core.Configured() && core.IsLinkToken(tok) {
+		return s.linkUser(ctx, tok, r)
+	}
+	u, err := s.userOf(r, tok)
+	return u, "", err
+}
+
+// userOf resolves everyone but a linked app: a personal or Core token (tok),
+// the trusted proxy header or the session cookie.
+func (s *Server) userOf(r *http.Request, tok string) (*store.User, error) {
+	ctx := r.Context()
 	if tok != "" {
-		if s.core.Configured() && core.IsLinkToken(tok) {
-			return s.linkUser(ctx, tok, r)
-		}
 		if s.core.Configured() && core.IsCoreToken(tok) {
 			return s.coreUser(ctx, tok)
 		}

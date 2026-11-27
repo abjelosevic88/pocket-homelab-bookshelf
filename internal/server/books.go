@@ -133,22 +133,40 @@ func (s *Server) findDuplicate(r *http.Request, b *store.Book) *store.Book {
 			return &found[0]
 		}
 	}
-	filter := store.BookFilter{UserID: b.UserID, Query: b.Title}
-	for _, c := range b.Title {
-		if c > unicode.MaxASCII {
-			// SQLite's LOWER leaves "Č" as it is, so the search would miss
-			// "Čarobnjak iz Oza": compare against the whole shelf instead
-			filter.Query = ""
-			break
-		}
-	}
-	found, _ := s.store.ListBooks(r.Context(), filter)
+	found := s.sameTitle(r.Context(), b.UserID, b.Title)
 	for i := range found {
-		if strings.EqualFold(found[i].Title, b.Title) && strings.EqualFold(found[i].Authors, b.Authors) {
+		if strings.EqualFold(found[i].Authors, b.Authors) {
 			return &found[i]
 		}
 	}
 	return nil
+}
+
+// sameTitle lists the person's books with this title, capitals aside.
+func (s *Server) sameTitle(ctx context.Context, uid int64, title string) []store.Book {
+	filter := store.BookFilter{UserID: uid, Query: title}
+	if !isASCII(title) {
+		// SQLite's LOWER leaves "Č" as it is, so the search would miss
+		// "Čarobnjak iz Oza": compare against the whole shelf instead
+		filter.Query = ""
+	}
+	found, _ := s.store.ListBooks(ctx, filter)
+	same := found[:0]
+	for _, b := range found {
+		if strings.EqualFold(b.Title, title) {
+			same = append(same, b)
+		}
+	}
+	return same
+}
+
+func isASCII(s string) bool {
+	for _, c := range s {
+		if c > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) handleCreateBook(w http.ResponseWriter, r *http.Request) {
